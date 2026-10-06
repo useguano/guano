@@ -41,6 +41,7 @@ const files = {
           dev: 'guano dev',
           start: 'guano start',
           build: 'guano build',
+          connect: 'guano connect',
         },
         dependencies: {
           '@useguano/guano': '^0.1.0',
@@ -81,6 +82,7 @@ Your published site is served at http://localhost:4174/.
 
 - \`npm run start\` — production server (\`NODE_ENV=production\`)
 - \`npm run build\` — export the site as static files to \`./dist-site\`
+- \`npm run connect\` — connect Claude Desktop to this instance over MCP (quit Claude first)
 - everything lives in \`./data\` — **backing up = copying that directory**
 
 See the @useguano/guano package README for deploy notes and environment variables.

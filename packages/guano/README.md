@@ -60,10 +60,11 @@ styling, and interactions exactly as if you'd typed them.
 On the machine running your instance (after `/admin` setup):
 
 ```sh
-guano connect
+npx guano connect   # or `npm run connect` in a scaffolded project
 ```
 
-It mints an API token (proving instance ownership via the data dir — no
+The `guano` binary is a project dependency, not a global install, so it is
+reached through `npx` (or an npm script) rather than typed bare. It mints an API token (proving instance ownership via the data dir — no
 copy-paste) and writes the `mcpServers` entry into Claude Desktop's config with
 absolute paths. Quit Claude Desktop before running it — the app overwrites its
 config from memory on quit, which would silently undo the setup — then open it
