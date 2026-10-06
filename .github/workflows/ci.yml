@@ -1,0 +1,75 @@
+# The gates, in the order that fails fastest.
+#
+# There is no linter and no unit-test runner in this project by design: the
+# type-check, the four check:* scripts and the Playwright suite are the gates,
+# and they are what runs here.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # cheap and independent: a failure here should not wait on a browser
+      - run: npm run type-check
+      - run: npm run check:mcp
+      - run: npm run check:migrate
+      - run: npm run check:html
+
+      # the e2e server serves dist/, so the build is a prerequisite rather
+      # than a separate job
+      - run: npm run build
+
+      # The render referee needs .corpus/inputs, which is gitignored: the
+      # inputs ARE the referee, they are built once from real projects, and
+      # committing them would mean committing other people's content. So it
+      # runs where it exists — locally, before a release — and is skipped here
+      # rather than silently passing on an empty corpus.
+      - name: check:corpus (only when the corpus is present)
+        run: |
+          if [ -d .corpus/inputs ]; then
+            npm run check:corpus
+          else
+            echo "::notice::no .corpus/inputs — skipping the render referee"
+          fi
+
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # A dependency advisory should be visible without failing every unrelated PR,
+  # so this reports and does not gate.
+  audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev

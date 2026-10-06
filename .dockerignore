@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.github
+# every copy of the runtime data — see .gitignore for why the globs are this wide
+server/data
+server/data-backup-*
+server/data.backup-*
+.e2e-data
+.e2e-lifecycle-*
+.corpus
+test-results
+playwright-report
+.claude
+*.log

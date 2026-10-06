@@ -1,0 +1,9 @@
+# staged by scripts/prepack.mjs from the repo root — never committed
+dist/
+server/
+src/
+*.tgz
+# runtime/ is committed (like server/motion-runtime.js): the server imports
+# mcp-runtime.mjs for first-run seeding, so a fresh clone must have it.
+# Rebuild with `npm run build:mcp-runtime` after changing src/lib; prepack
+# always rebuilds it fresh before publishing.

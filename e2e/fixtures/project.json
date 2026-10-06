@@ -1,0 +1,3777 @@
+{
+  "id": "ae3019d6-5d46-46ab-aaac-fa4ddf3c5f69",
+  "name": "Brume",
+  "pages": [
+    {
+      "id": "feba33ca-a1e5-493e-b708-5faab739945d",
+      "name": "Home",
+      "path": "/",
+      "status": "published",
+      "elements": [
+        {
+          "id": "473f7341-0020-4f19-a740-86c263d380b0",
+          "type": "body",
+          "content": "",
+          "children": [
+            {
+              "id": "8b2660a5-4595-4293-b750-5acf63f036a7",
+              "type": "main",
+              "content": "",
+              "children": [
+                {
+                  "id": "83ecbd04-851c-472d-9e9f-9a68cce72e88",
+                  "type": "Header",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "4bb418ae-0eba-4ee7-9cf1-199d26cd20ad",
+                      "type": "header",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "a1bfbe5a-190a-4b2f-b613-da9ff2d95a89",
+                          "type": "link",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "c7193e1b-3ffd-41d6-83d7-0a9bc9f663d0",
+                              "type": "span",
+                              "content": "",
+                              "children": []
+                            }
+                          ],
+                          "link": "/"
+                        },
+                        {
+                          "id": "c974000e-f38b-47c0-9e19-eb08d5e8ad0f",
+                          "type": "nav",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "e156b1d8-d5e3-4c9e-a8ef-b3d413559e56",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "4175ce3d-5130-4a63-9f8f-95111ac4ee0d",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#why"
+                            },
+                            {
+                              "id": "d2263f70-0497-44f6-8794-6b093918fdac",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "29322514-e6c1-4a2a-a3c1-af30f46c3d50",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#how"
+                            },
+                            {
+                              "id": "c515ddd6-9619-4bf8-a992-36803dbe4aa5",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "f555f6a6-49ea-4172-892d-5143504f726a",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#pricing"
+                            },
+                            {
+                              "id": "efeb47c1-b9b5-4901-911f-501cc6d482ca",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "52db5c9c-2d57-4850-a95b-c5567b0ea50d",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#journal"
+                            },
+                            {
+                              "id": "cbbfa959-c32b-4be4-8915-6ad105d9496e",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "283724d0-1575-45ec-8923-7ee5865f4826",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#faq"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "8e384f75-c911-458e-b3d3-c653b76f6184",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "b921fb03-8433-4c90-a732-bca018a6ee83",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "f15d469d-231e-467d-87b1-36d8c9d636a0",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "/en"
+                            },
+                            {
+                              "id": "a1e3d39f-fb22-4bae-a416-3c00645bab38",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "3e4a3fb8-cebf-4b3a-91f4-4fdcef2d6d48",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "/fr"
+                            },
+                            {
+                              "id": "5d84c42f-de2f-4539-88fe-1a0a2ab1342e",
+                              "type": "link",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "d6a61f8b-4d70-4f2f-8734-969b2cdbe24b",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ],
+                              "link": "#pricing"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "484ad0f1-2dcc-4cb3-bbaa-fac42a1ae2e0",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "5159a5f8-4a64-4791-b04a-15c589699f26",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "ea21d6ad-a607-4d91-8447-cb23597c9aa2",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "2712fd86-3445-4111-8eca-6978064845fd",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "9050ecca-2c99-49f7-808b-33119e1c2d48",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "4ad3b239-ee56-447c-acc6-4f83d2e416ea",
+                                      "type": "span",
+                                      "content": "Roasted in Mile-End every Tuesday",
+                                      "children": [],
+                                      "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Torréfié dans le Mile-End chaque mardi"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "f9f35bcc-7574-4a89-876c-e892d4967fcb",
+                                      "type": "h1",
+                                      "content": "Coffee roasted this week, not this quarter.",
+                                      "children": [],
+                                      "classes": "max-w-3xl text-[40px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[56px]",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Un café torréfié cette semaine, pas ce trimestre."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "844bb8c9-55a6-4cee-8feb-74e633e8a42f",
+                                      "type": "paragraph",
+                                      "content": "Brume roasts small lots in Mile-End every Tuesday and ships the same afternoon. Your subscription arrives at peak flavour — usually within 48 hours of leaving the drum.",
+                                      "children": [],
+                                      "classes": "max-w-2xl text-[16px] leading-[1.6] text-on-surface-variant md:text-[20px]",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Brume torréfie de petits lots dans le Mile-End chaque mardi et expédie l’après-midi même. Votre abonnement arrive au sommet de sa saveur — habituellement moins de 48 heures après la sortie du tambour."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "2697d07e-dd40-4a9b-9569-24048f86e437",
+                                      "type": "div",
+                                      "content": "",
+                                      "children": [
+                                        {
+                                          "id": "3b4cc09b-4405-4781-bf86-a3228c4f0c53",
+                                          "type": "link",
+                                          "content": "",
+                                          "children": [
+                                            {
+                                              "id": "e99fdc1a-efee-4771-b033-e9f487d7da0d",
+                                              "type": "span",
+                                              "content": "Start your subscription",
+                                              "children": [],
+                                              "locales": {
+                                                "fr": {
+                                                  "content": "Commencer votre abonnement"
+                                                }
+                                              }
+                                            }
+                                          ],
+                                          "link": "#pricing",
+                                          "classes": "rounded-full bg-primary px-8 py-4 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/90 hover:shadow-md active:bg-primary/80 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none text-base"
+                                        },
+                                        {
+                                          "id": "7ebe9492-5cf3-4b35-b1ff-34c869e70d25",
+                                          "type": "link",
+                                          "content": "",
+                                          "children": [
+                                            {
+                                              "id": "f2d2eee8-8fa6-4680-84ef-2e8c65af89fe",
+                                              "type": "span",
+                                              "content": "See how it works",
+                                              "children": [],
+                                              "locales": {
+                                                "fr": {
+                                                  "content": "Voir comment ça marche"
+                                                }
+                                              }
+                                            }
+                                          ],
+                                          "link": "#how",
+                                          "classes": "rounded-full bg-secondary-container px-8 py-4 text-sm font-medium text-on-secondary-container transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-secondary-container/70 hover:shadow-sm active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                                        }
+                                      ],
+                                      "classes": "flex flex-wrap items-center justify-center gap-4"
+                                    },
+                                    {
+                                      "id": "3963191f-63af-4e57-9cfd-c98eebdf6c81",
+                                      "type": "span",
+                                      "content": "From $22 a month · Pause or cancel anytime · Free shipping in Canada",
+                                      "children": [],
+                                      "classes": "text-[14px] text-on-surface-variant",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "À partir de 22 $ par mois · Pause ou annulation en tout temps · Livraison gratuite au Canada"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "classes": "relative mx-auto flex max-w-4xl flex-col items-center gap-8 text-center translate-y-6 opacity-0",
+                                  "interactions": [
+                                    {
+                                      "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                                      "trigger": "appear",
+                                      "targetId": null,
+                                      "id": "d1427de0-6c24-4c84-b566-8e681a3d626b"
+                                    }
+                                  ]
+                                }
+                              ],
+                              "classes": "pointer-events-none absolute -bottom-32 left-1/3 h-72 w-[36rem] rounded-full bg-secondary-container/60 blur-3xl"
+                            }
+                          ],
+                          "classes": "pointer-events-none absolute top-40 -right-24 h-80 w-80 rounded-full bg-tertiary/20 blur-3xl"
+                        }
+                      ],
+                      "classes": "pointer-events-none absolute -top-24 -left-32 h-96 w-96 rounded-full bg-primary/20 blur-3xl"
+                    }
+                  ],
+                  "classes": "relative overflow-hidden px-6 pt-20 pb-24 md:pt-28 md:pb-32"
+                },
+                {
+                  "id": "5814cef3-b996-4b91-99d2-95c8e73d5894",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "4d80073e-998c-4e52-a132-8f656ad6b06a",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "092620cc-dbdb-4987-b9aa-4dd4b5d44e4c",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "4c857316-58fc-4c35-b433-e81952b8137f",
+                              "type": "span",
+                              "content": "Why Brume",
+                              "children": [],
+                              "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                              "locales": {
+                                "fr": {
+                                  "content": "Pourquoi Brume"
+                                }
+                              }
+                            },
+                            {
+                              "id": "316cbe09-09f1-43fc-a620-9191b5fcba34",
+                              "type": "h2",
+                              "content": "Freshness you can taste in the first sip.",
+                              "children": [],
+                              "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                              "locales": {
+                                "fr": {
+                                  "content": "Une fraîcheur qui se goûte dès la première gorgée."
+                                }
+                              }
+                            },
+                            {
+                              "id": "f50412bc-a4cf-4463-9088-d33eafa511e9",
+                              "type": "paragraph",
+                              "content": "Most grocery-store coffee is months old before you open the bag. Ours has a roast date, a farm, and a plan for your brewer.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "La plupart des cafés d’épicerie ont des mois avant même d’être ouverts. Le nôtre a une date de torréfaction, une ferme et un plan pour votre cafetière."
+                                }
+                              }
+                            }
+                          ],
+                          "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                          "interactions": [
+                            {
+                              "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                              "trigger": "appear",
+                              "targetId": null,
+                              "id": "7d99671b-8072-46ce-a6cd-ca36c1778a89"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "adc5c9db-ed42-4a5e-856a-672c39b27bc8",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "517b6047-65da-42fd-aa79-e29307193134",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "57fbdbf1-a870-41d2-973b-5cd56c72e218",
+                                  "type": "span",
+                                  "content": "☕",
+                                  "children": [],
+                                  "classes": "flex h-14 w-14 items-center justify-center rounded-full bg-secondary-container text-2xl"
+                                },
+                                {
+                                  "id": "4a243728-d82f-4d5b-9b4c-673a4a22fad2",
+                                  "type": "h3",
+                                  "content": "Roasted, not stockpiled",
+                                  "children": [],
+                                  "classes": "text-[24px] font-medium leading-[1.3] text-on-surface",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Torréfié, pas entreposé"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "2379c706-a3b7-4931-9cab-02ec1360955d",
+                                  "type": "paragraph",
+                                  "content": "We roast every Tuesday in four-kilo batches and ship the same day. Nothing sits on a shelf — including your coffee.",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Nous torréfions chaque mardi en lots de quatre kilos et expédions le jour même. Rien ne dort sur une tablette — surtout pas votre café."
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-4 rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                              "interactions": [
+                                {
+                                  "interactionId": "fc21165d-80b1-4180-9974-b33cbf324d0c",
+                                  "trigger": "hover",
+                                  "targetId": null,
+                                  "id": "ae55aef6-29e4-47e2-b732-1e7f2c26afe1"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "4de176e4-a38f-42da-8a85-862c46eaff6a",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "e12af1d8-c937-4d4f-b8e7-a6abc07697e6",
+                                  "type": "span",
+                                  "content": "🌱",
+                                  "children": [],
+                                  "classes": "flex h-14 w-14 items-center justify-center rounded-full bg-secondary-container text-2xl"
+                                },
+                                {
+                                  "id": "78b1fa1d-5e8e-4c27-8088-8687ecb5382d",
+                                  "type": "h3",
+                                  "content": "Traceable to the farm",
+                                  "children": [],
+                                  "classes": "text-[24px] font-medium leading-[1.3] text-on-surface",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Traçable jusqu’à la ferme"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "30b61a36-b824-4dad-ad4b-d3de5e2c8c35",
+                                  "type": "paragraph",
+                                  "content": "Every bag names the farm, the lot, and what we paid for it. This season: Huila, Colombia and Sidama, Ethiopia.",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Chaque sac nomme la ferme, le lot et le prix que nous avons payé. Cette saison : Huila, en Colombie, et Sidama, en Éthiopie."
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-4 rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                              "interactions": [
+                                {
+                                  "interactionId": "fc21165d-80b1-4180-9974-b33cbf324d0c",
+                                  "trigger": "hover",
+                                  "targetId": null,
+                                  "id": "b9680bba-d601-41f3-bbc5-af85d68965b3"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "46f7604c-34ca-45d8-81cb-b601a0f99a02",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "ec243ec8-5164-4170-93b4-c96863dbba9b",
+                                  "type": "span",
+                                  "content": "⚙️",
+                                  "children": [],
+                                  "classes": "flex h-14 w-14 items-center justify-center rounded-full bg-secondary-container text-2xl"
+                                },
+                                {
+                                  "id": "f1c1950c-f3b1-431d-b8fc-64fd97751e8b",
+                                  "type": "h3",
+                                  "content": "Matched to your brewer",
+                                  "children": [],
+                                  "classes": "text-[24px] font-medium leading-[1.3] text-on-surface",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Adapté à votre cafetière"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "af064f55-4a88-49ad-af5d-fe62ae7871fd",
+                                  "type": "paragraph",
+                                  "content": "Tell us if you pour, press, or pull espresso. We tune the roast profile and grind to fit — no generic “medium roast” here.",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Dites-nous si vous filtrez, pressez ou tirez un espresso. Nous ajustons le profil de torréfaction et la mouture — pas de « torréfaction moyenne » générique ici."
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-4 rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                              "interactions": [
+                                {
+                                  "interactionId": "fc21165d-80b1-4180-9974-b33cbf324d0c",
+                                  "trigger": "hover",
+                                  "targetId": null,
+                                  "id": "bd7cda96-0551-4466-b190-f7e5735e21e6"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "61669c95-0108-485e-af30-f0fada088186",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "193257ec-a2e1-4374-b16b-787b55541f74",
+                                  "type": "span",
+                                  "content": "⏸️",
+                                  "children": [],
+                                  "classes": "flex h-14 w-14 items-center justify-center rounded-full bg-secondary-container text-2xl"
+                                },
+                                {
+                                  "id": "a4cefc04-cbe7-42f3-a8bb-aeb9986c4098",
+                                  "type": "h3",
+                                  "content": "Yours to pause",
+                                  "children": [],
+                                  "classes": "text-[24px] font-medium leading-[1.3] text-on-surface",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "À vous de décider"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "25caa55c-e150-460f-af58-f84d08e482a6",
+                                  "type": "paragraph",
+                                  "content": "Skip a month, switch beans, or stop entirely in two taps. A subscription should feel like a treat, not a contract.",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Sautez un mois, changez de grains ou arrêtez tout en deux clics. Un abonnement devrait être un plaisir, pas un contrat."
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-4 rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                              "interactions": [
+                                {
+                                  "interactionId": "fc21165d-80b1-4180-9974-b33cbf324d0c",
+                                  "trigger": "hover",
+                                  "targetId": null,
+                                  "id": "d0223bd0-d028-4550-bdd4-155798b29d9d"
+                                }
+                              ]
+                            }
+                          ],
+                          "classes": "relative mx-auto mt-12 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-4"
+                        }
+                      ],
+                      "classes": "pointer-events-none absolute top-1/3 -right-32 h-96 w-96 rounded-full bg-primary/10 blur-3xl"
+                    }
+                  ],
+                  "classes": "relative overflow-hidden px-6 py-20",
+                  "htmlId": "why"
+                },
+                {
+                  "id": "e8bf123a-f31c-46b4-b29c-5cf1dfd018ea",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "382393c5-421e-495c-9e35-c40db683e6ce",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "a6d3eaa8-36af-4069-bd97-2ac6d39510bd",
+                          "type": "span",
+                          "content": "How it works",
+                          "children": [],
+                          "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                          "locales": {
+                            "fr": {
+                              "content": "Comment ça marche"
+                            }
+                          }
+                        },
+                        {
+                          "id": "2308adda-2064-4ac9-8586-462689bd7b44",
+                          "type": "h2",
+                          "content": "Tuesday is roast day. Here’s what happens.",
+                          "children": [],
+                          "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                          "locales": {
+                            "fr": {
+                              "content": "Le mardi, c’est jour de torréfaction. Voici ce qui se passe."
+                            }
+                          }
+                        },
+                        {
+                          "id": "fc44acc0-15e5-4455-8d66-d799327a0e63",
+                          "type": "paragraph",
+                          "content": "From your first order to the bag on your counter, in three steps.",
+                          "children": [],
+                          "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                          "locales": {
+                            "fr": {
+                              "content": "De votre première commande au sac sur votre comptoir, en trois étapes."
+                            }
+                          }
+                        }
+                      ],
+                      "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                      "interactions": [
+                        {
+                          "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                          "trigger": "appear",
+                          "targetId": null,
+                          "id": "cf97d24b-cb44-4401-9762-d7a196ad3292"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "6e60f050-11c4-49c2-95fe-eff0dfebd4b7",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "0e534e3a-8d4f-41fb-bbd7-3e58e1f449c7",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "16ef632e-b623-409f-8593-a5c167b7ef54",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "d9c0d84b-34b9-4f15-8dd1-41079feee1c3",
+                                  "type": "span",
+                                  "content": "1",
+                                  "children": [],
+                                  "classes": "relative flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:scale-110"
+                                },
+                                {
+                                  "id": "31c29653-2ad3-4221-9049-4cc9220f6c62",
+                                  "type": "h3",
+                                  "content": "Tell us how you brew",
+                                  "children": [],
+                                  "classes": "relative text-[24px] font-medium leading-[1.3] text-on-surface",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Dites-nous comment vous infusez"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "10b75229-72e7-48bb-93ea-0bf13cafffd5",
+                                  "type": "paragraph",
+                                  "content": "Answer three questions — how you brew, how much you drink, and how adventurous you’re feeling. Two minutes, no account needed.",
+                                  "children": [],
+                                  "classes": "relative text-[16px] leading-[1.6] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Répondez à trois questions — votre méthode, votre consommation et votre goût de l’aventure. Deux minutes, sans créer de compte."
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "pointer-events-none absolute -top-8 -left-8 h-36 w-36 rounded-full bg-primary/20 blur-3xl opacity-0 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:opacity-100"
+                            },
+                            {
+                              "id": "c64e0c09-3f30-4d6e-b9d1-1305585fd658",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "fdbf9e86-8dac-4af4-9ec6-44dbe6c922fb",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "e26c9ec8-8422-46be-ba88-8b9d9236a968",
+                                      "type": "span",
+                                      "content": "2",
+                                      "children": [],
+                                      "classes": "relative flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:scale-110"
+                                    },
+                                    {
+                                      "id": "6a20bbfd-f93e-4d0e-aa94-85488cb786e9",
+                                      "type": "h3",
+                                      "content": "We roast your lot",
+                                      "children": [],
+                                      "classes": "relative text-[24px] font-medium leading-[1.3] text-on-surface",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Nous torréfions votre lot"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "5b70aad3-4bee-4218-9f8d-c8c0564a3c1f",
+                                      "type": "paragraph",
+                                      "content": "Tuesday morning your beans go through the drum in our Mile-End roastery, rest just long enough, and are sealed behind a one-way valve.",
+                                      "children": [],
+                                      "classes": "relative text-[16px] leading-[1.6] text-on-surface-variant",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Mardi matin, vos grains passent au tambour dans notre atelier du Mile-End, reposent juste assez, puis sont scellés derrière une valve unidirectionnelle."
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "classes": "pointer-events-none absolute -top-8 -left-8 h-36 w-36 rounded-full bg-primary/20 blur-3xl opacity-0 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:opacity-100"
+                                },
+                                {
+                                  "id": "e82ee590-bd81-40d9-9279-53e932d64907",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "09018c8c-6246-4d80-a049-7d80974a94ee",
+                                      "type": "div",
+                                      "content": "",
+                                      "children": [
+                                        {
+                                          "id": "6d18cd30-9f50-4b7f-aba7-5e7333b4bcea",
+                                          "type": "span",
+                                          "content": "3",
+                                          "children": [],
+                                          "classes": "relative flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:scale-110"
+                                        },
+                                        {
+                                          "id": "11a359bf-ed1d-438b-81c6-fb0e39b1ac19",
+                                          "type": "h3",
+                                          "content": "It ships that afternoon",
+                                          "children": [],
+                                          "classes": "relative text-[24px] font-medium leading-[1.3] text-on-surface",
+                                          "locales": {
+                                            "fr": {
+                                              "content": "Expédié l’après-midi même"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "a4c64e1a-d81f-4940-8588-99d121f18e49",
+                                          "type": "paragraph",
+                                          "content": "Bags leave the same day by carbon-neutral post. Most of Canada sees them within two days — peak-flavour week included.",
+                                          "children": [],
+                                          "classes": "relative text-[16px] leading-[1.6] text-on-surface-variant",
+                                          "locales": {
+                                            "fr": {
+                                              "content": "Les sacs partent le jour même par la poste carboneutre. La majorité du Canada les reçoit en deux jours — semaine de saveur optimale incluse."
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "classes": "pointer-events-none absolute -top-8 -left-8 h-36 w-36 rounded-full bg-primary/20 blur-3xl opacity-0 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:opacity-100"
+                                    }
+                                  ],
+                                  "classes": "group relative flex flex-col gap-4 overflow-hidden rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                                }
+                              ],
+                              "classes": "group relative flex flex-col gap-4 overflow-hidden rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                            }
+                          ],
+                          "classes": "group relative flex flex-col gap-4 overflow-hidden rounded-[24px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        }
+                      ],
+                      "classes": "mx-auto mt-12 grid max-w-6xl gap-6 md:grid-cols-3"
+                    }
+                  ],
+                  "classes": "px-6 py-20",
+                  "htmlId": "how"
+                },
+                {
+                  "id": "35fffc2d-f7b0-4b26-88d7-029887394788",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "36addf29-eeb6-491f-9ebc-fead03b1ab6a",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "948a2b3c-ddec-44db-bf48-9e820f3a9047",
+                          "type": "span",
+                          "content": "Pricing",
+                          "children": [],
+                          "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                          "locales": {
+                            "fr": {
+                              "content": "Tarifs"
+                            }
+                          }
+                        },
+                        {
+                          "id": "f6fac821-b216-4ad7-82f0-b66466fbb4ff",
+                          "type": "h2",
+                          "content": "Three ways to never run out.",
+                          "children": [],
+                          "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                          "locales": {
+                            "fr": {
+                              "content": "Trois façons de ne jamais en manquer."
+                            }
+                          }
+                        },
+                        {
+                          "id": "331a3570-fe00-4146-a3e0-019958165a59",
+                          "type": "paragraph",
+                          "content": "Every tier ships fresh on Tuesdays. Pause, swap, or cancel whenever.",
+                          "children": [],
+                          "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                          "locales": {
+                            "fr": {
+                              "content": "Chaque forfait part frais le mardi. Pausez, changez ou annulez quand vous voulez."
+                            }
+                          }
+                        }
+                      ],
+                      "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                      "interactions": [
+                        {
+                          "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                          "trigger": "appear",
+                          "targetId": null,
+                          "id": "3e13a570-6023-4f12-b471-dd8a21a0192d"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "388970d1-b5df-4f6d-a322-9baedda0077f",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "e8e7545c-2eb0-4f0b-b046-19326830c8f4",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "df206679-56f6-4712-85bb-77af309d30a3",
+                              "type": "h3",
+                              "content": "Le Curieux",
+                              "children": [],
+                              "classes": "text-[24px] font-medium text-on-surface"
+                            },
+                            {
+                              "id": "d7a463ed-2b69-4f88-92b8-d1c8cde9c13f",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "a9443200-5bbc-4d24-9770-0ad4c941ebce",
+                                  "type": "span",
+                                  "content": "$22",
+                                  "children": [],
+                                  "classes": "text-[48px] font-medium tracking-tight text-on-surface"
+                                },
+                                {
+                                  "id": "62f15ae6-34cf-4a35-9d7c-6ded31765a3a",
+                                  "type": "span",
+                                  "content": "/month",
+                                  "children": [],
+                                  "classes": "text-[14px] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "/mois"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex items-baseline gap-1"
+                            },
+                            {
+                              "id": "f6bcd6f9-4a73-480f-a606-654616aa51e1",
+                              "type": "paragraph",
+                              "content": "One bag a month for the curious cup.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Un sac par mois pour les curieux."
+                                }
+                              }
+                            },
+                            {
+                              "id": "37032414-ea03-47bd-9c4c-8f7fbf5b4dc3",
+                              "type": "list",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "1b2b49cd-b8c0-4784-88e0-890f5f767b73",
+                                  "type": "list-item",
+                                  "content": "✓ One 340 g bag, rotating single origin",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Un sac de 340 g, origine unique en rotation"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "9ba2d478-a894-495b-8a76-5ae835a76a2b",
+                                  "type": "list-item",
+                                  "content": "✓ Whole bean or ground to order",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ En grains ou moulu sur commande"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "9ff4145d-0cbb-4fb8-b98d-2c4e057e7e11",
+                                  "type": "list-item",
+                                  "content": "✓ Tasting card with every lot",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Fiche de dégustation avec chaque lot"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "e78a78a7-f53b-41a9-b986-87518c240cdd",
+                                  "type": "list-item",
+                                  "content": "✓ Free shipping in Canada",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Livraison gratuite au Canada"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-3"
+                            },
+                            {
+                              "id": "e094d8bc-ec88-4afe-a5b7-fea886948f1d",
+                              "type": "button",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "15ba6ab6-34ce-48b9-b78b-6ff81ece84cd",
+                                  "type": "span",
+                                  "content": "Choose Le Curieux",
+                                  "children": [],
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Choisir Le Curieux"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "mt-auto w-full text-center rounded-full bg-secondary-container px-8 py-4 text-sm font-medium text-on-secondary-container transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-secondary-container/70 hover:shadow-sm active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                            }
+                          ],
+                          "classes": "flex flex-col gap-6 rounded-[32px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "011e2ce9-3efe-4f94-8696-ce177dccec9d",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "b69118d3-2655-4d05-b623-410b110fe34a",
+                              "type": "span",
+                              "content": "Most popular",
+                              "children": [],
+                              "classes": "w-fit rounded-full bg-primary px-4 py-1.5 text-xs font-medium tracking-wide text-white",
+                              "locales": {
+                                "fr": {
+                                  "content": "Le plus populaire"
+                                }
+                              }
+                            },
+                            {
+                              "id": "0587139f-393e-4f5c-b76f-7680d26ed08d",
+                              "type": "h3",
+                              "content": "L’Habitué",
+                              "children": [],
+                              "classes": "text-[24px] font-medium text-on-surface"
+                            },
+                            {
+                              "id": "f6e20ee3-5302-448c-bdcd-989b4cd8b132",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "8d565ec3-9f18-4bf4-be23-0d5de648b85d",
+                                  "type": "span",
+                                  "content": "$38",
+                                  "children": [],
+                                  "classes": "text-[48px] font-medium tracking-tight text-on-surface"
+                                },
+                                {
+                                  "id": "20f22d0d-7cad-4f74-8172-086eaefc72a7",
+                                  "type": "span",
+                                  "content": "/month",
+                                  "children": [],
+                                  "classes": "text-[14px] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "/mois"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex items-baseline gap-1"
+                            },
+                            {
+                              "id": "2b61d67e-79b6-484b-a2ef-793c8b4b575f",
+                              "type": "paragraph",
+                              "content": "Two bags, tuned to your routine.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Deux sacs, réglés sur votre routine."
+                                }
+                              }
+                            },
+                            {
+                              "id": "fe782500-0915-4634-8862-e7be55787cf7",
+                              "type": "list",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "bd9c3254-6640-4427-8c02-bc7a7a96da55",
+                                  "type": "list-item",
+                                  "content": "✓ Two 340 g bags — mix origins freely",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Deux sacs de 340 g — mélangez les origines"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "72c6b05c-8224-4cfe-b05f-5f7cbd40e2a0",
+                                  "type": "list-item",
+                                  "content": "✓ Espresso or filter roast profiles",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Profils espresso ou filtre"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "12c2eca0-9e35-4101-9014-f2c1e2a2cc9a",
+                                  "type": "list-item",
+                                  "content": "✓ First taste of limited micro-lots",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Primeur des micro-lots limités"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "23721169-0bf0-4e15-ae05-f6b8208387f5",
+                                  "type": "list-item",
+                                  "content": "✓ Free shipping + surprise samples",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Livraison gratuite + échantillons surprises"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-3"
+                            },
+                            {
+                              "id": "0b368f21-924d-41f5-b1d4-033caee3a3e5",
+                              "type": "button",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "2ccb2668-c236-4515-96d3-144f01de0831",
+                                  "type": "span",
+                                  "content": "Choose L’Habitué",
+                                  "children": [],
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Choisir L’Habitué"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "mt-auto w-full text-center rounded-full bg-primary px-8 py-4 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/90 hover:shadow-md active:bg-primary/80 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                            }
+                          ],
+                          "classes": "relative flex flex-col gap-6 rounded-[32px] bg-surface-container p-8 shadow-lg ring-2 ring-primary transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-lg md:-translate-y-4"
+                        },
+                        {
+                          "id": "88b38c71-6597-4ef1-96cd-fb3da17df9ff",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "9ae797d5-ff24-4bac-980b-90f21e974738",
+                              "type": "h3",
+                              "content": "La Maisonnée",
+                              "children": [],
+                              "classes": "text-[24px] font-medium text-on-surface"
+                            },
+                            {
+                              "id": "f4144e59-aee3-4996-988d-e861d48b4d12",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "79394f0e-c906-4bde-bb53-0bba0e1837ef",
+                                  "type": "span",
+                                  "content": "$54",
+                                  "children": [],
+                                  "classes": "text-[48px] font-medium tracking-tight text-on-surface"
+                                },
+                                {
+                                  "id": "62519a43-3dd0-4093-ac8d-efd6c5f93c9d",
+                                  "type": "span",
+                                  "content": "/month",
+                                  "children": [],
+                                  "classes": "text-[14px] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "/mois"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex items-baseline gap-1"
+                            },
+                            {
+                              "id": "ebc761ec-33a0-4a49-897d-25f1384e25f6",
+                              "type": "paragraph",
+                              "content": "Three bags for full households.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Trois sacs pour les grandes maisonnées."
+                                }
+                              }
+                            },
+                            {
+                              "id": "df36fb4b-c23b-497e-a029-0fe440eb5956",
+                              "type": "list",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "b91b273e-280c-432f-a9a8-3a9334942993",
+                                  "type": "list-item",
+                                  "content": "✓ Three 340 g bags, or one 1 kg + one 340 g",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Trois sacs de 340 g, ou un 1 kg + un 340 g"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "f74d09b6-3d7f-4fab-8489-e25f32574c6b",
+                                  "type": "list-item",
+                                  "content": "✓ Priority pick of rare lots",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Priorité sur les lots rares"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "6fead4a2-75a5-439e-a7e4-9f314afde223",
+                                  "type": "list-item",
+                                  "content": "✓ Quarterly cupping invite in Mile-End",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Invitation trimestrielle à une dégustation dans le Mile-End"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "fd281dfc-4fbb-4a17-9be9-89c428fb395e",
+                                  "type": "list-item",
+                                  "content": "✓ Gift a month to a friend, on us",
+                                  "children": [],
+                                  "classes": "text-[16px] leading-[1.5] text-on-surface-variant",
+                                  "locales": {
+                                    "fr": {
+                                      "content": "✓ Offrez un mois à un ami, à nos frais"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "flex flex-col gap-3"
+                            },
+                            {
+                              "id": "f909e84a-0887-4369-8291-f4f1f28752aa",
+                              "type": "button",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "44e9283e-bb4b-4931-b1c4-82ca98681605",
+                                  "type": "span",
+                                  "content": "Choose La Maisonnée",
+                                  "children": [],
+                                  "locales": {
+                                    "fr": {
+                                      "content": "Choisir La Maisonnée"
+                                    }
+                                  }
+                                }
+                              ],
+                              "classes": "mt-auto w-full text-center rounded-full bg-secondary-container px-8 py-4 text-sm font-medium text-on-secondary-container transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-secondary-container/70 hover:shadow-sm active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                            }
+                          ],
+                          "classes": "flex flex-col gap-6 rounded-[32px] bg-surface-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        }
+                      ],
+                      "classes": "mx-auto mt-16 grid max-w-5xl items-stretch gap-6 md:grid-cols-3"
+                    }
+                  ],
+                  "classes": "px-6 py-20",
+                  "htmlId": "pricing"
+                },
+                {
+                  "id": "9de9b37b-de73-4894-908b-a3f6388237af",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "5ecaddbb-e173-4668-b848-dbe0a8747ca7",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "a0ee941e-6fa1-4a49-956a-97011ee09554",
+                          "type": "span",
+                          "content": "From the mailbag",
+                          "children": [],
+                          "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                          "locales": {
+                            "fr": {
+                              "content": "Courrier des abonnés"
+                            }
+                          }
+                        },
+                        {
+                          "id": "cf496d79-97b0-457e-8c09-d62fbf741dfe",
+                          "type": "h2",
+                          "content": "Word travels fast in a small city.",
+                          "children": [],
+                          "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                          "locales": {
+                            "fr": {
+                              "content": "Les nouvelles vont vite dans une petite ville."
+                            }
+                          }
+                        }
+                      ],
+                      "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                      "interactions": [
+                        {
+                          "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                          "trigger": "appear",
+                          "targetId": null,
+                          "id": "75f8ad49-39c9-407f-8b75-412ec023f0f1"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "fc85d070-f356-4a3e-9855-d65eadf4850e",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "1f6a6a1f-5aa8-49ff-944a-b0c1cd717318",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "3cdd0f4d-c3e1-459f-9801-0469ef1f3548",
+                              "type": "paragraph",
+                              "content": "“I didn’t know coffee had a fresh until the first Brume bag. Grocery-store coffee tastes like cardboard now.”",
+                              "children": [],
+                              "classes": "text-[20px] leading-[1.5] text-on-secondary-container",
+                              "locales": {
+                                "fr": {
+                                  "content": "« Je ne savais pas que le café avait un “frais” avant mon premier sac Brume. Le café d’épicerie goûte le carton maintenant. »"
+                                }
+                              }
+                            },
+                            {
+                              "id": "04991ddf-1a9f-446c-bab8-79ece7460b7c",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "0f445f6b-8a5a-43f0-8de1-9a0c504dfb6d",
+                                  "type": "span",
+                                  "content": "MG",
+                                  "children": [],
+                                  "classes": "flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-medium text-white"
+                                },
+                                {
+                                  "id": "72d39735-b524-421c-9085-1c4f51d2638a",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "0d9357c0-4197-4103-8947-41e5dea76a83",
+                                      "type": "span",
+                                      "content": "Marie-Ève G.",
+                                      "children": [],
+                                      "classes": "text-[14px] font-medium text-on-secondary-container"
+                                    },
+                                    {
+                                      "id": "f104710d-15cc-4508-801c-b028374b882a",
+                                      "type": "span",
+                                      "content": "Plateau-Mont-Royal",
+                                      "children": [],
+                                      "classes": "text-[12px] text-on-surface-variant"
+                                    }
+                                  ],
+                                  "classes": "flex flex-col"
+                                }
+                              ],
+                              "classes": "flex items-center gap-3"
+                            }
+                          ],
+                          "classes": "flex flex-col justify-between gap-8 rounded-[24px] bg-secondary-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "898fc5af-b4a9-49e6-adf8-53b887e1004a",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "55f1457e-0a83-4379-a279-25bb6318ed2c",
+                              "type": "paragraph",
+                              "content": "“The espresso profile actually pulls differently — richer, slower. My machine has never been happier.”",
+                              "children": [],
+                              "classes": "text-[20px] leading-[1.5] text-on-secondary-container",
+                              "locales": {
+                                "fr": {
+                                  "content": "« Le profil espresso s’extrait vraiment autrement — plus riche, plus lent. Ma machine n’a jamais été aussi heureuse. »"
+                                }
+                              }
+                            },
+                            {
+                              "id": "17c5aa17-1ce0-4d45-9002-ab4e1878826a",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "a3c2785b-da33-4376-b543-5e9af374d3b0",
+                                  "type": "span",
+                                  "content": "ST",
+                                  "children": [],
+                                  "classes": "flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-medium text-white"
+                                },
+                                {
+                                  "id": "a42db26a-3fef-4ae5-9851-243fca4e3bd9",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "c79302d9-1a23-4452-b7a7-99d0ab0ef61e",
+                                      "type": "span",
+                                      "content": "Sam T.",
+                                      "children": [],
+                                      "classes": "text-[14px] font-medium text-on-secondary-container"
+                                    },
+                                    {
+                                      "id": "965f4049-9116-46cb-b544-85cf2dc4c50f",
+                                      "type": "span",
+                                      "content": "Verdun",
+                                      "children": [],
+                                      "classes": "text-[12px] text-on-surface-variant"
+                                    }
+                                  ],
+                                  "classes": "flex flex-col"
+                                }
+                              ],
+                              "classes": "flex items-center gap-3"
+                            }
+                          ],
+                          "classes": "flex flex-col justify-between gap-8 rounded-[24px] bg-secondary-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "687d4f66-cd0d-47be-b098-3d94f6ddb89e",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "00acb15d-ef09-4839-b716-1d53331bb898",
+                              "type": "paragraph",
+                              "content": "“We split La Maisonnée at the office. Tuesday delivery has become a small holiday.”",
+                              "children": [],
+                              "classes": "text-[20px] leading-[1.5] text-on-secondary-container",
+                              "locales": {
+                                "fr": {
+                                  "content": "« On partage La Maisonnée au bureau. La livraison du mardi est devenue une petite fête. »"
+                                }
+                              }
+                            },
+                            {
+                              "id": "5bff0da3-f6c7-4af4-8314-85d7d8b926a4",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "273b8385-38b4-469b-8947-a12f2b284416",
+                                  "type": "span",
+                                  "content": "PK",
+                                  "children": [],
+                                  "classes": "flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-medium text-white"
+                                },
+                                {
+                                  "id": "a5b04fa7-ac37-4a89-ab63-256323fd5620",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "d3f6576e-4772-4c5f-83e4-12c1caa9b93d",
+                                      "type": "span",
+                                      "content": "Priya K.",
+                                      "children": [],
+                                      "classes": "text-[14px] font-medium text-on-secondary-container"
+                                    },
+                                    {
+                                      "id": "56061561-7253-4d11-9e7a-1015784b687d",
+                                      "type": "span",
+                                      "content": "Vieux-Montréal",
+                                      "children": [],
+                                      "classes": "text-[12px] text-on-surface-variant"
+                                    }
+                                  ],
+                                  "classes": "flex flex-col"
+                                }
+                              ],
+                              "classes": "flex items-center gap-3"
+                            }
+                          ],
+                          "classes": "flex flex-col justify-between gap-8 rounded-[24px] bg-secondary-container p-8 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        }
+                      ],
+                      "classes": "mx-auto mt-12 grid max-w-6xl gap-6 md:grid-cols-3"
+                    }
+                  ],
+                  "classes": "px-6 py-20"
+                },
+                {
+                  "id": "a7e6965c-3391-4b64-bd50-9c2e9c081288",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "ca5d1031-77f4-48f0-8e0a-9ead29f09126",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "3bc1c3b9-43e6-4f7b-9a8d-c1b57de51a56",
+                          "type": "span",
+                          "content": "FAQ",
+                          "children": [],
+                          "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container"
+                        },
+                        {
+                          "id": "55341536-4966-417b-9375-8aafc2306c80",
+                          "type": "h2",
+                          "content": "Questions, poured over.",
+                          "children": [],
+                          "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                          "locales": {
+                            "fr": {
+                              "content": "Vos questions, filtrées avec soin."
+                            }
+                          }
+                        }
+                      ],
+                      "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                      "interactions": [
+                        {
+                          "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                          "trigger": "appear",
+                          "targetId": null,
+                          "id": "f1eab06a-0269-4850-824d-4d1d588317bb"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "2f0e2607-b479-4b6b-a507-31cd176e973e",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "d3b60b3b-37d0-4507-8c47-924429e5cd54",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "509273ca-ae97-49e9-91ca-62ad1acca3b1",
+                              "type": "h3",
+                              "content": "When does my coffee ship?",
+                              "children": [],
+                              "classes": "text-[20px] font-medium leading-[1.3] text-on-surface",
+                              "locales": {
+                                "fr": {
+                                  "content": "Quand mon café est-il expédié ?"
+                                }
+                              }
+                            },
+                            {
+                              "id": "63d4983b-2cb2-41b3-a675-cae30f1bb750",
+                              "type": "paragraph",
+                              "content": "We roast Tuesday morning and ship Tuesday afternoon. Order by Sunday midnight to make that week’s roast; otherwise you’re first in line for the next one.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Nous torréfions le mardi matin et expédions le mardi après-midi. Commandez avant dimanche minuit pour la fournée de la semaine ; sinon, vous êtes en tête de liste pour la suivante."
+                                }
+                              }
+                            }
+                          ],
+                          "classes": "flex flex-col gap-3 rounded-[24px] bg-surface-container p-6 shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "7b13282b-a813-4f43-8533-76866f98b6d7",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "ce2ce985-f046-41c4-93aa-49e927ae0bb6",
+                              "type": "h3",
+                              "content": "Whole bean or ground?",
+                              "children": [],
+                              "classes": "text-[20px] font-medium leading-[1.3] text-on-surface",
+                              "locales": {
+                                "fr": {
+                                  "content": "En grains ou moulu ?"
+                                }
+                              }
+                            },
+                            {
+                              "id": "d6d6eb04-ef18-43ad-bf7a-e70151f0c8fd",
+                              "type": "paragraph",
+                              "content": "Either. If you choose ground, tell us your brewer and we grind to match right before sealing — burrs to bag in under an hour.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Les deux. Si vous choisissez moulu, indiquez votre cafetière et nous moulons juste avant de sceller — des meules au sac en moins d’une heure."
+                                }
+                              }
+                            }
+                          ],
+                          "classes": "flex flex-col gap-3 rounded-[24px] bg-surface-container p-6 shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "2653f682-c2ea-4618-a249-68358386dd40",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "163368aa-f9ea-49e6-9203-6009d670181c",
+                              "type": "h3",
+                              "content": "Can I skip a month?",
+                              "children": [],
+                              "classes": "text-[20px] font-medium leading-[1.3] text-on-surface",
+                              "locales": {
+                                "fr": {
+                                  "content": "Puis-je sauter un mois ?"
+                                }
+                              }
+                            },
+                            {
+                              "id": "1fcbac27-5830-4d62-bd7a-f742fbe6ff2f",
+                              "type": "paragraph",
+                              "content": "Yes — from your account, in two taps, any time before Sunday. Skipping never costs you your spot on limited lots.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "Oui — depuis votre compte, en deux clics, jusqu’au dimanche. Sauter un mois ne vous fait jamais perdre votre place sur les lots limités."
+                                }
+                              }
+                            }
+                          ],
+                          "classes": "flex flex-col gap-3 rounded-[24px] bg-surface-container p-6 shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        },
+                        {
+                          "id": "fd0b4ac0-c6cd-4ba4-b541-718dcf940b35",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "ea8d2fa0-b0c4-418c-bb26-7833334add31",
+                              "type": "h3",
+                              "content": "Where do the beans come from?",
+                              "children": [],
+                              "classes": "text-[20px] font-medium leading-[1.3] text-on-surface",
+                              "locales": {
+                                "fr": {
+                                  "content": "D’où viennent les grains ?"
+                                }
+                              }
+                            },
+                            {
+                              "id": "8dd57cfc-1ebf-4bb7-b340-7552eaf99a5c",
+                              "type": "paragraph",
+                              "content": "Small farms we buy from directly, at prices we publish on every bag. This season: Huila, Colombia; Sidama, Ethiopia; and a honey-process lot from Costa Rica.",
+                              "children": [],
+                              "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                              "locales": {
+                                "fr": {
+                                  "content": "De petites fermes avec qui nous traitons directement, à des prix publiés sur chaque sac. Cette saison : Huila, en Colombie ; Sidama, en Éthiopie ; et un lot honey du Costa Rica."
+                                }
+                              }
+                            }
+                          ],
+                          "classes": "flex flex-col gap-3 rounded-[24px] bg-surface-container p-6 shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md"
+                        }
+                      ],
+                      "classes": "mx-auto mt-12 grid max-w-4xl gap-4 md:grid-cols-2"
+                    }
+                  ],
+                  "classes": "px-6 py-20",
+                  "htmlId": "faq"
+                },
+                {
+                  "id": "2322ddba-a0f3-4987-ba6e-b1b5a361abbd",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "2b94c063-f1d7-4e15-912e-c4ba561b0139",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "adc82d63-de9f-4bee-bea6-cb809ac6d9b9",
+                          "type": "span",
+                          "content": "The Journal",
+                          "children": [],
+                          "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container",
+                          "locales": {
+                            "fr": {
+                              "content": "Le Journal"
+                            }
+                          }
+                        },
+                        {
+                          "id": "06a0079b-68c5-45bd-a0d1-691eddf92d90",
+                          "type": "h2",
+                          "content": "Brewing notes.",
+                          "children": [],
+                          "classes": "text-[32px] font-medium leading-[1.2] tracking-tight text-on-surface md:text-[48px]",
+                          "locales": {
+                            "fr": {
+                              "content": "Notes d’infusion."
+                            }
+                          }
+                        },
+                        {
+                          "id": "df91bbeb-1e8c-4d0b-bddf-8bade70ea5e7",
+                          "type": "paragraph",
+                          "content": "Dispatches from the roastery — origin trips, brew recipes, and the occasional opinion.",
+                          "children": [],
+                          "classes": "text-[16px] leading-[1.6] text-on-surface-variant",
+                          "locales": {
+                            "fr": {
+                              "content": "Des nouvelles de l’atelier — voyages aux origines, recettes d’infusion et quelques opinions."
+                            }
+                          }
+                        }
+                      ],
+                      "classes": "mx-auto flex max-w-2xl flex-col items-center gap-4 text-center translate-y-6 opacity-0",
+                      "interactions": [
+                        {
+                          "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                          "trigger": "appear",
+                          "targetId": null,
+                          "id": "a938652a-6533-4b7f-a2e7-bcc04125c60f"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "20c65a99-dfc3-4963-8bb9-0f8b6d118860",
+                      "type": "collection-list",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "707c8c19-e495-4b20-815a-979be5a2e95e",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "f9097de5-a240-49bc-86a7-4553540c569d",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "f093c649-8f5f-4904-bc35-9656ea36061a",
+                                  "type": "image",
+                                  "content": "",
+                                  "children": [],
+                                  "arg": "cover",
+                                  "classes": "aspect-[4/3] w-full object-cover transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none group-hover:scale-105"
+                                }
+                              ],
+                              "classes": "overflow-hidden"
+                            },
+                            {
+                              "id": "86051797-4ca4-4baf-9fe3-b9ac1e972938",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "9d692ba3-f6f0-4c0c-8040-f6f8fe8024d6",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": [],
+                                  "arg": "date",
+                                  "classes": "w-fit rounded-full bg-secondary-container px-3 py-1 text-[12px] font-medium text-on-secondary-container"
+                                },
+                                {
+                                  "id": "1ef18c4c-2e20-4cc0-83ee-3fb9544c6bed",
+                                  "type": "h3",
+                                  "content": "",
+                                  "children": [],
+                                  "arg": "title",
+                                  "classes": "text-[24px] font-medium leading-[1.3] text-on-surface"
+                                },
+                                {
+                                  "id": "dee45daf-9971-4ce0-9075-9cb6be561db9",
+                                  "type": "paragraph",
+                                  "content": "",
+                                  "children": [],
+                                  "arg": "excerpt",
+                                  "classes": "text-[16px] leading-[1.6] text-on-surface-variant"
+                                }
+                              ],
+                              "classes": "flex flex-col gap-3 p-6"
+                            }
+                          ],
+                          "link": "@item",
+                          "classes": "group flex cursor-pointer flex-col overflow-hidden rounded-[24px] bg-surface-container shadow-sm transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                        }
+                      ],
+                      "arg": "post",
+                      "classes": "mx-auto mt-12 grid max-w-6xl gap-6 md:grid-cols-3"
+                    }
+                  ],
+                  "classes": "px-6 py-20",
+                  "htmlId": "journal"
+                },
+                {
+                  "id": "74879955-9fa5-4e78-a912-4266a6d852ac",
+                  "type": "section",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "9ef7ea05-c622-4dec-8988-ef6d5edcf604",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "72c61907-17d4-4ed6-a1f6-6b56c15e54fe",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "e77a45d3-63ab-4d74-998d-9c14879bb729",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "065b87f4-1263-4936-8ed2-747c10d66d40",
+                                  "type": "div",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "c162f14c-3b41-4ff8-8241-5977b1675f0b",
+                                      "type": "span",
+                                      "content": "Next roast: Tuesday",
+                                      "children": [],
+                                      "classes": "rounded-full border border-white/10 bg-white/10 px-4 py-1.5 text-xs font-medium tracking-wide text-white backdrop-blur-sm",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Prochaine torréfaction : mardi"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "2536e89f-64c6-44b3-aa02-aa3e7f658eac",
+                                      "type": "h2",
+                                      "content": "Your first bag ships next Tuesday.",
+                                      "children": [],
+                                      "classes": "max-w-2xl text-[32px] font-medium leading-[1.2] tracking-tight text-white md:text-[48px]",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Votre premier sac part mardi prochain."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "86a923e2-ef31-41f4-87b2-bd6bd1ffe00a",
+                                      "type": "paragraph",
+                                      "content": "Tell us where to send it. Skip, swap, or cancel any time — and the first delivery ships free.",
+                                      "children": [],
+                                      "classes": "max-w-xl text-[16px] leading-[1.6] text-white/80 md:text-[20px]",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Dites-nous où l’envoyer. Sautez, changez ou annulez en tout temps — et la première livraison est gratuite."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "7f425775-987b-4905-bda0-75cb331199c8",
+                                      "type": "form",
+                                      "content": "",
+                                      "children": [
+                                        {
+                                          "id": "5a3296ba-2213-4653-bb98-87e19edc4f67",
+                                          "type": "label",
+                                          "content": "",
+                                          "children": [
+                                            {
+                                              "id": "f0b8e80c-b5c5-4e9f-bd81-c6a804797c17",
+                                              "type": "span",
+                                              "content": "Your email",
+                                              "children": [],
+                                              "locales": {
+                                                "fr": {
+                                                  "content": "Votre courriel"
+                                                }
+                                              }
+                                            }
+                                          ],
+                                          "classes": "text-[12px] font-medium tracking-wide text-white/80"
+                                        },
+                                        {
+                                          "id": "9c219292-8848-4e4f-a1e2-15468686b6c8",
+                                          "type": "div",
+                                          "content": "",
+                                          "children": [
+                                            {
+                                              "id": "29463400-23ae-494b-b508-39bed9e0018b",
+                                              "type": "input",
+                                              "content": "",
+                                              "children": [],
+                                              "classes": "h-14 w-full rounded-t-xl border-b-2 border-white/40 bg-white/10 px-4 text-white backdrop-blur-sm outline-none transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none focus:border-white"
+                                            },
+                                            {
+                                              "id": "a34331fb-deaf-4c1d-91e1-358d02f3001f",
+                                              "type": "button",
+                                              "content": "",
+                                              "children": [
+                                                {
+                                                  "id": "c0f4cbfb-8618-4f67-9485-7def69b415c0",
+                                                  "type": "span",
+                                                  "content": "Get started",
+                                                  "children": [],
+                                                  "locales": {
+                                                    "fr": {
+                                                      "content": "Commencer"
+                                                    }
+                                                  }
+                                                }
+                                              ],
+                                              "classes": "h-14 shrink-0 rounded-full bg-white px-8 text-sm font-medium text-primary shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-white/90 active:bg-white/80 active:scale-95 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary focus-visible:outline-none"
+                                            }
+                                          ],
+                                          "classes": "flex w-full flex-col gap-3 sm:flex-row"
+                                        }
+                                      ],
+                                      "classes": "flex w-full max-w-md flex-col items-start gap-2"
+                                    },
+                                    {
+                                      "id": "066f2334-5a15-4aca-9c16-bff325a303e2",
+                                      "type": "span",
+                                      "content": "No commitment. Rated 4.9 by 1,200+ subscribers.",
+                                      "children": [],
+                                      "classes": "text-[12px] text-white/60",
+                                      "locales": {
+                                        "fr": {
+                                          "content": "Sans engagement. Noté 4,9 par plus de 1 200 abonnés."
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "classes": "relative flex flex-col items-center gap-6 text-center translate-y-6 opacity-0",
+                                  "interactions": [
+                                    {
+                                      "interactionId": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+                                      "trigger": "appear",
+                                      "targetId": null,
+                                      "id": "1bd9cebc-9e70-431e-a327-461b60dd9af3"
+                                    }
+                                  ]
+                                }
+                              ],
+                              "classes": "pointer-events-none absolute -bottom-28 -left-16 h-96 w-96 rounded-full bg-tertiary/40 blur-3xl"
+                            }
+                          ],
+                          "classes": "pointer-events-none absolute -top-24 -right-20 h-80 w-80 rounded-full bg-white/10 blur-3xl"
+                        }
+                      ],
+                      "classes": "relative mx-auto max-w-6xl overflow-hidden rounded-[24px] bg-primary px-6 py-16 shadow-lg md:rounded-[48px] md:px-16 md:py-24"
+                    }
+                  ],
+                  "classes": "px-6 pt-4 pb-8"
+                },
+                {
+                  "id": "1a10143b-f141-4987-bf7b-5a8e06e01ce7",
+                  "type": "Footer",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "068e09ea-5c47-4f4b-bb9b-49e6ee63c3cc",
+                      "type": "footer",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "3978c9cb-cd74-4f56-a944-b68aee2e512b",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "9462a465-03f4-4ecb-a18d-d6d64e07f542",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "8844b998-04cf-4fd5-aebc-de7c13a95d85",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                },
+                                {
+                                  "id": "b87b2d98-7f6d-4baf-8e54-9424890ad7d2",
+                                  "type": "paragraph",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "id": "2e7e788e-cabd-40a1-a88e-91178c2c774d",
+                              "type": "nav",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "9bc0ec46-2ee9-4125-88fd-7299ec497369",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "5d0f8f15-59eb-4940-a217-5139811a767b",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "#why"
+                                },
+                                {
+                                  "id": "6d2e41fa-42c8-4a3f-8424-c9d3e8605f78",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "3731e6e5-bc64-4f19-94d7-1b59ad12bf00",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "#how"
+                                },
+                                {
+                                  "id": "9fa9a0d1-0868-425f-9cc5-11c7f1f3f960",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "041bb472-dc5a-4dfe-a48a-5f7d89070d3f",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "#pricing"
+                                },
+                                {
+                                  "id": "a9679fb7-a2d5-4d74-8b50-017e8b31f25d",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "f93e8df1-6b5c-4c8e-9add-ccd9cfb50f61",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "#journal"
+                                },
+                                {
+                                  "id": "045602c4-085a-459b-9f69-56612ae1d0a8",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "63eb4238-782f-457e-ac5c-884705a7b608",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "#faq"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "133402a2-ee09-4263-928d-6ff541822dfe",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "f53201cc-7ea9-4731-bb7f-cdd1fd09fe31",
+                                  "type": "link",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "e6f0412d-1975-484e-91a9-1491dad784bc",
+                                      "type": "span",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ],
+                                  "link": "mailto:hello@brume.coffee"
+                                },
+                                {
+                                  "id": "3fc679f3-a5b9-4581-bad2-59afac8047f8",
+                                  "type": "span",
+                                  "content": "",
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "c3ef8577-ef15-4949-af8d-07c641cc11c4",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "96211c16-efdb-4d30-86fb-e15d9c2edaa8",
+                              "type": "span",
+                              "content": "",
+                              "children": []
+                            },
+                            {
+                              "id": "9ce1181b-d22c-4135-8f8a-f3ab969eea62",
+                              "type": "span",
+                              "content": "",
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "classes": "bg-surface text-on-surface antialiased"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b44801db-9f9c-42a8-a468-861f88e894da",
+      "name": "Post template",
+      "path": "/journal",
+      "status": "published",
+      "elements": [
+        {
+          "id": "cc55f0c8-dc03-4464-815d-b2e80bda6cc6",
+          "type": "body",
+          "content": "",
+          "children": [
+            {
+              "id": "bc1fa26c-285f-4883-9a2c-f5cb05748b31",
+              "type": "article",
+              "content": "",
+              "children": [
+                {
+                  "id": "94ac44de-8003-45a5-9cba-741aaeab7415",
+                  "type": "span",
+                  "content": "",
+                  "children": [],
+                  "arg": "date",
+                  "classes": "w-fit rounded-full bg-secondary-container px-4 py-1.5 text-xs font-medium tracking-wide text-on-secondary-container"
+                },
+                {
+                  "id": "86428e08-7bb5-4cf8-ad0c-aa63b6039c14",
+                  "type": "h1",
+                  "content": "",
+                  "children": [],
+                  "arg": "title",
+                  "classes": "text-[32px] font-medium leading-[1.2] tracking-tight md:text-[48px]"
+                },
+                {
+                  "id": "9b53df05-2b9b-44a3-bf36-697c66e520c2",
+                  "type": "image",
+                  "content": "",
+                  "children": [],
+                  "arg": "cover",
+                  "classes": "aspect-video w-full rounded-[24px] object-cover shadow-sm md:rounded-[32px]"
+                },
+                {
+                  "id": "0a8231f7-969e-4765-bd0d-88f0f1e60af5",
+                  "type": "paragraph",
+                  "content": "",
+                  "children": [],
+                  "arg": "body",
+                  "classes": "text-[20px] leading-[1.6] text-on-surface-variant"
+                }
+              ],
+              "classes": "mx-auto flex max-w-2xl flex-col gap-8 bg-surface px-6 pt-24 pb-24 text-on-surface"
+            }
+          ],
+          "arg": "post"
+        }
+      ],
+      "collectionId": "39ffce2f-b014-42dc-81a6-2aa218565915"
+    }
+  ],
+  "components": [
+    {
+      "id": "91f349b4-d61e-4209-9027-5274dc9225eb",
+      "name": "Header",
+      "root": {
+        "id": "3d024801-4ee3-4454-b15a-e01da612a9bc",
+        "type": "Header",
+        "content": "",
+        "children": [
+          {
+            "id": "49d48ee9-526b-4540-bf5d-32762ffa0a1d",
+            "type": "header",
+            "content": "",
+            "classes": "sticky top-0 z-50 flex items-center justify-between border-b border-outline/20 bg-surface/80 px-6 py-3 backdrop-blur-md",
+            "children": [
+              {
+                "id": "e1735882-4fb7-4b08-bb4a-0f5e1f924c34",
+                "type": "link",
+                "content": "",
+                "classes": "rounded-full px-3 py-1.5 text-xl font-medium tracking-tight text-primary transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                "link": "/",
+                "children": [
+                  {
+                    "id": "437eb233-ab41-48fd-9a4c-d8d7bf501ecd",
+                    "type": "span",
+                    "content": "Brume",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "fc2ee87c-ebb2-4f79-ae72-d65f4a9b9ec0",
+                "type": "nav",
+                "content": "",
+                "classes": "hidden items-center gap-1 md:flex",
+                "children": [
+                  {
+                    "id": "39c2a960-9629-4172-b811-350801031971",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-4 py-2 text-sm font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#why",
+                    "interactions": [
+                      {
+                        "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                        "trigger": "hover",
+                        "targetId": null,
+                        "id": "daf12d1d-2de0-4320-9da8-1dc6314feeb0"
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "920a2e0a-f410-4536-a8e6-7ff1cdc81c37",
+                        "type": "span",
+                        "content": "Why Brume",
+                        "locales": {
+                          "fr": {
+                            "content": "Pourquoi Brume"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "ceda01c1-95fa-4b61-b68f-ec8bb8cbfed5",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-4 py-2 text-sm font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#how",
+                    "interactions": [
+                      {
+                        "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                        "trigger": "hover",
+                        "targetId": null,
+                        "id": "ffff96f2-37c5-4806-9213-ba4041b44138"
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "3ec2c11c-9fbe-4c6b-a129-fab724fb8dab",
+                        "type": "span",
+                        "content": "How it works",
+                        "locales": {
+                          "fr": {
+                            "content": "Comment ça marche"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "b636f1be-e1b3-4d81-8d19-bc139447fb86",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-4 py-2 text-sm font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#pricing",
+                    "interactions": [
+                      {
+                        "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                        "trigger": "hover",
+                        "targetId": null,
+                        "id": "b952f476-187d-4500-8e9f-98cfc7e03a27"
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "8c0d3dc4-93b3-4f15-b5d2-06182207341d",
+                        "type": "span",
+                        "content": "Pricing",
+                        "locales": {
+                          "fr": {
+                            "content": "Tarifs"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "b1782520-af72-4de3-bdf8-df92ba43386c",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-4 py-2 text-sm font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#journal",
+                    "interactions": [
+                      {
+                        "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                        "trigger": "hover",
+                        "targetId": null,
+                        "id": "2884b230-53fa-4264-b420-0056802f1128"
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "b8f27d6f-182d-46bc-9de8-2921b3dd71ab",
+                        "type": "span",
+                        "content": "Journal",
+                        "locales": {
+                          "fr": {
+                            "content": "Journal"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "acbe9711-c73c-4168-a9ea-4ee1e8f659f1",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-4 py-2 text-sm font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#faq",
+                    "interactions": [
+                      {
+                        "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                        "trigger": "hover",
+                        "targetId": null,
+                        "id": "40520be8-8539-4501-b7de-d341cdfc68b5"
+                      }
+                    ],
+                    "children": [
+                      {
+                        "id": "a989c8dc-f432-4adf-bdbf-436b7e9c4a25",
+                        "type": "span",
+                        "content": "FAQ",
+                        "locales": {
+                          "fr": {
+                            "content": "FAQ"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "9993be6e-da01-469a-88ab-242c2be7f48c",
+                "type": "div",
+                "content": "",
+                "classes": "flex items-center gap-2",
+                "children": [
+                  {
+                    "id": "aef3755f-5e9b-4e9f-9278-54db25cd1133",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "/en",
+                    "children": [
+                      {
+                        "id": "04460621-7dec-49f0-8ff8-a567e29525bc",
+                        "type": "span",
+                        "content": "EN",
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "243d7a9b-9b8b-47d3-b440-fd7692bcb26f",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "/fr",
+                    "children": [
+                      {
+                        "id": "9506f7ca-665a-423b-ab1b-ef05924c0458",
+                        "type": "span",
+                        "content": "FR",
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "55d5f733-9fac-46ea-a433-d3fad69af37c",
+                    "type": "link",
+                    "content": "",
+                    "classes": "rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/90 active:bg-primary/80 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "link": "#pricing",
+                    "children": [
+                      {
+                        "id": "fc2571c4-77cd-4d83-9dc2-6ec668a4f58f",
+                        "type": "span",
+                        "content": "Subscribe",
+                        "locales": {
+                          "fr": {
+                            "content": "S’abonner"
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "d6ed6396-8611-4f22-b869-4abe3bbbc97e",
+      "name": "Footer",
+      "root": {
+        "id": "826572b3-e469-4017-9793-7c0ead93683a",
+        "type": "Footer",
+        "content": "",
+        "children": [
+          {
+            "id": "ee74ed63-d19c-456e-a6dd-4a3a195ad19c",
+            "type": "footer",
+            "content": "",
+            "classes": "mt-8 rounded-t-[32px] bg-surface-container px-6 pt-16 pb-8 md:px-12",
+            "children": [
+              {
+                "id": "5db50e6c-793e-4603-8620-1d0cd7d0bc4b",
+                "type": "div",
+                "content": "",
+                "classes": "mx-auto flex max-w-6xl flex-col gap-12 md:flex-row md:justify-between",
+                "children": [
+                  {
+                    "id": "16bf0938-db82-456d-b3d3-9773a08a5ae3",
+                    "type": "div",
+                    "content": "",
+                    "classes": "flex max-w-sm flex-col gap-4",
+                    "children": [
+                      {
+                        "id": "1804d46b-bd76-4473-b646-12c0692b36cc",
+                        "type": "span",
+                        "content": "Brume",
+                        "classes": "text-2xl font-medium tracking-tight text-primary",
+                        "children": []
+                      },
+                      {
+                        "id": "daa6c8d1-6fbb-4ab9-afeb-016625294f31",
+                        "type": "paragraph",
+                        "content": "Small-batch coffee roasted every Tuesday in Mile-End, Montréal, and shipped the same afternoon.",
+                        "classes": "text-[14px] leading-[1.6] text-on-surface-variant",
+                        "locales": {
+                          "fr": {
+                            "content": "Du café en petits lots, torréfié chaque mardi dans le Mile-End à Montréal et expédié l’après-midi même."
+                          }
+                        },
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "98eef22b-c101-4ced-8419-ab8f32ffa119",
+                    "type": "nav",
+                    "content": "",
+                    "classes": "flex flex-col items-start gap-1",
+                    "children": [
+                      {
+                        "id": "1849767f-2ebf-4eac-aed7-aa58117212ea",
+                        "type": "link",
+                        "content": "",
+                        "classes": "rounded-full px-3 py-1.5 text-[14px] font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "#why",
+                        "interactions": [
+                          {
+                            "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                            "trigger": "hover",
+                            "targetId": null,
+                            "id": "8b339336-74f3-4106-b721-593c402960ad"
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "81d92386-de1b-4faa-811f-3c924b37b98d",
+                            "type": "span",
+                            "content": "Why Brume",
+                            "locales": {
+                              "fr": {
+                                "content": "Pourquoi Brume"
+                              }
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "id": "62818ce2-51ab-4614-8331-918ac77535da",
+                        "type": "link",
+                        "content": "",
+                        "classes": "rounded-full px-3 py-1.5 text-[14px] font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "#how",
+                        "interactions": [
+                          {
+                            "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                            "trigger": "hover",
+                            "targetId": null,
+                            "id": "61b314b6-e9a7-43a2-8942-9f9aa45f54f4"
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "04122a87-6cc7-4b5e-9e17-88ae54568718",
+                            "type": "span",
+                            "content": "How it works",
+                            "locales": {
+                              "fr": {
+                                "content": "Comment ça marche"
+                              }
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "id": "86259fb0-b871-4ce4-9ad7-6506661d5797",
+                        "type": "link",
+                        "content": "",
+                        "classes": "rounded-full px-3 py-1.5 text-[14px] font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "#pricing",
+                        "interactions": [
+                          {
+                            "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                            "trigger": "hover",
+                            "targetId": null,
+                            "id": "45a23afa-b31a-428c-aab3-7626f51435e8"
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "ebeb294d-1ea2-41d1-aba8-8b5c1b1bd0cd",
+                            "type": "span",
+                            "content": "Pricing",
+                            "locales": {
+                              "fr": {
+                                "content": "Tarifs"
+                              }
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "id": "8897cf46-bd10-44cb-8bb3-fa5bdd80d141",
+                        "type": "link",
+                        "content": "",
+                        "classes": "rounded-full px-3 py-1.5 text-[14px] font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "#journal",
+                        "interactions": [
+                          {
+                            "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                            "trigger": "hover",
+                            "targetId": null,
+                            "id": "e244bcdd-5789-4636-b928-7b6c7747c517"
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "96288819-995a-4e35-80f1-d120d3b2fb4d",
+                            "type": "span",
+                            "content": "Journal",
+                            "locales": {
+                              "fr": {
+                                "content": "Journal"
+                              }
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "id": "3d864d03-80bc-433c-97ac-5eb63e861b23",
+                        "type": "link",
+                        "content": "",
+                        "classes": "rounded-full px-3 py-1.5 text-[14px] font-medium text-on-surface-variant transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "#faq",
+                        "interactions": [
+                          {
+                            "interactionId": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+                            "trigger": "hover",
+                            "targetId": null,
+                            "id": "56b8120a-f78f-4322-9834-4e8c54f535e2"
+                          }
+                        ],
+                        "children": [
+                          {
+                            "id": "2b38a497-4c3f-4a7b-9f89-1d23b0eda177",
+                            "type": "span",
+                            "content": "FAQ",
+                            "locales": {
+                              "fr": {
+                                "content": "FAQ"
+                              }
+                            },
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "6a4884e0-21e8-4ded-abb6-83b30b1da3a1",
+                    "type": "div",
+                    "content": "",
+                    "classes": "flex flex-col gap-2 text-[14px] text-on-surface-variant",
+                    "children": [
+                      {
+                        "id": "df7911ee-458a-4d8a-9531-d96bb0f818b6",
+                        "type": "link",
+                        "content": "",
+                        "classes": "w-fit rounded-full px-3 py-1.5 font-medium transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none",
+                        "link": "mailto:hello@brume.coffee",
+                        "children": [
+                          {
+                            "id": "b61a7503-735d-4fe5-9bd7-99d0b2d7540b",
+                            "type": "span",
+                            "content": "hello@brume.coffee",
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "id": "2969b2bc-f3b4-4e24-a26c-594c44d0dcba",
+                        "type": "span",
+                        "content": "5445 av. de Gaspé, Montréal",
+                        "classes": "px-3",
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "0a3ca2d9-1980-4b19-8674-fcc3e1c5c6ba",
+                "type": "div",
+                "content": "",
+                "classes": "mx-auto mt-12 flex max-w-6xl flex-wrap items-center justify-between gap-2 border-t border-outline/20 pt-6 text-[12px] text-on-surface-variant",
+                "children": [
+                  {
+                    "id": "70dbf1e6-6af9-45ec-9e0b-b4c63f4b5978",
+                    "type": "span",
+                    "content": "© 2026 Brume Torréfacteur inc.",
+                    "children": []
+                  },
+                  {
+                    "id": "9d4bd0b7-abb5-4e11-9016-b5bc53de4e41",
+                    "type": "span",
+                    "content": "Roasted with patience in Mile-End.",
+                    "locales": {
+                      "fr": {
+                        "content": "Torréfié avec patience dans le Mile-End."
+                      }
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c6a19fc9-29bc-4a4b-91d6-be41d6dc2d60",
+      "name": "Button",
+      "root": {
+        "id": "1820083c-0648-4778-92f9-8aadb92fc284",
+        "type": "Button",
+        "content": "",
+        "children": [
+          {
+            "id": "4a193710-fc7a-4031-b875-081f16f1303f",
+            "type": "button",
+            "content": "",
+            "children": [
+              {
+                "id": "c5612884-30c5-45f3-99d2-a27edf1e89be",
+                "type": "icon",
+                "content": "",
+                "children": [],
+                "classes": "size-4 shrink-0",
+                "hidden": true,
+                "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+              },
+              {
+                "id": "ea405d31-a924-4571-af8a-e0b91359efe5",
+                "type": "span",
+                "content": "Button",
+                "children": []
+              },
+              {
+                "id": "d230ec0e-66bc-4bac-b4cb-e2bc61628705",
+                "type": "icon",
+                "content": "",
+                "children": [],
+                "classes": "size-4 shrink-0",
+                "hidden": true,
+                "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+              }
+            ],
+            "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+            "variantClasses": {
+              "variant:secondary": "bg-secondary text-secondary-foreground",
+              "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+              "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+              "variant:destructive": "bg-destructive text-destructive-foreground",
+              "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+              "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+              "size:lg": "h-10 px-6 text-base",
+              "size:icon": "w-9 px-0"
+            }
+          }
+        ]
+      },
+      "category": "Buttons",
+      "variants": [
+        {
+          "name": "variant",
+          "options": [
+            "default",
+            "secondary",
+            "outline",
+            "ghost",
+            "destructive",
+            "link"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "size",
+          "options": [
+            "md",
+            "sm",
+            "lg",
+            "icon"
+          ],
+          "default": "md"
+        }
+      ]
+    },
+    {
+      "id": "9891628f-1aae-46f9-8fee-49c6a4a2378f",
+      "name": "Card",
+      "root": {
+        "id": "f6547bef-fa1a-42ec-a251-65b534b74089",
+        "type": "Card",
+        "content": "",
+        "children": [
+          {
+            "id": "4eace109-3c14-4052-bca6-ea030afe600d",
+            "type": "div",
+            "content": "",
+            "children": [
+              {
+                "id": "d1bd190d-6ec1-44a5-ae61-24636728ef70",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "3fbae467-7475-42f7-ab56-dc8c19b2ba5f",
+                    "type": "h3",
+                    "content": "Card title",
+                    "children": [],
+                    "classes": "text-lg font-semibold tracking-tight text-card-foreground"
+                  },
+                  {
+                    "id": "a8607c40-f990-4c81-ad1c-21b6041e3a15",
+                    "type": "paragraph",
+                    "content": "A short line about what this card holds.",
+                    "children": [],
+                    "classes": "text-sm text-muted-foreground"
+                  }
+                ],
+                "classes": "flex flex-col gap-1.5 p-6"
+              },
+              {
+                "id": "6912853f-7761-42e9-884c-9a14dc9800b6",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "df472b3f-8362-40e3-a77e-a9f147c90f3b",
+                    "type": "paragraph",
+                    "content": "Card content goes here.",
+                    "children": [],
+                    "classes": "text-sm text-card-foreground"
+                  }
+                ],
+                "classes": "px-6 pb-6"
+              },
+              {
+                "id": "a5e17ed9-e864-4099-a25f-645a71b65777",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "60371630-7c80-4068-acab-87d1674e274f",
+                    "type": "Button",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "0ea8a95c-43d8-4558-a193-4f63bea43a02",
+                        "type": "button",
+                        "content": "",
+                        "children": [
+                          {
+                            "id": "6e2c5e67-c8b6-417c-bd04-9c29c9434d08",
+                            "type": "icon",
+                            "content": "",
+                            "children": []
+                          },
+                          {
+                            "id": "556e12d9-5ef1-46a3-abc1-85d1e651dab7",
+                            "type": "span",
+                            "content": "Continue",
+                            "children": []
+                          },
+                          {
+                            "id": "36641cde-3c5b-4338-9276-172b14c15c0e",
+                            "type": "icon",
+                            "content": "",
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "classes": "flex items-center justify-end gap-2 border-t border-border px-6 py-4",
+                "hidden": true
+              }
+            ],
+            "classes": "rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+          }
+        ]
+      },
+      "category": "Cards"
+    },
+    {
+      "id": "2ffb91e7-3a21-462e-985d-ff1af42bed8f",
+      "name": "Tabs",
+      "root": {
+        "id": "9e81cfda-5524-4483-a958-46f630425428",
+        "type": "Tabs",
+        "content": "",
+        "children": [
+          {
+            "id": "5af956c9-827b-4b80-8d6d-1d633fe8effc",
+            "type": "div",
+            "content": "",
+            "children": [
+              {
+                "id": "6ab22130-3cc8-408c-afe2-9ae13594e800",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "fb7a2870-6740-49af-902a-241ec8606af8",
+                    "type": "button",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "0a7dc428-64d3-4fad-bcc6-be6cfa197367",
+                        "type": "span",
+                        "content": "Overview",
+                        "children": []
+                      }
+                    ],
+                    "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring bg-background text-foreground",
+                    "interactions": [
+                      {
+                        "id": "69753010-4840-48c5-af15-e71496345cc2",
+                        "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                        "trigger": "click",
+                        "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                        "action": "off"
+                      },
+                      {
+                        "id": "d721baa6-a0a7-4a2d-a2b5-7d66b98d03ce",
+                        "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                        "trigger": "click",
+                        "targetId": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                        "action": "off"
+                      },
+                      {
+                        "id": "db46207e-ae89-4f53-a7de-b4ef3ca4b37d",
+                        "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                        "trigger": "click",
+                        "targetId": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                        "action": "off"
+                      },
+                      {
+                        "id": "a7e28a37-4097-4fee-b65a-18fb4773ce9c",
+                        "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                        "trigger": "click",
+                        "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                        "action": "off"
+                      },
+                      {
+                        "id": "25c76c83-b2a7-4d0c-ac28-c62244e31fd0",
+                        "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                        "trigger": "click",
+                        "targetId": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                        "action": "off"
+                      },
+                      {
+                        "id": "97072cdc-d34e-4c68-90ba-e41ac2bacb77",
+                        "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                        "trigger": "click",
+                        "targetId": "993db2fb-e093-488c-9bef-72233276d552",
+                        "action": "off"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                    "type": "button",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "2f469b65-3eb1-4bf0-8229-7b11c610e5a8",
+                        "type": "span",
+                        "content": "Details",
+                        "children": []
+                      }
+                    ],
+                    "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground",
+                    "interactions": [
+                      {
+                        "id": "9944bf62-12f9-4238-a1b6-7df20e9c534c",
+                        "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                        "trigger": "click",
+                        "targetId": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                        "action": "on",
+                        "group": "panels"
+                      },
+                      {
+                        "id": "5c3185ab-f58d-40cd-9eeb-5f33aa63a96e",
+                        "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                        "trigger": "click",
+                        "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                        "action": "on"
+                      },
+                      {
+                        "id": "79396638-bfce-4efe-81f7-4f124c1439ac",
+                        "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                        "trigger": "click",
+                        "targetId": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                        "action": "on",
+                        "group": "tabs"
+                      },
+                      {
+                        "id": "837aad4c-495f-40bb-8919-5e96f9210e11",
+                        "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                        "trigger": "click",
+                        "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                        "action": "on"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "993db2fb-e093-488c-9bef-72233276d552",
+                    "type": "button",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "09850605-ef90-49a8-8a9d-ff1b6c70f197",
+                        "type": "span",
+                        "content": "Activity",
+                        "children": []
+                      }
+                    ],
+                    "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground",
+                    "interactions": [
+                      {
+                        "id": "821de14d-ba5b-4a99-bcd2-994b12c5d8d7",
+                        "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                        "trigger": "click",
+                        "targetId": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                        "action": "on",
+                        "group": "panels"
+                      },
+                      {
+                        "id": "9929e24e-4d59-484f-ba48-284c4e36c034",
+                        "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                        "trigger": "click",
+                        "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                        "action": "on"
+                      },
+                      {
+                        "id": "194a389b-1d5e-4038-afe8-654585ec93cf",
+                        "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                        "trigger": "click",
+                        "targetId": "993db2fb-e093-488c-9bef-72233276d552",
+                        "action": "on",
+                        "group": "tabs"
+                      },
+                      {
+                        "id": "d70871a3-e2f1-49c8-ae1c-a4ba3e8d181e",
+                        "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                        "trigger": "click",
+                        "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                        "action": "on"
+                      }
+                    ]
+                  }
+                ],
+                "classes": "flex items-center gap-1 rounded-lg bg-muted p-1"
+              },
+              {
+                "id": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                "type": "div",
+                "content": "The first panel is the one visible before anything is clicked.",
+                "children": [],
+                "classes": "py-4 text-sm text-muted-foreground"
+              },
+              {
+                "id": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                "type": "div",
+                "content": "The second panel. Clicking its tab hides the others.",
+                "children": [],
+                "classes": "hidden py-4 text-sm text-muted-foreground"
+              },
+              {
+                "id": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                "type": "div",
+                "content": "The third panel, same again.",
+                "children": [],
+                "classes": "hidden py-4 text-sm text-muted-foreground"
+              }
+            ],
+            "classes": "flex w-full flex-col"
+          }
+        ]
+      },
+      "category": "Interactive"
+    },
+    {
+      "id": "7ee76698-4746-4ba5-ae4d-4699f40ec75f",
+      "name": "Dialog",
+      "root": {
+        "id": "13040f13-7fbf-4355-9d0b-24353be77add",
+        "type": "Dialog",
+        "content": "",
+        "children": [
+          {
+            "id": "a96a4df6-3f7e-4c27-a6ba-4b6a9ef8c12c",
+            "type": "div",
+            "content": "",
+            "children": [
+              {
+                "id": "b4b43635-5532-4c6b-8036-884fd8e311af",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "c424cde3-52cd-4840-858c-4462bf913495",
+                    "type": "Button",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "265930c3-b124-4f2a-9eba-6ce27dcd7089",
+                        "type": "button",
+                        "content": "",
+                        "children": [
+                          {
+                            "id": "ac49b12c-8e93-4c25-9156-dd7196537a0d",
+                            "type": "icon",
+                            "content": "",
+                            "children": []
+                          },
+                          {
+                            "id": "04c74340-7861-46ac-8d5b-97515734a995",
+                            "type": "span",
+                            "content": "Open dialog",
+                            "children": []
+                          },
+                          {
+                            "id": "840ce62c-5076-4fa6-85ba-5dd74519a355",
+                            "type": "icon",
+                            "content": "",
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "classes": "contents",
+                "interactions": [
+                  {
+                    "id": "493f8266-e6fc-4871-8d57-5247b96b3def",
+                    "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                    "trigger": "click",
+                    "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                    "action": "on"
+                  }
+                ]
+              },
+              {
+                "id": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "00fa3bf9-61c7-4b2e-bf55-395f7e44cc2d",
+                    "type": "div",
+                    "content": "",
+                    "children": [],
+                    "classes": "absolute inset-0 bg-black/50",
+                    "interactions": [
+                      {
+                        "id": "634ca23f-5e14-41e8-9a91-0771a5a113f7",
+                        "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                        "trigger": "click",
+                        "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                        "action": "off"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "0f371a8e-3195-4730-8f53-e4a1d8e02e78",
+                    "type": "div",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "eb8ddc81-fd94-49f7-b94f-f4c9594f59fd",
+                        "type": "h3",
+                        "content": "Edit profile",
+                        "children": [],
+                        "classes": "text-lg font-semibold tracking-tight text-card-foreground"
+                      },
+                      {
+                        "id": "8bd4201e-22fc-4ed6-b689-fa1f40910a7e",
+                        "type": "paragraph",
+                        "content": "Make your changes here, then save when you are done.",
+                        "children": [],
+                        "classes": "text-sm text-muted-foreground"
+                      },
+                      {
+                        "id": "d9f27575-cfe3-491d-8fa6-666069e1b572",
+                        "type": "div",
+                        "content": "",
+                        "children": [
+                          {
+                            "id": "f895f293-e77e-4e35-a8d2-2328b554a670",
+                            "type": "div",
+                            "content": "",
+                            "children": [
+                              {
+                                "id": "edaeb7c9-5a98-416c-b348-c63971f7e702",
+                                "type": "Button",
+                                "content": "",
+                                "children": [
+                                  {
+                                    "id": "deca64ea-e130-4dbe-ba29-4fdf10151335",
+                                    "type": "button",
+                                    "content": "",
+                                    "children": [
+                                      {
+                                        "id": "7101649c-fb0a-42cc-9073-87b4bc17a215",
+                                        "type": "icon",
+                                        "content": "",
+                                        "children": []
+                                      },
+                                      {
+                                        "id": "d1e0f77b-0236-4120-9249-76dded8710af",
+                                        "type": "span",
+                                        "content": "Cancel",
+                                        "children": []
+                                      },
+                                      {
+                                        "id": "87d913ed-783d-4278-afce-7a022141cd51",
+                                        "type": "icon",
+                                        "content": "",
+                                        "children": []
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "variants": {
+                                  "variant": "outline"
+                                }
+                              }
+                            ],
+                            "classes": "contents",
+                            "interactions": [
+                              {
+                                "id": "3f4780bc-9757-47ff-85d9-c9bc165d965a",
+                                "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                                "trigger": "click",
+                                "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                                "action": "off",
+                                "closeOn": [
+                                  "escape"
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "id": "563ac963-0d8f-4829-a99a-437b579f47d5",
+                            "type": "div",
+                            "content": "",
+                            "children": [
+                              {
+                                "id": "b499dd2d-9415-4b7d-9bb1-c0c8c5d1abf1",
+                                "type": "Button",
+                                "content": "",
+                                "children": [
+                                  {
+                                    "id": "b68526dc-e5af-406b-a510-a8a2948439a7",
+                                    "type": "button",
+                                    "content": "",
+                                    "children": [
+                                      {
+                                        "id": "2089619a-dc05-4da4-a875-96add9c0199a",
+                                        "type": "icon",
+                                        "content": "",
+                                        "children": []
+                                      },
+                                      {
+                                        "id": "a9855d6e-1927-4d61-ab1c-d806808049e0",
+                                        "type": "span",
+                                        "content": "Save changes",
+                                        "children": []
+                                      },
+                                      {
+                                        "id": "8f0bf512-7196-497b-a8d4-c794b6493555",
+                                        "type": "icon",
+                                        "content": "",
+                                        "children": []
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ],
+                            "classes": "contents",
+                            "interactions": [
+                              {
+                                "id": "3de70d9a-1bc4-48dd-bd46-be519ba607f7",
+                                "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                                "trigger": "click",
+                                "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                                "action": "off"
+                              }
+                            ]
+                          }
+                        ],
+                        "classes": "flex items-center justify-end gap-2"
+                      }
+                    ],
+                    "classes": "relative z-50 flex w-full max-w-md flex-col gap-4 rounded-xl p-6 shadow-lg border border-border bg-card text-card-foreground",
+                    "attributes": {
+                      "role": "dialog",
+                      "aria-modal": "true"
+                    }
+                  }
+                ],
+                "classes": "hidden fixed inset-0 z-50 items-center justify-center p-6"
+              }
+            ],
+            "classes": "flex flex-col items-start gap-4"
+          }
+        ]
+      },
+      "category": "Interactive"
+    },
+    {
+      "id": "b70ca1d1-c33f-486f-99d9-899bca52bda8",
+      "name": "Testimonial",
+      "root": {
+        "id": "e75c1a6c-36fb-4302-942e-4f94ab6eac01",
+        "type": "Testimonial",
+        "content": "",
+        "children": [
+          {
+            "id": "6e76b79e-aca2-4327-a378-49e65657e39b",
+            "type": "div",
+            "content": "",
+            "children": [
+              {
+                "id": "2b566333-dba3-41a7-b3c5-5c6362c51940",
+                "type": "paragraph",
+                "content": "This is the single best tool we have adopted all year.",
+                "children": [],
+                "classes": "text-base text-card-foreground"
+              },
+              {
+                "id": "f91b7d85-531a-4af9-b33f-b7ce0de61707",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "b0aa1b04-cf0f-45d2-a404-f0a4be09d571",
+                    "type": "div",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "ae507fcd-4832-4c72-99a2-2b52b26337fa",
+                        "type": "image",
+                        "content": "",
+                        "children": [],
+                        "classes": "h-full w-full object-cover"
+                      }
+                    ],
+                    "classes": "size-10 shrink-0 overflow-hidden rounded-full bg-muted"
+                  },
+                  {
+                    "id": "c08a24da-90e5-4996-ae2c-88f78ad9a754",
+                    "type": "div",
+                    "content": "",
+                    "children": [
+                      {
+                        "id": "848bee00-367e-4d0c-a3b6-e6270e6501ee",
+                        "type": "span",
+                        "content": "Jane Doe",
+                        "children": [],
+                        "classes": "truncate text-sm font-medium text-card-foreground"
+                      },
+                      {
+                        "id": "10c60f18-b486-4d22-b022-98d86750a669",
+                        "type": "span",
+                        "content": "Head of Design, Acme",
+                        "children": [],
+                        "classes": "truncate text-xs text-muted-foreground"
+                      }
+                    ],
+                    "classes": "flex min-w-0 flex-col"
+                  }
+                ],
+                "classes": "flex items-center gap-3"
+              }
+            ],
+            "classes": "flex flex-col gap-4 p-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+          }
+        ]
+      },
+      "category": "Content"
+    },
+    {
+      "id": "4e739f5d-d175-48c9-a42d-88cb9992bc88",
+      "name": "Alert",
+      "root": {
+        "id": "ee6ccc79-9383-4a89-94ce-5af9883931e8",
+        "type": "Alert",
+        "content": "",
+        "children": [
+          {
+            "id": "059cd719-c3cf-4236-b954-0d6346b4988b",
+            "type": "div",
+            "content": "",
+            "children": [
+              {
+                "id": "4b9146e5-1744-4a8d-bd0d-425e46d37126",
+                "type": "icon",
+                "content": "",
+                "children": [],
+                "classes": "mt-0.5 size-4 shrink-0",
+                "svg": "<svg data-icon=\"lucide:info\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/></svg>"
+              },
+              {
+                "id": "717163fb-ea67-4644-808b-a3031c629c2e",
+                "type": "div",
+                "content": "",
+                "children": [
+                  {
+                    "id": "0ff99478-74b6-497c-a555-2fe4e9380ecd",
+                    "type": "h4",
+                    "content": "Heads up",
+                    "children": [],
+                    "classes": "text-sm font-medium"
+                  },
+                  {
+                    "id": "5a254c26-9a4d-4df8-bb38-57836725afb6",
+                    "type": "paragraph",
+                    "content": "Something worth knowing before you carry on.",
+                    "children": [],
+                    "classes": "text-sm text-muted-foreground",
+                    "variantClasses": {
+                      "variant:destructive": "text-destructive"
+                    }
+                  }
+                ],
+                "classes": "flex min-w-0 flex-col gap-1"
+              }
+            ],
+            "classes": "flex w-full gap-3 rounded-lg border border-border bg-background p-4 text-foreground",
+            "attributes": {
+              "role": "alert"
+            },
+            "variantClasses": {
+              "variant:destructive": "border-destructive text-destructive"
+            }
+          }
+        ]
+      },
+      "category": "Feedback",
+      "variants": [
+        {
+          "name": "variant",
+          "options": [
+            "default",
+            "destructive"
+          ],
+          "default": "default"
+        }
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "id": "39ffce2f-b014-42dc-81a6-2aa218565915",
+      "name": "post",
+      "fields": [
+        {
+          "id": "8ecf6731-d396-415b-ac38-c0d6ab319036",
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "id": "f66d65e5-a2a7-42e4-b29b-691dd34caec9",
+          "name": "excerpt",
+          "type": "text"
+        },
+        {
+          "id": "9c32a1e3-09f6-4e84-aee1-b3d396a28513",
+          "name": "body",
+          "type": "text"
+        },
+        {
+          "id": "c758f1d6-e196-4c5d-9957-c665e40288bf",
+          "name": "date",
+          "type": "date"
+        },
+        {
+          "id": "ceeeac16-f947-4e8d-8870-902f010c803c",
+          "name": "cover",
+          "type": "image"
+        }
+      ],
+      "templatePageId": "b44801db-9f9c-42a8-a468-861f88e894da",
+      "entries": [
+        {
+          "id": "a0ce4d6e-b2bd-4eab-9084-5626ce5be331",
+          "name": "Why we rest our roasts for three days",
+          "slug": "why-we-rest-our-roasts-for-three-days",
+          "values": {
+            "title": "Why we rest our roasts for three days",
+            "excerpt": "Fresh doesn’t mean straight from the drum. Here’s the science of degassing.",
+            "body": "Right off the drum, a roast is still exhaling carbon dioxide — brew it that day and the gas fights the water, leaving the cup sour and hollow. We rest every lot for three days before it ships, which is why your bag lands at exactly the moment the flavour opens up. Fresh is a window, not a race, and we time your delivery to the middle of it.",
+            "date": "2026-08-11",
+            "cover": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20800%20600%22%3E%3Cdefs%3E%3Cfilter%20id%3D%22b%22%20x%3D%22-50%25%22%20y%3D%22-50%25%22%20width%3D%22200%25%22%20height%3D%22200%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2260%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22800%22%20height%3D%22600%22%20fill%3D%22%23F3EDF7%22%2F%3E%3Ccircle%20cx%3D%22620%22%20cy%3D%22120%22%20r%3D%22180%22%20fill%3D%22%236750A4%22%20opacity%3D%22.25%22%20filter%3D%22url(%23b)%22%2F%3E%3Ccircle%20cx%3D%22140%22%20cy%3D%22500%22%20r%3D%22160%22%20fill%3D%22%237D5260%22%20opacity%3D%22.2%22%20filter%3D%22url(%23b)%22%2F%3E%3Cellipse%20cx%3D%22400%22%20cy%3D%22310%22%20rx%3D%22150%22%20ry%3D%22200%22%20fill%3D%22%236750A4%22%2F%3E%3Cpath%20d%3D%22M400%20130%20C330%20250%20470%20370%20400%20490%22%20stroke%3D%22%23E8DEF8%22%20stroke-width%3D%2228%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E"
+          },
+          "locales": {
+            "fr": {
+              "title": "Pourquoi nous laissons reposer nos torréfactions trois jours",
+              "excerpt": "Frais ne veut pas dire tout droit sorti du tambour. Voici la science du dégazage.",
+              "body": "Au sortir du tambour, une torréfaction exhale encore du dioxyde de carbone — infusez-la le jour même et le gaz repousse l’eau, laissant une tasse acide et creuse. Nous laissons reposer chaque lot trois jours avant l’expédition : votre sac arrive exactement au moment où les arômes s’ouvrent. La fraîcheur est une fenêtre, pas une course, et nous calons votre livraison en plein milieu."
+            }
+          },
+          "createdAt": 1790701104077
+        },
+        {
+          "id": "034dadba-5045-42b2-bf00-da2c40293762",
+          "name": "A visit to Finca El Mirador, Huila",
+          "slug": "a-visit-to-finca-el-mirador-huila",
+          "values": {
+            "title": "A visit to Finca El Mirador, Huila",
+            "excerpt": "Ten days with the family behind our best-selling Colombian lot.",
+            "body": "The Ordóñez family has farmed the same hillside above Pitalito for three generations, and for the last four harvests every cherry of their caturra has come to us. We spent ten days there in July walking the rows, cupping experimental ferments, and agreeing on next year’s price over dinner — 2.4 times the fair-trade floor, published on every bag. Direct trade is just a slogan until you can name the people; now you can.",
+            "date": "2026-07-22",
+            "cover": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20800%20600%22%3E%3Cdefs%3E%3Cfilter%20id%3D%22b%22%20x%3D%22-50%25%22%20y%3D%22-50%25%22%20width%3D%22200%25%22%20height%3D%22200%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2260%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22800%22%20height%3D%22600%22%20fill%3D%22%23F3EDF7%22%2F%3E%3Ccircle%20cx%3D%22180%22%20cy%3D%22140%22%20r%3D%22170%22%20fill%3D%22%23E8DEF8%22%20opacity%3D%22.9%22%20filter%3D%22url(%23b)%22%2F%3E%3Ccircle%20cx%3D%22660%22%20cy%3D%22480%22%20r%3D%22170%22%20fill%3D%22%236750A4%22%20opacity%3D%22.2%22%20filter%3D%22url(%23b)%22%2F%3E%3Cpath%20d%3D%22M0%20430%20Q400%20260%20800%20400%20L800%20600%20L0%20600%20Z%22%20fill%3D%22%236750A4%22%2F%3E%3Cg%20fill%3D%22%23E8DEF8%22%3E%3Ccircle%20cx%3D%22160%22%20cy%3D%22470%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22440%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22440%22%20cy%3D%22425%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22580%22%20cy%3D%22435%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22710%22%20cy%3D%22465%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22230%22%20cy%3D%22540%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22370%22%20cy%3D%22515%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22510%22%20cy%3D%22505%22%20r%3D%2222%22%2F%3E%3Ccircle%20cx%3D%22650%22%20cy%3D%22525%22%20r%3D%2222%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
+          },
+          "locales": {
+            "fr": {
+              "title": "Une visite à la Finca El Mirador, Huila",
+              "excerpt": "Dix jours avec la famille derrière notre lot colombien le plus populaire.",
+              "body": "La famille Ordóñez cultive le même versant au-dessus de Pitalito depuis trois générations, et depuis quatre récoltes chaque cerise de leur caturra nous revient. Nous avons passé dix jours là-bas en juillet à arpenter les rangs, à déguster des fermentations expérimentales et à convenir du prix de l’an prochain autour d’un souper — 2,4 fois le plancher équitable, publié sur chaque sac. Le commerce direct n’est qu’un slogan tant qu’on ne peut pas nommer les gens ; maintenant, vous le pouvez."
+            }
+          },
+          "createdAt": 1790701104078
+        },
+        {
+          "id": "594d0d0e-715b-4427-8340-89fc970adf70",
+          "name": "The $40 pour-over setup we actually recommend",
+          "slug": "the-40-pour-over-setup-we-actually-recommend",
+          "values": {
+            "title": "The $40 pour-over setup we actually recommend",
+            "excerpt": "You don’t need a lab. You need a scale, a kettle you can control, and patience.",
+            "body": "Every week someone asks which $300 brewer to buy, and every week we talk them out of it. A plastic cone, a $15 kitchen scale, and any kettle you can pour slowly beat an expensive machine that hides the variables from you. Spend the difference on better beans — the recipe inside this month’s bag was written for exactly this setup.",
+            "date": "2026-06-30",
+            "cover": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20800%20600%22%3E%3Cdefs%3E%3Cfilter%20id%3D%22b%22%20x%3D%22-50%25%22%20y%3D%22-50%25%22%20width%3D%22200%25%22%20height%3D%22200%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%2260%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22800%22%20height%3D%22600%22%20fill%3D%22%23F3EDF7%22%2F%3E%3Ccircle%20cx%3D%22650%22%20cy%3D%22150%22%20r%3D%22170%22%20fill%3D%22%237D5260%22%20opacity%3D%22.2%22%20filter%3D%22url(%23b)%22%2F%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22470%22%20r%3D%22150%22%20fill%3D%22%236750A4%22%20opacity%3D%22.2%22%20filter%3D%22url(%23b)%22%2F%3E%3Cpath%20d%3D%22M250%20170%20h300%20a30%2030%200%200%201%2024%2048%20L448%20350%20a60%2060%200%200%201%20-96%200%20L226%20218%20a30%2030%200%200%201%2024%20-48%20Z%22%20fill%3D%22%236750A4%22%2F%3E%3Ccircle%20cx%3D%22400%22%20cy%3D%22430%22%20r%3D%2226%22%20fill%3D%22%237D5260%22%2F%3E%3Crect%20x%3D%22300%22%20y%3D%22490%22%20width%3D%22200%22%20height%3D%2236%22%20rx%3D%2218%22%20fill%3D%22%23E8DEF8%22%2F%3E%3C%2Fsvg%3E"
+          },
+          "locales": {
+            "fr": {
+              "title": "L’équipement à 40 $ que nous recommandons vraiment",
+              "excerpt": "Pas besoin d’un laboratoire. Il vous faut une balance, une bouilloire précise et de la patience.",
+              "body": "Chaque semaine, quelqu’un nous demande quelle machine à 300 $ acheter, et chaque semaine nous l’en dissuadons. Un cône en plastique, une balance de cuisine à 15 $ et n’importe quelle bouilloire qui verse lentement battent une machine coûteuse qui vous cache les variables. Mettez la différence dans de meilleurs grains — la recette glissée dans le sac de ce mois-ci a été écrite pour exactement cet équipement."
+            }
+          },
+          "createdAt": 1790701104079
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "id": "1fa85a81-3aa8-4fe1-8b1e-edab94dfbef8",
+      "name": "Rise in",
+      "toClasses": "translate-y-0 opacity-100",
+      "duration": "duration-500",
+      "easing": "ease-[cubic-bezier(0.2,0,0,1)]"
+    },
+    {
+      "id": "fc21165d-80b1-4180-9974-b33cbf324d0c",
+      "name": "Card lift",
+      "toClasses": "scale-[1.02] shadow-md",
+      "duration": "duration-300",
+      "easing": "ease-[cubic-bezier(0.2,0,0,1)]"
+    },
+    {
+      "id": "31cab4a0-3cd6-4425-81de-9735a2c493eb",
+      "name": "State layer",
+      "toClasses": "bg-primary/10 text-primary",
+      "duration": "duration-200",
+      "easing": "ease-[cubic-bezier(0.2,0,0,1)]"
+    },
+    {
+      "id": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+      "name": "Tabs · show panel",
+      "toClasses": "block",
+      "duration": "duration-200",
+      "easing": "ease-out"
+    },
+    {
+      "id": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+      "name": "Tabs · hide first panel",
+      "toClasses": "hidden",
+      "duration": "duration-200",
+      "easing": "ease-out"
+    },
+    {
+      "id": "e71e4323-16b2-4700-8342-b5532a6e2471",
+      "name": "Tabs · active tab",
+      "toClasses": "bg-background text-foreground",
+      "duration": "duration-200",
+      "easing": "ease-out"
+    },
+    {
+      "id": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+      "name": "Tabs · inactive first tab",
+      "toClasses": "bg-muted text-muted-foreground",
+      "duration": "duration-200",
+      "easing": "ease-out"
+    },
+    {
+      "id": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+      "name": "Dialog · open",
+      "toClasses": "flex",
+      "duration": "duration-200",
+      "easing": "ease-out"
+    }
+  ],
+  "breakpoints": [
+    {
+      "id": "f8710d65-cbcc-44fa-a1e3-6f6339b2ac0b",
+      "name": "Desktop",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "b096da25-0789-4796-a4d6-6ecc85c75367",
+      "name": "Tablet",
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "id": "d3d996a8-b977-4c1a-96bf-a926b8f722dc",
+      "name": "Mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "comments": [],
+  "locales": [
+    "en",
+    "fr"
+  ],
+  "defaultLocale": "en",
+  "settings": {
+    "publishing": {
+      "method": "server",
+      "github": {
+        "repo": "",
+        "branch": "main"
+      }
+    },
+    "seo": {
+      "siteName": "Brume",
+      "titleTemplate": "%s — Brume",
+      "description": "Specialty coffee roasted every Tuesday in Mile-End, Montréal, and shipped the same day. Subscriptions from $22 a month."
+    },
+    "domain": "",
+    "smtp": {
+      "host": "",
+      "port": "",
+      "user": "",
+      "password": "",
+      "from": ""
+    },
+    "integrations": {
+      "stripe": {
+        "publishableKey": ""
+      },
+      "mailing": {
+        "provider": ""
+      }
+    },
+    "tokens": [
+      {
+        "id": "206e84b4-40dd-4269-a69d-239fc866a697",
+        "name": "primary",
+        "value": "#6750A4"
+      },
+      {
+        "id": "293e06c8-a23a-446b-b790-fe0927a5fd90",
+        "name": "tertiary",
+        "value": "#7D5260"
+      },
+      {
+        "id": "7a65e398-6266-4227-871b-2a9841d7f5a3",
+        "name": "surface",
+        "value": "#FFFBFE"
+      },
+      {
+        "id": "b88c4e3b-ad1b-427c-8595-7c917d753b80",
+        "name": "on-surface",
+        "value": "#1C1B1F"
+      },
+      {
+        "id": "01e99091-5362-4558-a51e-9f2cd1c37450",
+        "name": "on-surface-variant",
+        "value": "#49454F"
+      },
+      {
+        "id": "f8a538d0-d256-46a7-8d21-512a75a35181",
+        "name": "secondary-container",
+        "value": "#E8DEF8"
+      },
+      {
+        "id": "0bd4d95c-bcf6-415b-ab77-614c49e695bb",
+        "name": "on-secondary-container",
+        "value": "#1D192B"
+      },
+      {
+        "id": "28f6e638-3bc1-4d54-91da-5594c07a20fa",
+        "name": "surface-container",
+        "value": "#F3EDF7"
+      },
+      {
+        "id": "7b747887-3ed4-4092-a36c-babc85139f56",
+        "name": "surface-container-low",
+        "value": "#E7E0EC"
+      },
+      {
+        "id": "d574c3c9-6535-48a7-a078-f3294031df49",
+        "name": "outline",
+        "value": "#79747E"
+      },
+      {
+        "id": "c4df938f-92ab-4989-a01a-87d986fb2663",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "c56ef0a9-4961-4dd9-a488-5fce892ace3d",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "988cd18c-ee22-40b9-9d89-fc832507ead3",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "17299b52-71d3-409b-8d19-96c98048c872",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "90e1702b-029f-4a1d-9236-264415473f1c",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "274b65b1-cecb-42c4-bb7a-e428443fba27",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "d3f7bbb8-30dc-443a-82a5-d3c37a8c5cfe",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "4514d590-57fc-4730-a4a7-de8d80709600",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "282a79ba-c8ce-478f-b78a-87494aafb1e3",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "9d9e8b6c-20e7-4ec7-9eb9-b58794c5c59d",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "681c3450-9427-489e-9032-65de11f5e8fb",
+        "name": "accent-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "0c7078b6-3f0b-4667-966a-2562bc1d4780",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "7c862133-1469-4e88-87da-8fe49af67476",
+        "name": "card",
+        "value": "#ffffff"
+      },
+      {
+        "id": "c9db1140-a3a7-4523-84fc-4c487235c558",
+        "name": "card-foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "5ff88ec0-a4d9-4f35-bbf8-94065eef9106",
+        "name": "muted-foreground",
+        "value": "#737373"
+      },
+      {
+        "id": "fac2d88b-513a-41dc-9973-ca1f9a9ad1b1",
+        "name": "muted",
+        "value": "#f5f5f5"
+      }
+    ],
+    "customCode": {
+      "head": ""
+    },
+    "fonts": {
+      "family": "'Roboto', ui-sans-serif, system-ui, sans-serif",
+      "googleFontsUrl": "https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+    }
+  },
+  "schemaVersion": 2
+}

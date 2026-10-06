@@ -1,0 +1,65 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+# publish server data — every copy of it. A backup dir holds publish.json
+# (GitHub token, SMTP password, the site-password hash), users.json,
+# api-tokens.json and sessions.json, so the glob has to catch `data.backup-…`
+# and `data-backup-…` alike.
+server/data
+server/data-backup-*
+server/data.backup-*
+
+# e2e
+.e2e-data
+# lifecycle.spec.ts spawns its own servers, one data dir each
+.e2e-lifecycle-*
+test-results
+playwright-report
+
+# local agent config/permissions — never ship
+.claude/
+
+# tree-source migration render referee (scripts/corpus.mjs)
+.corpus
+
+# throwaway headless probes (CLAUDE.md's `.tmp-test.ts` recipe)
+.tmp-test.ts
+*.tmp-test.ts
+.tmp-*

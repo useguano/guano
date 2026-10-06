@@ -1,0 +1,2170 @@
+{
+  "button": {
+    "components": [
+      {
+        "id": "c6a19fc9-29bc-4a4b-91d6-be41d6dc2d60",
+        "name": "Button",
+        "root": {
+          "id": "1820083c-0648-4778-92f9-8aadb92fc284",
+          "type": "Button",
+          "content": "",
+          "children": [
+            {
+              "id": "4a193710-fc7a-4031-b875-081f16f1303f",
+              "type": "button",
+              "content": "",
+              "children": [
+                {
+                  "id": "c5612884-30c5-45f3-99d2-a27edf1e89be",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+                },
+                {
+                  "id": "ea405d31-a924-4571-af8a-e0b91359efe5",
+                  "type": "span",
+                  "content": "Button",
+                  "children": []
+                },
+                {
+                  "id": "d230ec0e-66bc-4bac-b4cb-e2bc61628705",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+                }
+              ],
+              "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+              "variantClasses": {
+                "variant:secondary": "bg-secondary text-secondary-foreground",
+                "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:destructive": "bg-destructive text-destructive-foreground",
+                "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+                "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+                "size:lg": "h-10 px-6 text-base",
+                "size:icon": "w-9 px-0"
+              }
+            }
+          ]
+        },
+        "category": "Buttons",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "secondary",
+              "outline",
+              "ghost",
+              "destructive",
+              "link"
+            ],
+            "default": "default"
+          },
+          {
+            "name": "size",
+            "options": [
+              "md",
+              "sm",
+              "lg",
+              "icon"
+            ],
+            "default": "md"
+          }
+        ]
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "c4df938f-92ab-4989-a01a-87d986fb2663",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "176e9c6c-64df-4222-9fca-f297e9edd6c0",
+        "name": "primary",
+        "value": "#171717"
+      },
+      {
+        "id": "c56ef0a9-4961-4dd9-a488-5fce892ace3d",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "988cd18c-ee22-40b9-9d89-fc832507ead3",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "17299b52-71d3-409b-8d19-96c98048c872",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "90e1702b-029f-4a1d-9236-264415473f1c",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "274b65b1-cecb-42c4-bb7a-e428443fba27",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "d3f7bbb8-30dc-443a-82a5-d3c37a8c5cfe",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "4514d590-57fc-4730-a4a7-de8d80709600",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "282a79ba-c8ce-478f-b78a-87494aafb1e3",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "9d9e8b6c-20e7-4ec7-9eb9-b58794c5c59d",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "681c3450-9427-489e-9032-65de11f5e8fb",
+        "name": "accent-foreground",
+        "value": "#171717"
+      }
+    ]
+  },
+  "card": {
+    "components": [
+      {
+        "id": "fad0d183-ec15-4cf5-ac4e-6e23cd0b3f5c",
+        "name": "Button",
+        "root": {
+          "id": "c74567ea-dfdd-4fce-a632-138cb143a748",
+          "type": "Button",
+          "content": "",
+          "children": [
+            {
+              "id": "20d194ad-48d9-4bbc-b22c-d3edb218d9a6",
+              "type": "button",
+              "content": "",
+              "children": [
+                {
+                  "id": "dd1fcf2e-875a-40d8-a181-d1d655a8b74d",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+                },
+                {
+                  "id": "872a120e-9707-40ba-a9c0-c0583b2a81ca",
+                  "type": "span",
+                  "content": "Button",
+                  "children": []
+                },
+                {
+                  "id": "c4f781c0-7858-476a-8277-1446bb0c1bd6",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+                }
+              ],
+              "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+              "variantClasses": {
+                "variant:secondary": "bg-secondary text-secondary-foreground",
+                "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:destructive": "bg-destructive text-destructive-foreground",
+                "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+                "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+                "size:lg": "h-10 px-6 text-base",
+                "size:icon": "w-9 px-0"
+              }
+            }
+          ]
+        },
+        "category": "Buttons",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "secondary",
+              "outline",
+              "ghost",
+              "destructive",
+              "link"
+            ],
+            "default": "default"
+          },
+          {
+            "name": "size",
+            "options": [
+              "md",
+              "sm",
+              "lg",
+              "icon"
+            ],
+            "default": "md"
+          }
+        ]
+      },
+      {
+        "id": "9891628f-1aae-46f9-8fee-49c6a4a2378f",
+        "name": "Card",
+        "root": {
+          "id": "f6547bef-fa1a-42ec-a251-65b534b74089",
+          "type": "Card",
+          "content": "",
+          "children": [
+            {
+              "id": "4eace109-3c14-4052-bca6-ea030afe600d",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "d1bd190d-6ec1-44a5-ae61-24636728ef70",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "3fbae467-7475-42f7-ab56-dc8c19b2ba5f",
+                      "type": "h3",
+                      "content": "Card title",
+                      "children": [],
+                      "classes": "text-lg font-semibold tracking-tight text-card-foreground"
+                    },
+                    {
+                      "id": "a8607c40-f990-4c81-ad1c-21b6041e3a15",
+                      "type": "paragraph",
+                      "content": "A short line about what this card holds.",
+                      "children": [],
+                      "classes": "text-sm text-muted-foreground"
+                    }
+                  ],
+                  "classes": "flex flex-col gap-1.5 p-6"
+                },
+                {
+                  "id": "6912853f-7761-42e9-884c-9a14dc9800b6",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "df472b3f-8362-40e3-a77e-a9f147c90f3b",
+                      "type": "paragraph",
+                      "content": "Card content goes here.",
+                      "children": [],
+                      "classes": "text-sm text-card-foreground"
+                    }
+                  ],
+                  "classes": "px-6 pb-6"
+                },
+                {
+                  "id": "a5e17ed9-e864-4099-a25f-645a71b65777",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "60371630-7c80-4068-acab-87d1674e274f",
+                      "type": "Button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "0ea8a95c-43d8-4558-a193-4f63bea43a02",
+                          "type": "button",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "6e2c5e67-c8b6-417c-bd04-9c29c9434d08",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            },
+                            {
+                              "id": "556e12d9-5ef1-46a3-abc1-85d1e651dab7",
+                              "type": "span",
+                              "content": "Continue",
+                              "children": []
+                            },
+                            {
+                              "id": "36641cde-3c5b-4338-9276-172b14c15c0e",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "classes": "flex items-center justify-end gap-2 border-t border-border px-6 py-4",
+                  "hidden": true
+                }
+              ],
+              "classes": "rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+            }
+          ]
+        },
+        "category": "Cards"
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "b142902f-da79-4fe2-9cf1-0f524ba79c7f",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "1e02ab33-d305-4fb5-be41-40b886791ad4",
+        "name": "primary",
+        "value": "#171717"
+      },
+      {
+        "id": "98b5c67c-040d-49e9-bb45-5d7194fd22c4",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "8023fd51-1b44-4769-9a54-66472b6214fa",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "7d2fe29f-3639-49a2-82c4-ff79add1e45c",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "c2e54999-b096-4209-ba8a-9266c07d6b6d",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "88425722-0206-4c61-a75b-d314c556bbf8",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "26cd53b1-d32d-4d3e-92c6-aacf93419913",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "d5ab3673-0e0d-4ca0-8fb5-f5318907e90b",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "f9043d85-97d5-4cac-852e-8ee9cf8a92d6",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "69f8ad96-6f93-4ce9-8bb5-99c8ccebe23c",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "99908aef-91e3-40ed-8e06-9164f36ef07f",
+        "name": "accent-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "0c7078b6-3f0b-4667-966a-2562bc1d4780",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "7c862133-1469-4e88-87da-8fe49af67476",
+        "name": "card",
+        "value": "#ffffff"
+      },
+      {
+        "id": "c9db1140-a3a7-4523-84fc-4c487235c558",
+        "name": "card-foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "5ff88ec0-a4d9-4f35-bbf8-94065eef9106",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "input": {
+    "components": [
+      {
+        "id": "8116a2c6-e8f6-4d64-b2ab-a3d9e2878fe9",
+        "name": "Input",
+        "root": {
+          "id": "2382acc7-0156-415a-bc92-40f45e604f08",
+          "type": "Input",
+          "content": "",
+          "children": [
+            {
+              "id": "18d6f1b7-8a55-40d7-9b86-bee071a28411",
+              "type": "input",
+              "content": "",
+              "children": [],
+              "classes": "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground",
+              "attributes": {
+                "type": "text"
+              }
+            }
+          ]
+        },
+        "category": "Forms"
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "96038d66-3086-44c1-a834-82885f1f9ffa",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "61ff2886-4193-4c78-9466-e346815419c8",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "02f380ba-dbcb-4162-b5d4-9fcbdd7cd336",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "241dae93-ea51-4252-8b58-c166863934c5",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "2866648a-54fe-4b47-b282-6e1b4c71621a",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "sheet": {
+    "components": [
+      {
+        "id": "a6743a17-f742-43f3-b913-749e0e14b68b",
+        "name": "Button",
+        "root": {
+          "id": "35f56274-8eaa-411f-a6e4-b4f01ccc6101",
+          "type": "Button",
+          "content": "",
+          "children": [
+            {
+              "id": "4e8659f1-0370-4d83-94d3-4db0892d3c3d",
+              "type": "button",
+              "content": "",
+              "children": [
+                {
+                  "id": "f341154c-49a0-4d40-9d85-f2a3ea7fcc25",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+                },
+                {
+                  "id": "9ff095c2-4ab9-4385-9b4a-35c3eff6ceed",
+                  "type": "span",
+                  "content": "Button",
+                  "children": []
+                },
+                {
+                  "id": "beec320d-7bbb-40d9-a851-9cd96807316b",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+                }
+              ],
+              "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+              "variantClasses": {
+                "variant:secondary": "bg-secondary text-secondary-foreground",
+                "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:destructive": "bg-destructive text-destructive-foreground",
+                "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+                "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+                "size:lg": "h-10 px-6 text-base",
+                "size:icon": "w-9 px-0"
+              }
+            }
+          ]
+        },
+        "category": "Buttons",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "secondary",
+              "outline",
+              "ghost",
+              "destructive",
+              "link"
+            ],
+            "default": "default"
+          },
+          {
+            "name": "size",
+            "options": [
+              "md",
+              "sm",
+              "lg",
+              "icon"
+            ],
+            "default": "md"
+          }
+        ]
+      },
+      {
+        "id": "bcb0a118-0b2d-4e96-b407-186ca8545f9a",
+        "name": "Sheet",
+        "root": {
+          "id": "16022cb4-f78b-4bd6-8777-8fc98bba06a0",
+          "type": "Sheet",
+          "content": "",
+          "children": [
+            {
+              "id": "f13d33a6-6ec6-4c1d-a1b2-53344c7d83a6",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "04c66fbd-8393-4b6d-b086-8ba5cce21cf9",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "31ab4e19-67d2-46b1-904e-dd6b7b72433d",
+                      "type": "Button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "4069ee30-96b9-4481-ae96-6e6f1eda7707",
+                          "type": "button",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "8838b9e3-0775-405b-ae36-0f2d03b37c13",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            },
+                            {
+                              "id": "5abdc962-eb20-47f9-a635-10546acfc161",
+                              "type": "span",
+                              "content": "Open sheet",
+                              "children": []
+                            },
+                            {
+                              "id": "203242fb-316e-417e-8261-373204d22672",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            }
+                          ]
+                        }
+                      ],
+                      "variants": {
+                        "variant": "outline"
+                      }
+                    }
+                  ],
+                  "classes": "contents",
+                  "interactions": [
+                    {
+                      "id": "28f57d62-cc2c-4d86-9af8-4a6389a08450",
+                      "interactionId": "29017fb9-1deb-4ccd-81b9-e5164a79393a",
+                      "trigger": "click",
+                      "targetId": "e23c69bf-40f3-48ab-afab-516ad2987035",
+                      "action": "on"
+                    },
+                    {
+                      "id": "ce6fb9d5-54c7-4a15-b264-0588fa0d7293",
+                      "interactionId": "622120cf-b53a-4c54-8b7b-941dfcd7ba35",
+                      "trigger": "click",
+                      "targetId": "f679c787-03cf-4efb-aa62-641cb8e12ff8",
+                      "action": "on"
+                    }
+                  ]
+                },
+                {
+                  "id": "e23c69bf-40f3-48ab-afab-516ad2987035",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "0d46c67d-8b25-4b3f-a9a9-3041321b6197",
+                      "type": "div",
+                      "content": "",
+                      "children": [],
+                      "classes": "absolute inset-0 bg-black/50",
+                      "interactions": [
+                        {
+                          "id": "365a057d-56ba-4dd8-b5b6-715e561c5923",
+                          "interactionId": "29017fb9-1deb-4ccd-81b9-e5164a79393a",
+                          "trigger": "click",
+                          "targetId": "e23c69bf-40f3-48ab-afab-516ad2987035",
+                          "action": "off",
+                          "closeOn": [
+                            "escape"
+                          ]
+                        },
+                        {
+                          "id": "38943269-420a-4825-93a8-3dc500d79ee6",
+                          "interactionId": "622120cf-b53a-4c54-8b7b-941dfcd7ba35",
+                          "trigger": "click",
+                          "targetId": "f679c787-03cf-4efb-aa62-641cb8e12ff8",
+                          "action": "off"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "f679c787-03cf-4efb-aa62-641cb8e12ff8",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "67b31011-7b47-4b95-a971-39ffd8816b99",
+                          "type": "h3",
+                          "content": "Sheet title",
+                          "children": [],
+                          "classes": "text-lg font-semibold tracking-tight text-foreground"
+                        },
+                        {
+                          "id": "eb8dfcd0-f00c-41e4-bb27-8f32430c4c2e",
+                          "type": "paragraph",
+                          "content": "What this panel is for, in a line.",
+                          "children": [],
+                          "classes": "text-sm text-muted-foreground"
+                        },
+                        {
+                          "id": "6910b4d5-4315-411d-b6ea-4d5655bd18f0",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "3e4f42d3-442b-4381-b34e-f9dca458af8e",
+                              "type": "Button",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "9cf57f27-9d82-4581-968b-05ed04252a3a",
+                                  "type": "button",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "9fb76f46-b5a4-4c8e-912d-ed4f5143f4cf",
+                                      "type": "icon",
+                                      "content": "",
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "4fb437ed-11a7-4247-9154-7810d2cf820e",
+                                      "type": "span",
+                                      "content": "Close",
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "a4ac960d-3335-4bc8-9081-a15a9ba73325",
+                                      "type": "icon",
+                                      "content": "",
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ],
+                              "variants": {
+                                "variant": "outline"
+                              }
+                            }
+                          ],
+                          "classes": "contents",
+                          "interactions": [
+                            {
+                              "id": "b1fe5109-22fc-4a71-b5a0-f1987b3db2ab",
+                              "interactionId": "29017fb9-1deb-4ccd-81b9-e5164a79393a",
+                              "trigger": "click",
+                              "targetId": "e23c69bf-40f3-48ab-afab-516ad2987035",
+                              "action": "off"
+                            },
+                            {
+                              "id": "7ba7537c-3864-4b3d-864c-a3870acf4a27",
+                              "interactionId": "622120cf-b53a-4c54-8b7b-941dfcd7ba35",
+                              "trigger": "click",
+                              "targetId": "f679c787-03cf-4efb-aa62-641cb8e12ff8",
+                              "action": "off"
+                            }
+                          ]
+                        }
+                      ],
+                      "classes": "absolute inset-y-0 right-0 flex h-full w-80 translate-x-full flex-col gap-4 border-l border-border bg-background p-6 shadow-lg transition-transform",
+                      "attributes": {
+                        "role": "dialog",
+                        "aria-modal": "true"
+                      },
+                      "variantClasses": {
+                        "side:left": "right-auto left-0 -translate-x-full border-l-0 border-r",
+                        "side:top": "inset-x-0 inset-y-auto top-0 h-auto w-full -translate-y-full border-l-0 border-b",
+                        "side:bottom": "inset-x-0 inset-y-auto bottom-0 h-auto w-full translate-y-full border-l-0 border-t"
+                      }
+                    }
+                  ],
+                  "classes": "invisible fixed inset-0 z-50 opacity-0 transition-opacity"
+                }
+              ],
+              "classes": "flex flex-col items-start gap-4"
+            }
+          ]
+        },
+        "category": "Interactive",
+        "variants": [
+          {
+            "name": "side",
+            "options": [
+              "right",
+              "left",
+              "top",
+              "bottom"
+            ],
+            "default": "right"
+          }
+        ]
+      }
+    ],
+    "interactions": [
+      {
+        "id": "29017fb9-1deb-4ccd-81b9-e5164a79393a",
+        "name": "Sheet · open",
+        "toClasses": "visible opacity-100",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      },
+      {
+        "id": "622120cf-b53a-4c54-8b7b-941dfcd7ba35",
+        "name": "Sheet · slide in",
+        "toClasses": "translate-x-0 translate-y-0",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      }
+    ],
+    "tokens": [
+      {
+        "id": "e7076833-ebe3-422c-b0ab-ae9abf0a0eae",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "17589c18-33f0-4421-9d9f-6fa6259765c1",
+        "name": "primary",
+        "value": "#171717"
+      },
+      {
+        "id": "5bc4c63a-f1dc-40c5-a325-9ed73f645455",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "0e9b59e2-409a-4959-81f8-ba11e76754f3",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "8148dc40-5331-4e28-acf8-10f57cb2bbba",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "ea3b613b-cda4-45a1-b32c-a5f664232205",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "8b33f31f-ce3d-4b88-87c5-f983c37797e2",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "44c45b46-170d-476f-b171-32a020a7ddd1",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "b32322d9-9fed-4502-98a1-30d475f08aa4",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "551561af-819a-4675-9282-e788c0c9ab4a",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "4377c4d9-fd1f-497a-88b4-2929207ef83c",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "40a183d0-d35f-49a5-8bee-d4dd555484c0",
+        "name": "accent-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "6c3f7a99-8050-4faa-8955-4b4ab5562070",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "b0682e4c-5aca-4b9a-b9f9-97f592a066f6",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "select": {
+    "components": [
+      {
+        "id": "edcb478d-474e-4d37-91db-ef50efe8b5fc",
+        "name": "Select",
+        "root": {
+          "id": "bca82edd-f373-4594-a7e7-8f44fa6660a5",
+          "type": "Select",
+          "content": "",
+          "children": [
+            {
+              "id": "77b503da-907b-450b-acf5-75bc89455e6d",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "dd1aef4c-41ce-49ab-b0f0-a062a5492e8f",
+                  "type": "select",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "05feb5fc-13d6-40d4-8996-6b5457f2299b",
+                      "type": "option",
+                      "content": "First option",
+                      "children": []
+                    },
+                    {
+                      "id": "aebb3171-aaf4-444a-a472-b1a9aa2c70c0",
+                      "type": "option",
+                      "content": "Second option",
+                      "children": []
+                    },
+                    {
+                      "id": "077cf735-bfbf-4dcc-a988-b90f63964492",
+                      "type": "option",
+                      "content": "Third option",
+                      "children": []
+                    }
+                  ],
+                  "classes": "h-9 appearance-none cursor-pointer pr-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "attributes": {
+                    "name": "choice"
+                  }
+                },
+                {
+                  "id": "d1613b9c-37b5-4afe-9029-59f898334b83",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground",
+                  "svg": "<svg data-icon=\"lucide:chevron-down\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg>"
+                }
+              ],
+              "classes": "relative w-full"
+            }
+          ]
+        },
+        "category": "Forms"
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "bdf470ed-1aa7-4068-b165-e043bafa7e38",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "175251d0-34f3-4778-9488-34a0f0eca94c",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "e4d34cfb-9bc7-4c0c-ba8c-ec890c91b53d",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "1211375a-4bfe-4884-8292-d3b0bc36d751",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "028fbb53-8dbf-45c5-84cb-fdb5a7b93b16",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "navbar": {
+    "components": [
+      {
+        "id": "edad2203-77a5-4579-9f19-ac7480042d9b",
+        "name": "Button",
+        "root": {
+          "id": "f504e172-9cb3-4bdd-ad99-9159bf43f62f",
+          "type": "Button",
+          "content": "",
+          "children": [
+            {
+              "id": "cfc1ed4d-9b8d-41db-936f-e1a9744808d7",
+              "type": "button",
+              "content": "",
+              "children": [
+                {
+                  "id": "8340b5a6-e722-48d3-80be-cb246f858c1c",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+                },
+                {
+                  "id": "6c2bb365-4f7c-4c2b-9694-31e391d2051b",
+                  "type": "span",
+                  "content": "Button",
+                  "children": []
+                },
+                {
+                  "id": "7cd7a8d9-2f3b-4130-97e8-49b9eb11fc03",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+                }
+              ],
+              "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+              "variantClasses": {
+                "variant:secondary": "bg-secondary text-secondary-foreground",
+                "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:destructive": "bg-destructive text-destructive-foreground",
+                "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+                "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+                "size:lg": "h-10 px-6 text-base",
+                "size:icon": "w-9 px-0"
+              }
+            }
+          ]
+        },
+        "category": "Buttons",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "secondary",
+              "outline",
+              "ghost",
+              "destructive",
+              "link"
+            ],
+            "default": "default"
+          },
+          {
+            "name": "size",
+            "options": [
+              "md",
+              "sm",
+              "lg",
+              "icon"
+            ],
+            "default": "md"
+          }
+        ]
+      },
+      {
+        "id": "3d593829-89fe-4f27-9a2c-4c7a9d14592c",
+        "name": "Navbar",
+        "root": {
+          "id": "8d0dca33-3cad-4ea7-855a-630b2cb60084",
+          "type": "Navbar",
+          "content": "",
+          "children": [
+            {
+              "id": "6962703d-0de2-48fb-b4fc-bde7068d2542",
+              "type": "header",
+              "content": "",
+              "children": [
+                {
+                  "id": "46a2ba16-2110-4aed-a57c-ac578ae6b4f0",
+                  "type": "link",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "eaba4e3d-e914-4ac2-8c84-9b45aa1b07f7",
+                      "type": "span",
+                      "content": "Acme",
+                      "children": []
+                    }
+                  ],
+                  "classes": "text-base font-semibold text-foreground",
+                  "link": "/"
+                },
+                {
+                  "id": "b18ebcea-4726-4b68-8746-6e682f43e4bd",
+                  "type": "nav",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "e775def3-419f-48e4-a56c-1b752eda009f",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "bb7d3ba8-1a7b-44e7-ae49-b79cefbca332",
+                          "type": "span",
+                          "content": "Home",
+                          "children": []
+                        }
+                      ],
+                      "classes": "text-sm text-muted-foreground transition-colors hover:text-foreground",
+                      "link": "/"
+                    },
+                    {
+                      "id": "4261e4e0-a66e-4e2e-9eac-b597e60d17f4",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "10619aac-1e68-48fc-8a21-f8ce11cadaa7",
+                          "type": "span",
+                          "content": "Features",
+                          "children": []
+                        }
+                      ],
+                      "classes": "text-sm text-muted-foreground transition-colors hover:text-foreground",
+                      "link": "/features"
+                    },
+                    {
+                      "id": "171dd74a-52de-4b7e-9dd9-310ce8f13983",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "72e26665-9683-431c-973f-8abe04ccb79e",
+                          "type": "span",
+                          "content": "Pricing",
+                          "children": []
+                        }
+                      ],
+                      "classes": "text-sm text-muted-foreground transition-colors hover:text-foreground",
+                      "link": "/pricing"
+                    }
+                  ],
+                  "classes": "hidden items-center gap-6 md:flex"
+                },
+                {
+                  "id": "b5c4a52d-29f9-494e-9829-3cad38acd376",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "72f82413-4558-41ee-bb26-d8fc219d7bfe",
+                      "type": "Button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "f6846246-5d52-4a52-9b36-daff64d55b17",
+                          "type": "button",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "32c89507-1d4c-460b-bf63-ac63bde3d9e9",
+                              "type": "icon",
+                              "content": "",
+                              "children": [],
+                              "hidden": false,
+                              "svg": "<svg data-icon=\"lucide:menu\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 5h16\"/><path d=\"M4 12h16\"/><path d=\"M4 19h16\"/></svg>"
+                            },
+                            {
+                              "id": "aab843e6-66ea-49b4-a6a7-6edc2478576f",
+                              "type": "span",
+                              "content": "Menu",
+                              "children": [],
+                              "hidden": true
+                            },
+                            {
+                              "id": "c36a96ae-0efa-4425-ad30-db6a15ed0371",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            }
+                          ]
+                        }
+                      ],
+                      "variants": {
+                        "variant": "outline",
+                        "size": "icon"
+                      }
+                    }
+                  ],
+                  "classes": "flex md:hidden",
+                  "interactions": [
+                    {
+                      "id": "c7aa1179-149e-4b25-96b3-29678287604f",
+                      "interactionId": "826fee0f-d83a-4a07-953c-323664f4aae2",
+                      "trigger": "click",
+                      "targetId": "bd4314bb-c6f9-4b98-a6d7-9accd1ed8f10",
+                      "closeOn": [
+                        "outside",
+                        "escape"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "bd4314bb-c6f9-4b98-a6d7-9accd1ed8f10",
+                  "type": "nav",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "101a49fd-6363-4fe6-916e-a09523ee8221",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "e1af9e59-7570-42ab-a81f-6aed04f86e1d",
+                          "type": "span",
+                          "content": "Home",
+                          "children": []
+                        }
+                      ],
+                      "classes": "rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "link": "/"
+                    },
+                    {
+                      "id": "c8d08ca5-65b6-437f-a98d-c4dec471a33e",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "a2d754cc-20a0-4c68-a0bb-641a40eb2c95",
+                          "type": "span",
+                          "content": "Features",
+                          "children": []
+                        }
+                      ],
+                      "classes": "rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "link": "/features"
+                    },
+                    {
+                      "id": "850b1017-7fff-4b0d-b893-b3434cfd05f6",
+                      "type": "link",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "95dfd7a8-b83e-4711-9f49-139696c8325e",
+                          "type": "span",
+                          "content": "Pricing",
+                          "children": []
+                        }
+                      ],
+                      "classes": "rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "link": "/pricing"
+                    }
+                  ],
+                  "classes": "hidden absolute left-0 top-[100%] z-50 w-full flex-col gap-1 border-b border-border bg-background p-4 md:hidden"
+                }
+              ],
+              "classes": "sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background px-6 py-3"
+            }
+          ]
+        },
+        "category": "Navigation"
+      }
+    ],
+    "interactions": [
+      {
+        "id": "826fee0f-d83a-4a07-953c-323664f4aae2",
+        "name": "Navbar · open menu",
+        "toClasses": "flex",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      }
+    ],
+    "tokens": [
+      {
+        "id": "a0eded37-2d2b-4f19-a743-9805b43bea21",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "55a927ac-94d4-4b43-ba96-87683b8449dc",
+        "name": "primary",
+        "value": "#171717"
+      },
+      {
+        "id": "870bf801-d81e-4c20-9948-9423be633f15",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "03a27d1a-e7a1-4834-a1d7-06ca3bc14737",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "cb3e4cfa-76f7-40f7-a420-212d9776c2bf",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "66fbb29f-fbd4-4993-a07c-fc59e3cb1b01",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "479b7525-f78f-4e32-9f2f-0142de847f90",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "00dd9a06-598b-4766-990b-488eae3510ec",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "d1319c86-b93b-4de2-9407-5a312b5fc538",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "ac35092b-a333-478e-955b-a33a70863e28",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "101a1592-d121-49af-b8fc-450598b00928",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "0084f443-ed7d-4031-b71d-1fba596c25a5",
+        "name": "accent-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "85989a08-4b61-4525-806c-734fe795e77b",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "f2c865fd-e75d-455a-837d-a64999b28d60",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "tabs": {
+    "components": [
+      {
+        "id": "2ffb91e7-3a21-462e-985d-ff1af42bed8f",
+        "name": "Tabs",
+        "root": {
+          "id": "9e81cfda-5524-4483-a958-46f630425428",
+          "type": "Tabs",
+          "content": "",
+          "children": [
+            {
+              "id": "5af956c9-827b-4b80-8d6d-1d633fe8effc",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "6ab22130-3cc8-408c-afe2-9ae13594e800",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "fb7a2870-6740-49af-902a-241ec8606af8",
+                      "type": "button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "0a7dc428-64d3-4fad-bcc6-be6cfa197367",
+                          "type": "span",
+                          "content": "Overview",
+                          "children": []
+                        }
+                      ],
+                      "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring bg-background text-foreground",
+                      "interactions": [
+                        {
+                          "id": "69753010-4840-48c5-af15-e71496345cc2",
+                          "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                          "trigger": "click",
+                          "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                          "action": "off"
+                        },
+                        {
+                          "id": "d721baa6-a0a7-4a2d-a2b5-7d66b98d03ce",
+                          "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                          "trigger": "click",
+                          "targetId": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                          "action": "off"
+                        },
+                        {
+                          "id": "db46207e-ae89-4f53-a7de-b4ef3ca4b37d",
+                          "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                          "trigger": "click",
+                          "targetId": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                          "action": "off"
+                        },
+                        {
+                          "id": "a7e28a37-4097-4fee-b65a-18fb4773ce9c",
+                          "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                          "trigger": "click",
+                          "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                          "action": "off"
+                        },
+                        {
+                          "id": "25c76c83-b2a7-4d0c-ac28-c62244e31fd0",
+                          "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                          "trigger": "click",
+                          "targetId": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                          "action": "off"
+                        },
+                        {
+                          "id": "97072cdc-d34e-4c68-90ba-e41ac2bacb77",
+                          "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                          "trigger": "click",
+                          "targetId": "993db2fb-e093-488c-9bef-72233276d552",
+                          "action": "off"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                      "type": "button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "2f469b65-3eb1-4bf0-8229-7b11c610e5a8",
+                          "type": "span",
+                          "content": "Details",
+                          "children": []
+                        }
+                      ],
+                      "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground",
+                      "interactions": [
+                        {
+                          "id": "9944bf62-12f9-4238-a1b6-7df20e9c534c",
+                          "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                          "trigger": "click",
+                          "targetId": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                          "action": "on",
+                          "group": "panels"
+                        },
+                        {
+                          "id": "5c3185ab-f58d-40cd-9eeb-5f33aa63a96e",
+                          "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                          "trigger": "click",
+                          "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                          "action": "on"
+                        },
+                        {
+                          "id": "79396638-bfce-4efe-81f7-4f124c1439ac",
+                          "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                          "trigger": "click",
+                          "targetId": "2cf1bdef-0547-4af6-82d9-c71c56be6195",
+                          "action": "on",
+                          "group": "tabs"
+                        },
+                        {
+                          "id": "837aad4c-495f-40bb-8919-5e96f9210e11",
+                          "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                          "trigger": "click",
+                          "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                          "action": "on"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "993db2fb-e093-488c-9bef-72233276d552",
+                      "type": "button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "09850605-ef90-49a8-8a9d-ff1b6c70f197",
+                          "type": "span",
+                          "content": "Activity",
+                          "children": []
+                        }
+                      ],
+                      "classes": "flex-1 rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground",
+                      "interactions": [
+                        {
+                          "id": "821de14d-ba5b-4a99-bcd2-994b12c5d8d7",
+                          "interactionId": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+                          "trigger": "click",
+                          "targetId": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                          "action": "on",
+                          "group": "panels"
+                        },
+                        {
+                          "id": "9929e24e-4d59-484f-ba48-284c4e36c034",
+                          "interactionId": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+                          "trigger": "click",
+                          "targetId": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                          "action": "on"
+                        },
+                        {
+                          "id": "194a389b-1d5e-4038-afe8-654585ec93cf",
+                          "interactionId": "e71e4323-16b2-4700-8342-b5532a6e2471",
+                          "trigger": "click",
+                          "targetId": "993db2fb-e093-488c-9bef-72233276d552",
+                          "action": "on",
+                          "group": "tabs"
+                        },
+                        {
+                          "id": "d70871a3-e2f1-49c8-ae1c-a4ba3e8d181e",
+                          "interactionId": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+                          "trigger": "click",
+                          "targetId": "fb7a2870-6740-49af-902a-241ec8606af8",
+                          "action": "on"
+                        }
+                      ]
+                    }
+                  ],
+                  "classes": "flex items-center gap-1 rounded-lg bg-muted p-1"
+                },
+                {
+                  "id": "74751a7d-32cc-46e0-9e55-f61940f39d1b",
+                  "type": "div",
+                  "content": "The first panel is the one visible before anything is clicked.",
+                  "children": [],
+                  "classes": "py-4 text-sm text-muted-foreground"
+                },
+                {
+                  "id": "3bb13c08-4cdc-4255-8452-4cbe37dc4394",
+                  "type": "div",
+                  "content": "The second panel. Clicking its tab hides the others.",
+                  "children": [],
+                  "classes": "hidden py-4 text-sm text-muted-foreground"
+                },
+                {
+                  "id": "f3e65fc4-6bcc-4a38-a67e-383035fc5ae1",
+                  "type": "div",
+                  "content": "The third panel, same again.",
+                  "children": [],
+                  "classes": "hidden py-4 text-sm text-muted-foreground"
+                }
+              ],
+              "classes": "flex w-full flex-col"
+            }
+          ]
+        },
+        "category": "Interactive"
+      }
+    ],
+    "interactions": [
+      {
+        "id": "87dacd4d-f22d-4a3b-804d-5236fc456e53",
+        "name": "Tabs · show panel",
+        "toClasses": "block",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      },
+      {
+        "id": "6b9329c4-2f87-4112-8b4c-e0ee18cc1d54",
+        "name": "Tabs · hide first panel",
+        "toClasses": "hidden",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      },
+      {
+        "id": "e71e4323-16b2-4700-8342-b5532a6e2471",
+        "name": "Tabs · active tab",
+        "toClasses": "bg-background text-foreground",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      },
+      {
+        "id": "d7b953d0-f58f-43b6-8345-1328f8bf6738",
+        "name": "Tabs · inactive first tab",
+        "toClasses": "bg-muted text-muted-foreground",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      }
+    ],
+    "tokens": [
+      {
+        "id": "fac2d88b-513a-41dc-9973-ca1f9a9ad1b1",
+        "name": "muted",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "978031b7-bd92-4616-be63-e7c47e954f71",
+        "name": "muted-foreground",
+        "value": "#737373"
+      },
+      {
+        "id": "3f0061fd-2860-4552-8aba-d9ad26f93975",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "0ce318ed-ce09-4d7c-a1cf-53365d33c911",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "9d55e7b8-ea0b-46b3-8b50-21b14c367b6e",
+        "name": "ring",
+        "value": "#a1a1a1"
+      }
+    ]
+  },
+  "dialog": {
+    "components": [
+      {
+        "id": "e3c66fa5-b56f-4534-95fe-472238ff23b2",
+        "name": "Button",
+        "root": {
+          "id": "849aeec1-b98c-4fcc-a419-4f844e2ea5b0",
+          "type": "Button",
+          "content": "",
+          "children": [
+            {
+              "id": "50e0c26b-3d37-4b25-b0b2-e8e9e3e90c1a",
+              "type": "button",
+              "content": "",
+              "children": [
+                {
+                  "id": "f565f8ba-f42a-46f4-ad82-7dce82256987",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-left\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/></svg>"
+                },
+                {
+                  "id": "c192cb9c-f0e4-462b-a14b-646c729a0b00",
+                  "type": "span",
+                  "content": "Button",
+                  "children": []
+                },
+                {
+                  "id": "1166b7e0-5f33-4f76-a0d0-2c8ca13d0181",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "size-4 shrink-0",
+                  "hidden": true,
+                  "svg": "<svg data-icon=\"lucide:arrow-right\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>"
+                }
+              ],
+              "classes": "inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-colors outline-none hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring",
+              "variantClasses": {
+                "variant:secondary": "bg-secondary text-secondary-foreground",
+                "variant:outline": "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:ghost": "bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground hover:opacity-100",
+                "variant:destructive": "bg-destructive text-destructive-foreground",
+                "variant:link": "h-auto bg-transparent px-0 text-primary underline-offset-4 hover:underline hover:opacity-100",
+                "size:sm": "h-8 gap-1.5 rounded-md px-3 text-xs",
+                "size:lg": "h-10 px-6 text-base",
+                "size:icon": "w-9 px-0"
+              }
+            }
+          ]
+        },
+        "category": "Buttons",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "secondary",
+              "outline",
+              "ghost",
+              "destructive",
+              "link"
+            ],
+            "default": "default"
+          },
+          {
+            "name": "size",
+            "options": [
+              "md",
+              "sm",
+              "lg",
+              "icon"
+            ],
+            "default": "md"
+          }
+        ]
+      },
+      {
+        "id": "7ee76698-4746-4ba5-ae4d-4699f40ec75f",
+        "name": "Dialog",
+        "root": {
+          "id": "13040f13-7fbf-4355-9d0b-24353be77add",
+          "type": "Dialog",
+          "content": "",
+          "children": [
+            {
+              "id": "a96a4df6-3f7e-4c27-a6ba-4b6a9ef8c12c",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "b4b43635-5532-4c6b-8036-884fd8e311af",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "c424cde3-52cd-4840-858c-4462bf913495",
+                      "type": "Button",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "265930c3-b124-4f2a-9eba-6ce27dcd7089",
+                          "type": "button",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "ac49b12c-8e93-4c25-9156-dd7196537a0d",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            },
+                            {
+                              "id": "04c74340-7861-46ac-8d5b-97515734a995",
+                              "type": "span",
+                              "content": "Open dialog",
+                              "children": []
+                            },
+                            {
+                              "id": "840ce62c-5076-4fa6-85ba-5dd74519a355",
+                              "type": "icon",
+                              "content": "",
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "classes": "contents",
+                  "interactions": [
+                    {
+                      "id": "493f8266-e6fc-4871-8d57-5247b96b3def",
+                      "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                      "trigger": "click",
+                      "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                      "action": "on"
+                    }
+                  ]
+                },
+                {
+                  "id": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "00fa3bf9-61c7-4b2e-bf55-395f7e44cc2d",
+                      "type": "div",
+                      "content": "",
+                      "children": [],
+                      "classes": "absolute inset-0 bg-black/50",
+                      "interactions": [
+                        {
+                          "id": "634ca23f-5e14-41e8-9a91-0771a5a113f7",
+                          "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                          "trigger": "click",
+                          "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                          "action": "off"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "0f371a8e-3195-4730-8f53-e4a1d8e02e78",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "eb8ddc81-fd94-49f7-b94f-f4c9594f59fd",
+                          "type": "h3",
+                          "content": "Edit profile",
+                          "children": [],
+                          "classes": "text-lg font-semibold tracking-tight text-card-foreground"
+                        },
+                        {
+                          "id": "8bd4201e-22fc-4ed6-b689-fa1f40910a7e",
+                          "type": "paragraph",
+                          "content": "Make your changes here, then save when you are done.",
+                          "children": [],
+                          "classes": "text-sm text-muted-foreground"
+                        },
+                        {
+                          "id": "d9f27575-cfe3-491d-8fa6-666069e1b572",
+                          "type": "div",
+                          "content": "",
+                          "children": [
+                            {
+                              "id": "f895f293-e77e-4e35-a8d2-2328b554a670",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "edaeb7c9-5a98-416c-b348-c63971f7e702",
+                                  "type": "Button",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "deca64ea-e130-4dbe-ba29-4fdf10151335",
+                                      "type": "button",
+                                      "content": "",
+                                      "children": [
+                                        {
+                                          "id": "7101649c-fb0a-42cc-9073-87b4bc17a215",
+                                          "type": "icon",
+                                          "content": "",
+                                          "children": []
+                                        },
+                                        {
+                                          "id": "d1e0f77b-0236-4120-9249-76dded8710af",
+                                          "type": "span",
+                                          "content": "Cancel",
+                                          "children": []
+                                        },
+                                        {
+                                          "id": "87d913ed-783d-4278-afce-7a022141cd51",
+                                          "type": "icon",
+                                          "content": "",
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "variants": {
+                                    "variant": "outline"
+                                  }
+                                }
+                              ],
+                              "classes": "contents",
+                              "interactions": [
+                                {
+                                  "id": "3f4780bc-9757-47ff-85d9-c9bc165d965a",
+                                  "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                                  "trigger": "click",
+                                  "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                                  "action": "off",
+                                  "closeOn": [
+                                    "escape"
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "563ac963-0d8f-4829-a99a-437b579f47d5",
+                              "type": "div",
+                              "content": "",
+                              "children": [
+                                {
+                                  "id": "b499dd2d-9415-4b7d-9bb1-c0c8c5d1abf1",
+                                  "type": "Button",
+                                  "content": "",
+                                  "children": [
+                                    {
+                                      "id": "b68526dc-e5af-406b-a510-a8a2948439a7",
+                                      "type": "button",
+                                      "content": "",
+                                      "children": [
+                                        {
+                                          "id": "2089619a-dc05-4da4-a875-96add9c0199a",
+                                          "type": "icon",
+                                          "content": "",
+                                          "children": []
+                                        },
+                                        {
+                                          "id": "a9855d6e-1927-4d61-ab1c-d806808049e0",
+                                          "type": "span",
+                                          "content": "Save changes",
+                                          "children": []
+                                        },
+                                        {
+                                          "id": "8f0bf512-7196-497b-a8d4-c794b6493555",
+                                          "type": "icon",
+                                          "content": "",
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "classes": "contents",
+                              "interactions": [
+                                {
+                                  "id": "3de70d9a-1bc4-48dd-bd46-be519ba607f7",
+                                  "interactionId": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+                                  "trigger": "click",
+                                  "targetId": "f1d22d64-2562-4af1-974e-f43c5a2837f7",
+                                  "action": "off"
+                                }
+                              ]
+                            }
+                          ],
+                          "classes": "flex items-center justify-end gap-2"
+                        }
+                      ],
+                      "classes": "relative z-50 flex w-full max-w-md flex-col gap-4 rounded-xl p-6 shadow-lg border border-border bg-card text-card-foreground",
+                      "attributes": {
+                        "role": "dialog",
+                        "aria-modal": "true"
+                      }
+                    }
+                  ],
+                  "classes": "hidden fixed inset-0 z-50 items-center justify-center p-6"
+                }
+              ],
+              "classes": "flex flex-col items-start gap-4"
+            }
+          ]
+        },
+        "category": "Interactive"
+      }
+    ],
+    "interactions": [
+      {
+        "id": "d3881dfb-0d4e-4f57-a987-d617163f5414",
+        "name": "Dialog · open",
+        "toClasses": "flex",
+        "duration": "duration-200",
+        "easing": "ease-out"
+      }
+    ],
+    "tokens": [
+      {
+        "id": "e2612597-cc1a-407d-917e-b4600cc8d10e",
+        "name": "ring",
+        "value": "#a1a1a1"
+      },
+      {
+        "id": "0e71c3b1-cc3f-4030-aa5f-1e2e50c7f341",
+        "name": "primary",
+        "value": "#171717"
+      },
+      {
+        "id": "af9a234a-c98a-4668-87ee-8df772dc7fe2",
+        "name": "primary-foreground",
+        "value": "#fafafa"
+      },
+      {
+        "id": "0ab424bb-334c-4a4e-a5a9-b221e802393b",
+        "name": "secondary",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "a5ccadf6-a000-4063-8e3a-b574868c96cd",
+        "name": "secondary-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "f639941c-0f6f-4b4d-8792-43baeb446fbc",
+        "name": "destructive",
+        "value": "#e7000b"
+      },
+      {
+        "id": "48b9baff-2515-491e-ab69-42a7a7934e4a",
+        "name": "destructive-foreground",
+        "value": "#ffffff"
+      },
+      {
+        "id": "aa87bb96-7ae4-4d24-83d4-8e9b926ac10f",
+        "name": "input",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "85677f82-a9dd-4a46-8690-11861dbd2137",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "b6d33406-8809-44d1-8fc1-31b23adabedb",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "81cc1041-99d0-4166-b7ab-dfff338f1e49",
+        "name": "accent",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "ec7ea7dc-32e4-4b9d-bbaa-26819bfa3535",
+        "name": "accent-foreground",
+        "value": "#171717"
+      },
+      {
+        "id": "8d1ec049-a640-4328-8fe7-5d39760bec1c",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "9b76d6d5-2b62-4065-bb71-b17b50cdebda",
+        "name": "card",
+        "value": "#ffffff"
+      },
+      {
+        "id": "55a6fd62-c2e7-4dee-bdd7-e3adbf68e6d1",
+        "name": "card-foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "1d04e235-baf1-4526-b0b9-ab3017cb3ac2",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "testimonial": {
+    "components": [
+      {
+        "id": "b70ca1d1-c33f-486f-99d9-899bca52bda8",
+        "name": "Testimonial",
+        "root": {
+          "id": "e75c1a6c-36fb-4302-942e-4f94ab6eac01",
+          "type": "Testimonial",
+          "content": "",
+          "children": [
+            {
+              "id": "6e76b79e-aca2-4327-a378-49e65657e39b",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "2b566333-dba3-41a7-b3c5-5c6362c51940",
+                  "type": "paragraph",
+                  "content": "This is the single best tool we have adopted all year.",
+                  "children": [],
+                  "classes": "text-base text-card-foreground"
+                },
+                {
+                  "id": "f91b7d85-531a-4af9-b33f-b7ce0de61707",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "b0aa1b04-cf0f-45d2-a404-f0a4be09d571",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "ae507fcd-4832-4c72-99a2-2b52b26337fa",
+                          "type": "image",
+                          "content": "",
+                          "children": [],
+                          "classes": "h-full w-full object-cover"
+                        }
+                      ],
+                      "classes": "size-10 shrink-0 overflow-hidden rounded-full bg-muted"
+                    },
+                    {
+                      "id": "c08a24da-90e5-4996-ae2c-88f78ad9a754",
+                      "type": "div",
+                      "content": "",
+                      "children": [
+                        {
+                          "id": "848bee00-367e-4d0c-a3b6-e6270e6501ee",
+                          "type": "span",
+                          "content": "Jane Doe",
+                          "children": [],
+                          "classes": "truncate text-sm font-medium text-card-foreground"
+                        },
+                        {
+                          "id": "10c60f18-b486-4d22-b022-98d86750a669",
+                          "type": "span",
+                          "content": "Head of Design, Acme",
+                          "children": [],
+                          "classes": "truncate text-xs text-muted-foreground"
+                        }
+                      ],
+                      "classes": "flex min-w-0 flex-col"
+                    }
+                  ],
+                  "classes": "flex items-center gap-3"
+                }
+              ],
+              "classes": "flex flex-col gap-4 p-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+            }
+          ]
+        },
+        "category": "Content"
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "d0d2e1cc-6a94-49cd-902b-5eb4e8d6781f",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "a630e08d-81ce-4dc5-9695-f04959dcc2c4",
+        "name": "card",
+        "value": "#ffffff"
+      },
+      {
+        "id": "c6792de1-903c-4ba4-8914-6122aac29da0",
+        "name": "card-foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "3952b427-c709-4f44-b69a-3a72b9957fb5",
+        "name": "muted",
+        "value": "#f5f5f5"
+      },
+      {
+        "id": "6c18b025-a2e2-40bf-a118-a2d40825e9b4",
+        "name": "muted-foreground",
+        "value": "#737373"
+      }
+    ]
+  },
+  "alert": {
+    "components": [
+      {
+        "id": "4e739f5d-d175-48c9-a42d-88cb9992bc88",
+        "name": "Alert",
+        "root": {
+          "id": "ee6ccc79-9383-4a89-94ce-5af9883931e8",
+          "type": "Alert",
+          "content": "",
+          "children": [
+            {
+              "id": "059cd719-c3cf-4236-b954-0d6346b4988b",
+              "type": "div",
+              "content": "",
+              "children": [
+                {
+                  "id": "4b9146e5-1744-4a8d-bd0d-425e46d37126",
+                  "type": "icon",
+                  "content": "",
+                  "children": [],
+                  "classes": "mt-0.5 size-4 shrink-0",
+                  "svg": "<svg data-icon=\"lucide:info\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/></svg>"
+                },
+                {
+                  "id": "717163fb-ea67-4644-808b-a3031c629c2e",
+                  "type": "div",
+                  "content": "",
+                  "children": [
+                    {
+                      "id": "0ff99478-74b6-497c-a555-2fe4e9380ecd",
+                      "type": "h4",
+                      "content": "Heads up",
+                      "children": [],
+                      "classes": "text-sm font-medium"
+                    },
+                    {
+                      "id": "5a254c26-9a4d-4df8-bb38-57836725afb6",
+                      "type": "paragraph",
+                      "content": "Something worth knowing before you carry on.",
+                      "children": [],
+                      "classes": "text-sm text-muted-foreground",
+                      "variantClasses": {
+                        "variant:destructive": "text-destructive"
+                      }
+                    }
+                  ],
+                  "classes": "flex min-w-0 flex-col gap-1"
+                }
+              ],
+              "classes": "flex w-full gap-3 rounded-lg border border-border bg-background p-4 text-foreground",
+              "attributes": {
+                "role": "alert"
+              },
+              "variantClasses": {
+                "variant:destructive": "border-destructive text-destructive"
+              }
+            }
+          ]
+        },
+        "category": "Feedback",
+        "variants": [
+          {
+            "name": "variant",
+            "options": [
+              "default",
+              "destructive"
+            ],
+            "default": "default"
+          }
+        ]
+      }
+    ],
+    "interactions": [],
+    "tokens": [
+      {
+        "id": "59732ba6-6b63-403a-bda0-a8369de2a739",
+        "name": "border",
+        "value": "#e5e5e5"
+      },
+      {
+        "id": "5064fa5d-8f2c-498e-aa92-daa86d8343cc",
+        "name": "background",
+        "value": "#ffffff"
+      },
+      {
+        "id": "876e8a62-f721-4365-9862-9f2177ea0fc0",
+        "name": "foreground",
+        "value": "#0a0a0a"
+      },
+      {
+        "id": "1e8cacd4-a020-428d-86c5-7edcd2a31724",
+        "name": "muted-foreground",
+        "value": "#737373"
+      },
+      {
+        "id": "d9f4d516-6cf8-4969-bbaa-fada23bdd643",
+        "name": "destructive",
+        "value": "#e7000b"
+      }
+    ]
+  }
+}

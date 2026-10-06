@@ -1,0 +1,26 @@
+{
+  "name": "create-guano",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "description": "Scaffold a new Guano site project.",
+  "homepage": "https://github.com/useguano/guano#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/useguano/guano.git",
+    "directory": "packages/create-guano"
+  },
+  "bugs": {
+    "url": "https://github.com/useguano/guano/issues"
+  },
+  "type": "module",
+  "bin": {
+    "create-guano": "index.js"
+  },
+  "files": [
+    "index.js",
+    "LICENSE-EXCEPTIONS.md"
+  ],
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  }
+}

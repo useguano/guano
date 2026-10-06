@@ -1,0 +1,26 @@
+# One instance = one project = one site. Five clients means five of these,
+# each with its own volume.
+services:
+  guano:
+    build: .
+    # or: image: ghcr.io/<you>/guano:<tag>
+    ports:
+      - '4174:4174'
+    volumes:
+      - guano-data:/data
+    environment:
+      # Set this behind the proxy below, and ONLY behind one: without a proxy
+      # the header is client-spoofable and every rate limit keys on it.
+      TRUST_PROXY: '1'
+      # The session cookie is Secure by default, so the editor needs HTTPS.
+      # Terminate TLS at the proxy; set COOKIE_SECURE=0 only for a plain-HTTP
+      # LAN setup you understand the consequences of.
+      LOG_LEVEL: info
+      # LOG_JSON: '1'        # for a log shipper
+    restart: unless-stopped
+    # the server drains in-flight work on SIGTERM; give it room to finish an
+    # export rather than being killed mid-swap
+    stop_grace_period: 45s
+
+volumes:
+  guano-data:

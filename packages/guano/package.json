@@ -1,0 +1,40 @@
+{
+  "name": "guano",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "description": "Self-hosted visual website builder: live canvas, layers tree, components, CMS collections, static publishing.",
+  "homepage": "https://github.com/useguano/guano#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/useguano/guano.git",
+    "directory": "packages/guano"
+  },
+  "bugs": {
+    "url": "https://github.com/useguano/guano/issues"
+  },
+  "type": "module",
+  "bin": {
+    "guano": "bin/guano.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "mcp",
+    "runtime",
+    "server",
+    "src",
+    "LICENSE-EXCEPTIONS.md"
+  ],
+  "scripts": {
+    "prepack": "node scripts/prepack.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@tailwindcss/node": "^4.3.3",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  }
+}
