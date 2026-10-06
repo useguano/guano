@@ -7,8 +7,10 @@ collections and locales — then publish a fully static site
 downloaded as a zip, or pushed to GitHub.
 
 ```sh
-npm install -g guano   # or: npx guano dev
-guano dev
+npm create @useguano   # scaffolds a folder and installs
+cd my-site && npm run dev
+# or, without a project folder:
+npx -y @useguano/guano dev
 ```
 
 Open `http://localhost:4174/admin`, create the first (admin) account, build.
@@ -78,7 +80,7 @@ or editor only (contributors can't).
 the URL and token. For example, with Claude Code:
 
 ```sh
-claude mcp add guano -- npx -y guano mcp
+claude mcp add guano -- npx -y @useguano/guano mcp
 ```
 
 then set the environment in your MCP client config:
@@ -88,7 +90,7 @@ then set the environment in your MCP client config:
   "mcpServers": {
     "guano": {
       "command": "npx",
-      "args": ["-y", "guano", "mcp"],
+      "args": ["-y", "@useguano/guano", "mcp"],
       "env": {
         "GUANO_URL": "http://localhost:4174",
         "GUANO_TOKEN": "guano_your_token_here"

@@ -1,7 +1,10 @@
 {
-  "name": "guano",
+  "name": "@useguano/guano",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Self-hosted visual website builder: live canvas, layers tree, components, CMS collections, static publishing.",
   "homepage": "https://github.com/useguano/guano#readme",
   "repository": {

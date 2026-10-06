@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// create-guano: scaffold a project dir that runs Guano via npm scripts, then
+// @useguano/create: scaffold a project dir that runs Guano via npm scripts, then
 // install it. Zero dependencies — prompts with node:readline when no dir is
-// given. `npm create guano [dir] [--no-install]`.
+// given. `npm create @useguano [dir] [--no-install]`.
 import { spawnSync } from 'node:child_process'
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
@@ -43,7 +43,7 @@ const files = {
           build: 'guano build',
         },
         dependencies: {
-          guano: '^0.1.0',
+          '@useguano/guano': '^0.1.0',
         },
       },
       null,
@@ -70,7 +70,7 @@ dist-site/
 
   'README.md': `# ${name}
 
-A [Guano](https://www.npmjs.com/package/guano) site.
+A [Guano](https://www.npmjs.com/package/@useguano/guano) site.
 
 \`\`\`sh
 npm run dev
@@ -83,7 +83,7 @@ Your published site is served at http://localhost:4174/.
 - \`npm run build\` — export the site as static files to \`./dist-site\`
 - everything lives in \`./data\` — **backing up = copying that directory**
 
-See the guano package README for deploy notes and environment variables.
+See the @useguano/guano package README for deploy notes and environment variables.
 `,
 }
 

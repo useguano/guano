@@ -213,7 +213,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
       build, then Playwright. `check:corpus` runs only when `.corpus/inputs` is
       present, since it is local and gitignored.
 - [x] **I-3 Docs.** Fix the package README's claims of a bundled component
-      library, `npm create guano` and the two MCP tools that do not exist, and the
+      library, `npm create @useguano` and the two MCP tools that do not exist, and the
       seven real tools it omits. Drop "DSL editor" from the package description.
       Document `STORE_QUOTA`, `GUANO_PREVIEW_PORT`, `PORT_STRICT` and everything
       this branch adds. State that HSTS is the proxy's job and that

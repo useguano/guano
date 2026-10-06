@@ -11,14 +11,13 @@ ships as a zip, or pushes straight to a GitHub repo. The admin editor lives at
 
 ## Quickstart
 
-`npm create guano` is coming. Until then, run from a clone:
-
 ```sh
-git clone <this repo> && cd builder
-npm install
-npm run build        # build the admin SPA
-npm run serve        # → http://localhost:4174
+npm create @useguano   # asks for a folder name, installs guano into it
+cd my-site
+npm run dev            # → http://localhost:4174
 ```
+
+Or from a clone of this repo: `npm install && npm run build && npm run serve`.
 
 Open `http://localhost:4174/admin`, create the first (admin) account, build,
 publish. The published site is served at `http://localhost:4174/`.
