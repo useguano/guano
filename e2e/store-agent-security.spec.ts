@@ -179,9 +179,26 @@ test('the agent policy actually opens the gate when an admin turns it on', async
   const mainBody = await seedMain(admin)
   const { ctx: agent } = await tokenContext(admin, baseURL, 'sec-spec-agent-2')
 
-  expect((await agent.put(`/api/store/${MAIN}`, { data: mainBody })).status()).toBe(403)
+  const blocked = await agent.put(`/api/store/${MAIN}`, { data: mainBody })
+  expect(blocked.status()).toBe(403)
+  // the refusal has to name a control that EXISTS: it used to say "enable agent
+  // Main writes in Settings" when Settings had no such switch, so the only way
+  // to say yes was hand-editing agent-policy.json in the data dir
+  expect((await blocked.json()).error).toContain('Agent permissions')
+
+  // a token learns its OWN permissions from /api/auth/me, so get_status can
+  // say so before the agent picks Main and discovers it at the first save
+  const closed = await (await agent.get('/api/auth/me')).json()
+  expect(closed.agentPolicy).toMatchObject({ allowMainWrites: false })
+
   expect((await admin.put('/api/agent-policy', { data: { allowMainWrites: true } })).ok()).toBeTruthy()
   expect((await agent.put(`/api/store/${MAIN}`, { data: mainBody })).status()).toBe(200)
+  const opened = await (await agent.get('/api/auth/me')).json()
+  expect(opened.agentPolicy).toMatchObject({ allowMainWrites: true })
+
+  // a browser session is not an agent, so it is told nothing about the policy
+  // here — it reads /api/agent-policy, which is admin + session only
+  expect(await (await admin.get('/api/auth/me')).json()).not.toHaveProperty('agentPolicy')
 
   // restore the closed default for every spec that follows
   expect((await admin.put('/api/agent-policy', { data: { allowMainWrites: false } })).ok()).toBeTruthy()

@@ -688,6 +688,48 @@ const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
  *  "the client supports dialogs" stops meaning "declared" alone */
 let elicitationBroken = false
 
+/**
+ * The server-side switches (server/agent-policy.mjs), spelled the way the
+ * editor's own Settings → MCP → Agent permissions panel labels them — so the
+ * sentence an agent reads out names the control the human has to find.
+ */
+const POLICY_SWITCH = {
+  allowMainWrites: 'Write to Main',
+  allowPublish: 'Publish the site',
+  allowCustomCode: 'Change custom code',
+  allowFormSubmissions: 'Read form submissions',
+}
+
+const policyHint = (flag) =>
+  'an admin turns it on in the Guano editor under Settings → MCP → Agent permissions → ' +
+  `"${POLICY_SWITCH[flag]}"`
+
+/** this token's permissions, as /api/auth/me reports them; null on an older
+ *  server that does not send them. Never cached — the point is that a human
+ *  can flip a switch mid-session and the next call must see it. */
+const agentPermissions = async () => (await whoami().catch(() => null))?.agentPolicy ?? null
+
+/**
+ * Every Main-target result goes through this. With Main writes off the target
+ * is still accepted — refusing it would leave a client configured with
+ * GUANO_MCP_TARGET="main" no target at all, and so no possible write anywhere
+ * — but the refusal that is coming is stated HERE, at the one moment an agent
+ * can still say something useful, instead of arriving as a 403 on the first
+ * save after an hour of work.
+ */
+async function withMainPolicy(result) {
+  const policy = await agentPermissions()
+  if (!policy || policy.allowMainWrites) return result
+  return {
+    ...result,
+    mainWritesDisabled: true,
+    warning:
+      'the target is Main, but this token may NOT write to Main — every save will be refused. ' +
+      `Tell the human, in these words: ${policyHint('allowMainWrites')}. Until then work in a ` +
+      'draft instead (set_target {createDraft: "<name>"}), which needs no permission.',
+  }
+}
+
 /** why a tool that needs a target has none yet, naming the configured one */
 const targetMissingMessage = () =>
   ENV_TARGET
@@ -5127,6 +5169,18 @@ const tools = [
         ...(FILE_ROOT ? {} : { fileRootNote: 'unset — any absolute path this process can read' }),
         ...(ENV_TARGET ? { configuredTarget: ENV_TARGET } : {}),
         serverVersion,
+        // what this token may actually DO. Without it an agent reads a healthy
+        // status, sets Main as its target, works, and only then learns that
+        // every save is refused — which is what "the agent keeps telling me it
+        // is blocked" looks like from the human's chair.
+        ...(user.agentPolicy ? { permissions: user.agentPolicy } : {}),
+        ...(user.agentPolicy && !user.agentPolicy.allowMainWrites
+          ? {
+              mainWritesNote:
+                'writes to Main are disabled for this token: propose a draft, or tell the ' +
+                `human that ${policyHint('allowMainWrites')}`,
+            }
+          : {}),
         ...(versionMismatch
           ? {
               versionMismatch: true,
@@ -5261,7 +5315,12 @@ const tools = [
         const stats = mainProject ? projectStats(mainProject) : null
         if (ENV_TARGET === MAIN_ID) {
           target = MAIN_ID
-          return { ok: true, target, chosenVia: 'config', ...(stats ? { main: stats } : {}) }
+          return await withMainPolicy({
+            ok: true,
+            target,
+            chosenVia: 'config',
+            ...(stats ? { main: stats } : {}),
+          })
         }
         const meta = await readBranchesMeta()
         const wanted = ENV_TARGET.startsWith('new:') ? ENV_TARGET.slice(4).trim() : null
@@ -5411,7 +5470,12 @@ const tools = [
             // no acknowledgeMain round here: the dialog already showed what
             // Main holds, and the click on that labeled option is the consent
             target = MAIN_ID
-            return { ok: true, target, chosenVia: 'dialog', ...(stats ? { main: stats } : {}) }
+            return await withMainPolicy({
+              ok: true,
+              target,
+              chosenVia: 'dialog',
+              ...(stats ? { main: stats } : {}),
+            })
           }
           const draft = drafts.find((b) => b.id === choice)
           if (!draft) {
@@ -5469,7 +5533,7 @@ const tools = [
           }
         }
         target = MAIN_ID
-        return viaChat({ ok: true, target, ...(stats ? { main: stats } : {}) })
+        return viaChat(await withMainPolicy({ ok: true, target, ...(stats ? { main: stats } : {}) }))
       }
       const meta = await readBranchesMeta()
       const draft = meta.branches.find((b) => b.id === t)

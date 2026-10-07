@@ -60,6 +60,7 @@ import { useMedia } from '@/composables/useMedia'
 import { timeAgo } from '@/lib/time'
 import { formatBytes } from '@/lib/media'
 import { downloadBlob, filenameFrom } from '@/lib/download'
+import { apiJson } from '@/lib/api'
 
 // opened on demand, never on first paint — split out of the editor chunk
 const FormSubmissionsModal = defineAsyncComponent(() => import('@/components/editor/forms/FormSubmissionsModal.vue'))
@@ -241,6 +242,84 @@ async function onRevokeToken(id: string, label: string) {
     confirmLabel: 'Revoke',
   })
   if (ok) await revokeTokenApi(id).catch((e) => (apiTokenError.value = e instanceof Error ? e.message : 'Failed'))
+}
+
+// --- agent policy (server/agent-policy.mjs, data/agent-policy.json) ---
+//
+// What a `guano_` token may do, held server-side and off by default. This panel
+// is the ONLY surface for it, which is the whole reason it exists: the server's
+// own refusals tell an agent to "enable agent Main writes in Settings", and
+// until there was a control here the only way to say yes was to hand-edit
+// agent-policy.json in the data dir — so a fresh instance left every agent
+// permanently unable to touch Main, with nothing in the product to change it.
+//
+// Admin + session only, like /api/users: a token able to flip these would
+// guard nothing, so an editor sees no group at all rather than a failing one.
+type AgentFlag = 'allowMainWrites' | 'allowPublish' | 'allowCustomCode' | 'allowFormSubmissions'
+
+const AGENT_SWITCHES: { id: AgentFlag; label: string; hint: string }[] = [
+  {
+    id: 'allowMainWrites',
+    label: 'Write to Main',
+    hint: 'Edits land on the live project with no review step. Off, an agent works in a draft you apply yourself.',
+  },
+  {
+    id: 'allowPublish',
+    label: 'Publish the site',
+    hint: 'Let an agent put bytes on the live origin. Off, it can still preview its own work.',
+  },
+  {
+    id: 'allowCustomCode',
+    label: 'Change custom code',
+    hint: 'Head/body code and custom-code blocks — raw script on every published page.',
+  },
+  {
+    id: 'allowFormSubmissions',
+    label: 'Read form submissions',
+    hint: "Visitors' names, emails and messages. Deleting one is never allowed, by any switch.",
+  },
+]
+
+const agentPolicy = ref<Record<AgentFlag, boolean>>({
+  allowMainWrites: false,
+  allowPublish: false,
+  allowCustomCode: false,
+  allowFormSubmissions: false,
+})
+const agentPolicyBusy = ref<AgentFlag | null>(null)
+const agentPolicyError = ref<string | null>(null)
+
+// immediate watch rather than onMounted: the role can resolve after this panel
+// mounts (the same reason NAV is watched), and a missed load reads as all-off
+watch(
+  isAdmin,
+  (admin) => {
+    if (!admin) return
+    apiJson('/api/agent-policy')
+      .then((policy) => Object.assign(agentPolicy.value, policy))
+      .catch(() => {
+        /* best-effort, like the site gate */
+      })
+  },
+  { immediate: true },
+)
+
+async function setAgentFlag(id: AgentFlag, value: boolean) {
+  agentPolicyBusy.value = id
+  agentPolicyError.value = null
+  const before = agentPolicy.value[id]
+  agentPolicy.value[id] = value // optimistic: the toggle must follow the finger
+  try {
+    Object.assign(
+      agentPolicy.value,
+      await apiJson('/api/agent-policy', { method: 'PUT', body: JSON.stringify({ [id]: value }) }),
+    )
+  } catch (e) {
+    agentPolicy.value[id] = before
+    agentPolicyError.value = e instanceof Error ? e.message : 'Save failed'
+  } finally {
+    agentPolicyBusy.value = null
+  }
 }
 
 // --- general ---
@@ -2108,6 +2187,32 @@ async function onImportFile(e: Event) {
                 </div>
               </div>
               <EmptyListUI v-else>No tokens yet — add one to connect an MCP client.</EmptyListUI>
+            </SettingsGroup>
+
+            <SettingsGroup
+              v-if="isAdmin"
+              title="Agent permissions"
+              description="What an agent holding a token may do. Everything is off until you allow it here."
+            >
+              <div class="flex flex-col rounded-xl border border-input">
+                <div
+                  v-for="sw in AGENT_SWITCHES"
+                  :key="sw.id"
+                  class="flex items-center gap-3 border-b border-input px-3 py-2 last:border-b-0"
+                >
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-medium">{{ sw.label }}</p>
+                    <p class="text-[9px] text-muted-foreground">{{ sw.hint }}</p>
+                  </div>
+                  <ToggleUI
+                    :model-value="agentPolicy[sw.id]"
+                    :aria-label="sw.label"
+                    :disabled="agentPolicyBusy === sw.id"
+                    @update:model-value="setAgentFlag(sw.id, $event)"
+                  />
+                </div>
+              </div>
+              <p v-if="agentPolicyError" class="text-[9px] text-danger">{{ agentPolicyError }}</p>
             </SettingsGroup>
           </TabPanelUI>
 

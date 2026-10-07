@@ -502,7 +502,18 @@ async function handleAuth(req, res, path) {
     // on boot to fail fast on a bad URL/token and to learn who it is
     const user = requestUser(req)
     if (!user) return send(res, 401, JSON.stringify({ needsSetup: false }))
-    return send(res, 200, JSON.stringify({ ...userProfile(user), serverVersion: APP_VERSION }))
+    // An agent is told its OWN permissions, because the alternative is finding
+    // out at the first write: with Main writes off, set_target {main} succeeds,
+    // the agent works for a while and then every save 403s, which reads to the
+    // human as "the agent keeps saying it is blocked" with nothing naming the
+    // switch. Not a secret — the refusals state it anyway — and WRITING the
+    // policy stays admin + session cookie (handleAgentPolicy).
+    const policy = isAgentRequest(req) ? { agentPolicy: await readAgentPolicy() } : null
+    return send(
+      res,
+      200,
+      JSON.stringify({ ...userProfile(user), serverVersion: APP_VERSION, ...policy }),
+    )
   }
   if (path === '/api/auth/setup' && req.method === 'POST') {
     // bootstrap the first admin — only when no users exist yet
@@ -1351,7 +1362,7 @@ async function ownsDraft(user, key) {
 
 const AGENT_MAIN_DENIED =
   'agent writes to Main are disabled — work in a draft and let a human apply it, ' +
-  'or enable agent Main writes in Settings'
+  'or have an admin turn on "Write to Main" in Settings → MCP → Agent permissions'
 
 /**
  * Guard one project-blob write: the reason to refuse, or null to allow.
@@ -1386,13 +1397,18 @@ async function protectedWriteDenial(req, user, key, existingStr, bodyStr) {
 
   const who = contributor ? `${user.role}s` : 'agents'
   if (delta.kind === 'publishing') {
-    return `${who} cannot change ${delta.field} — the publish target is set by an admin in Settings`
+    return (
+      `${who} cannot change ${delta.field} — the publish target is set by an admin in ` +
+      'Settings → Publish'
+    )
   }
   if (contributor || !(await readAgentPolicy()).allowCustomCode) {
     return (
       `${who} cannot change ${delta.field} — custom code runs as raw script on every ` +
       'published page. Ask an admin to make this edit' +
-      (contributor ? '.' : ', or enable agent custom code in Settings.')
+      (contributor
+        ? '.'
+        : ', or to turn on "Change custom code" in Settings → MCP → Agent permissions.')
     )
   }
   return null
@@ -1561,7 +1577,8 @@ async function handlePost(req, res, params) {
       return fail(
         res,
         403,
-        'agent publishing is disabled — ask a human to publish, or enable agent publishing in Settings',
+        'agent publishing is disabled — ask a human to publish, or have an admin turn on ' +
+          '"Publish the site" in Settings → MCP → Agent permissions',
       )
     }
     const limit = publishAllowed(user.id)
@@ -1867,7 +1884,8 @@ async function handleForms(req, res, path, query) {
       res,
       403,
       'agent access to form submissions is disabled — these are site visitors\' personal ' +
-        'details. Ask an admin to enable it in Settings if you need them.',
+        'details. Ask an admin to turn on "Read form submissions" in Settings → MCP → ' +
+        'Agent permissions if you need them.',
     )
   }
 
