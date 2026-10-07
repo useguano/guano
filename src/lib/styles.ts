@@ -355,6 +355,18 @@ function buildVocabulary(): string[] {
     'hyphens-none', 'hyphens-manual', 'hyphens-auto',
     'normal-nums', 'ordinal', 'slashed-zero', 'lining-nums', 'oldstyle-nums',
     'proportional-nums', 'tabular-nums',
+    // gradients: `from-*`/`via-*`/`to-*` were accepted while every DIRECTION
+    // class was refused, so the stops landed and painted nothing. v4 spells
+    // them `bg-linear-to-*` (+ `bg-radial`, `bg-conic`) and still compiles the
+    // v3 `bg-gradient-to-*`; both are listed because both are what people type.
+    'bg-linear-to-t', 'bg-linear-to-tr', 'bg-linear-to-r', 'bg-linear-to-br',
+    'bg-linear-to-b', 'bg-linear-to-bl', 'bg-linear-to-l', 'bg-linear-to-tl',
+    'bg-gradient-to-t', 'bg-gradient-to-tr', 'bg-gradient-to-r', 'bg-gradient-to-br',
+    'bg-gradient-to-b', 'bg-gradient-to-bl', 'bg-gradient-to-l', 'bg-gradient-to-tl',
+    'bg-radial', 'bg-conic', 'bg-none',
+    // background-attachment — `bg-fixed` was in the conflict regex but never in
+    // the vocabulary, so it was grouped correctly and refused anyway
+    'bg-fixed', 'bg-local', 'bg-scroll',
   ]
   common.forEach((c) => out.add(c))
   // grid placement — spans and explicit start/end lines
@@ -602,12 +614,42 @@ export function hasDisplayClass(tokens: string[]): boolean {
   return tokens.some((t) => DISPLAY_CLASSES.has(splitVariant(t).base))
 }
 
-/** bg-* utilities that are NOT background-color (size/position/repeat/…) —
- * everything else groups as one color property so `bg-paper` replaces
- * `bg-[#f5f3edee]` and vice versa (arbitrary values are outside the catalog,
- * so without this they never conflicted with anything) */
-const NON_COLOR_BG_RE =
-  /^bg-(?:auto$|cover$|contain$|center$|top|bottom|left|right|repeat|no-repeat|fixed$|local$|scroll$|clip-|origin-|gradient-|linear-|radial-|conic-|none$|blend-|size-|position-)/
+/**
+ * Which background property a `bg-*` class sets, decided by its VALUE SHAPE.
+ *
+ * It used to be one regex of bare keywords and "everything else is the colour",
+ * so every arbitrary value — `bg-[radial-gradient(…)]`, `bg-[url(…)]`, even
+ * `bg-[size:24px_24px]` — read as background-color and evicted `bg-[#070707]`
+ * (and was evicted by it). A layered background (colour + gradient + size) was
+ * not expressible through `applyClass`, and a hover effect's `bg-muted` wiped a
+ * card's gradient. `shared/interactionClasses.js` already split on value shape;
+ * this is the same rule. The data-type hint Tailwind accepts inside the bracket
+ * (`bg-[size:…]`, `bg-[position:…]`, `bg-[image:…]`, `bg-[color:…]`) is honoured
+ * first, then the function name, then the keyword families.
+ */
+function backgroundKey(base: string): string | undefined {
+  if (!base.startsWith('bg-')) return undefined
+  const value = base.slice(3)
+  if (value.startsWith('[')) {
+    const hint = /^\[([a-z-]+):/.exec(value)?.[1]
+    if (hint === 'size' || hint === 'length') return 'background-size'
+    if (hint === 'position') return 'background-position'
+    if (hint === 'image' || hint === 'url') return 'background-image'
+    if (hint === 'color') return 'background-color'
+    if (/^\[(?:url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\(|image\(|image-set\()/.test(value))
+      return 'background-image'
+    return 'background-color'
+  }
+  if (/^(?:auto|cover|contain)$/.test(value) || value.startsWith('size-')) return 'background-size'
+  if (BG_POSITION_RE.test(base) || value.startsWith('position-')) return 'background-position'
+  if (/^(?:fixed|local|scroll)$/.test(value)) return 'background-attachment'
+  if (/^(?:none$|linear-to-|linear$|linear-|radial|conic|gradient-to-)/.test(value)) return 'background-image'
+  if (/^(?:repeat|no-repeat)/.test(value)) return 'background-repeat'
+  if (value.startsWith('clip-')) return 'background-clip'
+  if (value.startsWith('origin-')) return 'background-origin'
+  if (value.startsWith('blend-')) return 'background-blend-mode'
+  return 'background-color'
+}
 
 /** font-family utilities — the keyword forms AND an arbitrary family
  * (`font-[Instrument_Serif]`, letters in the value). One conflict group so
@@ -705,6 +747,13 @@ const PANEL_LESS_GROUPS: [RegExp, string][] = [
 /** colour families an opacity modifier is meaningful on. `/50` on anything else
  * is either a fraction (`w-1/2`, handled by SPACING_FRACTION_RE) or nonsense, so
  * the stem is only re-checked for these. */
+/** a bare arbitrary PROPERTY — `[mask-image:radial-gradient(…)]`,
+ * `[grid-template-areas:"a_b"]` — Tailwind's escape hatch for a property no
+ * utility covers. Brace-free because it lands in a stylesheet verbatim. The
+ * arbitrary-VALUE rule above needs a dash before the bracket, so these were
+ * refused as "not a known class" while `mask-[…]` beside them passed. */
+const ARBITRARY_PROPERTY_RE = /^\[([a-z][a-z-]*):[^{};]+\]$/
+
 const OPACITY_MODIFIER_RE =
   /^((?:bg|text|border|ring|outline|divide|shadow|from|via|to|decoration|caret|accent|placeholder|fill|stroke)-.+)\/(?:\d{1,3}|\[[^\]]+\])$/
 
@@ -713,6 +762,7 @@ export function isValidClass(cls: string): boolean {
   if (!base) return false
   if (segments.some((v) => !isKnownVariant(v))) return false
   if (/-\[.+\]$/.test(base)) return true // arbitrary value
+  if (ARBITRARY_PROPERTY_RE.test(base)) return true // arbitrary property: [mask-image:…]
   // `bg-black/50`, `text-white/70`, `border-border/50` — Tailwind's opacity
   // modifier, everyday syntax that was rejected outright. The slider's own
   // chrome uses it, so the renderers emitted classes an author could not type,
@@ -820,8 +870,12 @@ function propKey(base: string): StyleProperty | string | undefined {
   // tabular-nums`, `touch-pan-x touch-pinch-zoom`, a snap axis beside a snap
   // strictness — are deliberately left ungrouped.
   for (const [re, prop] of PANEL_LESS_GROUPS) if (re.test(base)) return prop
-  if (BG_POSITION_RE.test(base) || base.startsWith('bg-position-')) return 'background-position'
-  if (base.startsWith('bg-') && !NON_COLOR_BG_RE.test(base)) return 'background-color'
+  // bare arbitrary PROPERTIES: `[mask-image:…]` conflicts with another
+  // `[mask-image:…]` and with nothing else
+  const arbitraryProp = ARBITRARY_PROPERTY_RE.exec(base)
+  if (arbitraryProp) return `arbitrary:${arbitraryProp[1]}`
+  const background = backgroundKey(base)
+  if (background) return background
   if (FONT_FAMILY_RE.test(base) || FONT_ARBITRARY_FAMILY_RE.test(base)) return 'font-family'
   if (ORIGIN_RE.test(base)) return 'transform-origin'
   // line-height spans a keyword scale AND a numeric one — one group, or
