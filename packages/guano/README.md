@@ -55,21 +55,35 @@ site through the same authenticated HTTP API the editor uses and shares the
 editor's own document logic, so structure edits preserve element identity,
 styling, and interactions exactly as if you'd typed them.
 
-### Claude Desktop: one command
+### Claude Desktop: already done by the scaffolder
 
-On the machine running your instance (after `/admin` setup):
+`npm create @useguano` asks whether to connect Claude Desktop and the two
+permission questions a connected agent needs answered — **may it edit the live
+project (Main)?** and **may it publish?** — and does the connect right there,
+before the server has ever run: it mints an API token into `./data`, writes the
+permissions beside it, and writes the `mcpServers` entry into Claude Desktop's
+config. The token is **pending** until you create the admin account at
+`/admin`, which binds it; the setup form shows the permissions you chose
+instead of asking again. Quit Claude Desktop before scaffolding (the app
+overwrites its config from memory on quit) — the scaffolder waits for you if
+it is open.
+
+To connect later, or from another machine running the instance:
 
 ```sh
 npx guano connect   # or `npm run connect` in a scaffolded project
 ```
 
 The `guano` binary is a project dependency, not a global install, so it is
-reached through `npx` (or an npm script) rather than typed bare. It mints an API token (proving instance ownership via the data dir — no
-copy-paste) and writes the `mcpServers` entry into Claude Desktop's config with
-absolute paths. Quit Claude Desktop before running it — the app overwrites its
-config from memory on quit, which would silently undo the setup — then open it
-again: connected. `guano connect --print` emits the JSON snippet instead, for
-any other MCP client or a remote instance.
+reached through `npx` (or an npm script) rather than typed bare. It mints the
+token (through the running server, or straight into the data dir when the
+server is down — `--offline` never asks the network), asks the same two
+questions unless `--main` / `--publish` answer them (`--yes` skips them and
+leaves the stored policy alone), and writes Claude Desktop's config. When Main
+is allowed it also sets `GUANO_MCP_TARGET=main`, so the agent starts working
+instead of asking which target to use. Change either permission later in
+**Settings → MCP → Agent permissions**. `guano connect --print` emits the JSON
+snippet instead, for any other MCP client or a remote instance.
 
 ### Manual setup (other clients / remote instances)
 

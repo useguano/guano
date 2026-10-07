@@ -50,7 +50,13 @@ import {
   redactSecretsForContributor,
   mergeReviewerProject,
 } from './contributor-merge.mjs'
-import { protectedFieldDelta, readAgentPolicy, writeAgentPolicy } from './agent-policy.mjs'
+import {
+  agentPolicyPreset,
+  onboardingPolicy,
+  protectedFieldDelta,
+  readAgentPolicy,
+  writeAgentPolicy,
+} from './agent-policy.mjs'
 import {
   createIntegration,
   deleteIntegration,
@@ -118,6 +124,7 @@ import {
   listUsers,
   loginAllowed,
   needsSetup,
+  pendingTokenCount,
   recordInviteAttempt,
   recordLoginFailure,
   revokeInvite,
@@ -497,7 +504,23 @@ const tooManyRequests = (res, retryAfterSeconds, what) =>
 
 async function handleAuth(req, res, path) {
   if (path === '/api/auth/me' && req.method === 'GET') {
-    if (needsSetup()) return send(res, 401, JSON.stringify({ needsSetup: true }))
+    if (needsSetup()) {
+      // A policy answered BEFORE the first account (the scaffolder's questions,
+      // `guano connect --offline`) is shown to the setup form so it does not
+      // ask again. Nothing here anyone could not set: with no users, whoever
+      // reaches this instance is about to become its admin.
+      const preset = (await agentPolicyPreset()) ? await readAgentPolicy() : null
+      return send(
+        res,
+        401,
+        JSON.stringify({
+          needsSetup: true,
+          ...(preset
+            ? { agentPolicy: { allowMainWrites: preset.allowMainWrites, allowPublish: preset.allowPublish } }
+            : {}),
+        }),
+      )
+    }
     // session cookie or a `guano_` API-token bearer — the MCP server calls this
     // on boot to fail fast on a bad URL/token and to learn who it is
     const user = requestUser(req)
@@ -519,9 +542,9 @@ async function handleAuth(req, res, path) {
     // bootstrap the first admin — only when no users exist yet
     if (!needsSetup()) return fail(res, 403, 'account already exists')
     const body = await readBody(req)
-    let email, password, name, projectName
+    let email, password, name, projectName, agentPolicy
     try {
-      ;({ email, password, name, projectName } = JSON.parse(body ?? ''))
+      ;({ email, password, name, projectName, agentPolicy } = JSON.parse(body ?? ''))
     } catch {
       return fail(res, 400, 'invalid request')
     }
@@ -539,6 +562,15 @@ async function handleAuth(req, res, path) {
     // creates it. `projectName` is the SITE's name (`name` above is the
     // admin's own). Best-effort: a seed failure must not fail setup.
     await ensureProjectSeeded(typeof projectName === 'string' ? projectName : '')
+    // The setup form asks the two agent questions a connected instance needs
+    // answered (work on Main? publish?). Whoever is creating the FIRST admin
+    // owns the instance — this is already the trusted moment, the same trust
+    // the admin+session PUT /api/agent-policy keys off a minute later — so the
+    // answers are applied here rather than sending the person to Settings →
+    // MCP → Agent permissions on their first connect. Only these two keys, and
+    // only booleans: custom code and form submissions stay a deliberate later
+    // decision, not a setup checkbox.
+    await writeAgentPolicy(onboardingPolicy(agentPolicy))
     return send(res, 200, JSON.stringify(userProfile(user)), 'application/json', {
       'set-cookie': sessionCookieHeader(createSession(user.id)),
     })
@@ -553,9 +585,9 @@ async function handleAuth(req, res, path) {
       return fail(res, 403, 'connect bootstrap is local-only')
     }
     const body = await readBody(req)
-    let nonce, name
+    let nonce, name, policy
     try {
-      ;({ nonce, name } = JSON.parse(body ?? ''))
+      ;({ nonce, name, policy } = JSON.parse(body ?? ''))
     } catch {
       return fail(res, 400, 'invalid request')
     }
@@ -570,9 +602,15 @@ async function handleAuth(req, res, path) {
     if (typeof nonce !== 'string' || nonce.length < 32 || !stored || !timingSafeEqualStr(stored, nonce)) {
       return fail(res, 403, 'nonce mismatch — run `guano connect` from the instance machine')
     }
+    // with no admin yet this mints a PENDING token, bound at setup
     const minted = await bootstrapConnectToken(typeof name === 'string' ? name : '')
-    if (!minted) return fail(res, 403, 'no admin account yet — open /admin and complete setup first')
-    return send(res, 200, JSON.stringify(minted))
+    // `guano connect --main --publish` (or its prompts): the person at the
+    // instance's own keyboard, holding the data dir, is the owner — the same
+    // trust the nonce already stands on — so the two onboarding switches are
+    // applied here too. A key left out is left alone; only booleans count.
+    const patch = onboardingPolicy(policy)
+    const agentPolicy = Object.keys(patch).length ? await writeAgentPolicy(patch) : await readAgentPolicy()
+    return send(res, 200, JSON.stringify({ ...minted, agentPolicy }))
   }
   if (path === '/api/auth/comments-seen' && req.method === 'POST') {
     // Session only: this is a human saying "I have read them". An agent token
@@ -2925,24 +2963,34 @@ const previewServer = createServer(async (req, res) => {
     if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/api/')) {
       return fail(res, 404, 'the preview server serves the exported site only')
     }
-    // the one-time link from the editor, traded for a cookie so the page's
-    // own asset requests carry it
+    // The link from the editor (or the MCP `preview` tool): a valid token sets
+    // the cookie the page's own asset requests ride on AND serves the page in
+    // the same response. It used to answer a 303 to the bare path, which a
+    // browser follows with the cookie — and which curl, fetch and every agent
+    // without a cookie jar follow WITHOUT it, landing on the 401 below. The
+    // one tool whose whole purpose is "look at your work" could never look.
+    // setHeader, not writeHead: serveSiteDir's own headers merge over it. The
+    // token stays in the query of this one request only (no-store, and nothing
+    // on this server echoes a URL back).
     const token = url.searchParams.get('t')
-    if (token && (await previewTokenValid(token))) {
+    const tokenOk = !!token && (await previewTokenValid(token))
+    if (tokenOk) {
       const secret = await previewSecret()
-      res.writeHead(303, {
-        location: path,
-        'set-cookie': `${PREVIEW_COOKIE}=${previewCookie(secret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
-        'cache-control': 'no-store',
-        'x-robots-tag': 'noindex',
-      })
-      return res.end()
-    }
-    if (!(await previewUnlocked(req))) {
+      res.setHeader(
+        'set-cookie',
+        `${PREVIEW_COOKIE}=${previewCookie(secret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
+      )
+      res.setHeader('cache-control', 'no-store')
+    } else if (!(await previewUnlocked(req))) {
       return send(
         res,
         401,
-        JSON.stringify({ error: 'open this preview from the editor' }),
+        JSON.stringify({
+          error:
+            'preview link missing or expired — open a fresh preview from the editor ' +
+            '(Publish → Preview) or call the `preview` tool again, and use the whole url ' +
+            'including its ?t= token',
+        }),
         'application/json',
         { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
       )
@@ -3191,7 +3239,13 @@ function printBanner() {
   ➜ site:    ${base}/
   ➜ preview: http://localhost:${PREVIEW_PORT || port + 1}/
   ➜ data:    ${DATA_DIR}
-${needsSetup() ? `\n  first run — open ${base}/admin to create your admin account\n` : ''}`)
+${
+  needsSetup()
+    ? `\n  first run — open ${base}/admin to create your admin account${
+        pendingTokenCount() > 0 ? ' — the Claude Desktop token you created is bound to it' : ''
+      }\n`
+    : ''
+}`)
   // Last thing printed, because it is the thing that will waste your day.
   if (port !== PORT) {
     log.banner(`  ⚠  PORT ${PORT} WAS BUSY — THIS SERVER IS ON ${port}

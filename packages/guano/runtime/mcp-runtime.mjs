@@ -4067,7 +4067,29 @@ function buildVocabulary() {
 		"lining-nums",
 		"oldstyle-nums",
 		"proportional-nums",
-		"tabular-nums"
+		"tabular-nums",
+		"bg-linear-to-t",
+		"bg-linear-to-tr",
+		"bg-linear-to-r",
+		"bg-linear-to-br",
+		"bg-linear-to-b",
+		"bg-linear-to-bl",
+		"bg-linear-to-l",
+		"bg-linear-to-tl",
+		"bg-gradient-to-t",
+		"bg-gradient-to-tr",
+		"bg-gradient-to-r",
+		"bg-gradient-to-br",
+		"bg-gradient-to-b",
+		"bg-gradient-to-bl",
+		"bg-gradient-to-l",
+		"bg-gradient-to-tl",
+		"bg-radial",
+		"bg-conic",
+		"bg-none",
+		"bg-fixed",
+		"bg-local",
+		"bg-scroll"
 	].forEach((c) => out.add(c));
 	for (let n = 1; n <= 12; n++) {
 		out.add(`col-span-${n}`);
@@ -4299,11 +4321,41 @@ var DISPLAY_CLASSES = /* @__PURE__ */ new Set([
 function hasDisplayClass(tokens) {
 	return tokens.some((t) => DISPLAY_CLASSES.has(splitVariant(t).base));
 }
-/** bg-* utilities that are NOT background-color (size/position/repeat/…) —
-* everything else groups as one color property so `bg-paper` replaces
-* `bg-[#f5f3edee]` and vice versa (arbitrary values are outside the catalog,
-* so without this they never conflicted with anything) */
-var NON_COLOR_BG_RE = /^bg-(?:auto$|cover$|contain$|center$|top|bottom|left|right|repeat|no-repeat|fixed$|local$|scroll$|clip-|origin-|gradient-|linear-|radial-|conic-|none$|blend-|size-|position-)/;
+/**
+* Which background property a `bg-*` class sets, decided by its VALUE SHAPE.
+*
+* It used to be one regex of bare keywords and "everything else is the colour",
+* so every arbitrary value — `bg-[radial-gradient(…)]`, `bg-[url(…)]`, even
+* `bg-[size:24px_24px]` — read as background-color and evicted `bg-[#070707]`
+* (and was evicted by it). A layered background (colour + gradient + size) was
+* not expressible through `applyClass`, and a hover effect's `bg-muted` wiped a
+* card's gradient. `shared/interactionClasses.js` already split on value shape;
+* this is the same rule. The data-type hint Tailwind accepts inside the bracket
+* (`bg-[size:…]`, `bg-[position:…]`, `bg-[image:…]`, `bg-[color:…]`) is honoured
+* first, then the function name, then the keyword families.
+*/
+function backgroundKey(base) {
+	if (!base.startsWith("bg-")) return void 0;
+	const value = base.slice(3);
+	if (value.startsWith("[")) {
+		const hint = /^\[([a-z-]+):/.exec(value)?.[1];
+		if (hint === "size" || hint === "length") return "background-size";
+		if (hint === "position") return "background-position";
+		if (hint === "image" || hint === "url") return "background-image";
+		if (hint === "color") return "background-color";
+		if (/^\[(?:url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\(|image\(|image-set\()/.test(value)) return "background-image";
+		return "background-color";
+	}
+	if (/^(?:auto|cover|contain)$/.test(value) || value.startsWith("size-")) return "background-size";
+	if (BG_POSITION_RE.test(base) || value.startsWith("position-")) return "background-position";
+	if (/^(?:fixed|local|scroll)$/.test(value)) return "background-attachment";
+	if (/^(?:none$|linear-to-|linear$|linear-|radial|conic|gradient-to-)/.test(value)) return "background-image";
+	if (/^(?:repeat|no-repeat)/.test(value)) return "background-repeat";
+	if (value.startsWith("clip-")) return "background-clip";
+	if (value.startsWith("origin-")) return "background-origin";
+	if (value.startsWith("blend-")) return "background-blend-mode";
+	return "background-color";
+}
 /** font-family utilities — the keyword forms AND an arbitrary family
 * (`font-[Instrument_Serif]`, letters in the value). One conflict group so
 * `font-mono` and `font-[JetBrains_Mono]` replace each other instead of
@@ -4391,12 +4443,19 @@ var PANEL_LESS_GROUPS = [
 /** colour families an opacity modifier is meaningful on. `/50` on anything else
 * is either a fraction (`w-1/2`, handled by SPACING_FRACTION_RE) or nonsense, so
 * the stem is only re-checked for these. */
+/** a bare arbitrary PROPERTY — `[mask-image:radial-gradient(…)]`,
+* `[grid-template-areas:"a_b"]` — Tailwind's escape hatch for a property no
+* utility covers. Brace-free because it lands in a stylesheet verbatim. The
+* arbitrary-VALUE rule above needs a dash before the bracket, so these were
+* refused as "not a known class" while `mask-[…]` beside them passed. */
+var ARBITRARY_PROPERTY_RE = /^\[([a-z][a-z-]*):[^{};]+\]$/;
 var OPACITY_MODIFIER_RE = /^((?:bg|text|border|ring|outline|divide|shadow|from|via|to|decoration|caret|accent|placeholder|fill|stroke)-.+)\/(?:\d{1,3}|\[[^\]]+\])$/;
 function isValidClass(cls) {
 	const { variants: segments, base } = splitClassVariants(cls);
 	if (!base) return false;
 	if (segments.some((v) => !isKnownVariant(v))) return false;
 	if (/-\[.+\]$/.test(base)) return true;
+	if (ARBITRARY_PROPERTY_RE.test(base)) return true;
 	const opacity = OPACITY_MODIFIER_RE.exec(base);
 	if (opacity) return isValidClass(opacity[1]);
 	if (FLEX_NUMERIC_RE.test(base)) return true;
@@ -4490,8 +4549,10 @@ function propKey(base) {
 	if (offset) return offset;
 	if (base === "truncate" || base.startsWith("line-clamp-")) return "line-clamp";
 	for (const [re, prop] of PANEL_LESS_GROUPS) if (re.test(base)) return prop;
-	if (BG_POSITION_RE.test(base) || base.startsWith("bg-position-")) return "background-position";
-	if (base.startsWith("bg-") && !NON_COLOR_BG_RE.test(base)) return "background-color";
+	const arbitraryProp = ARBITRARY_PROPERTY_RE.exec(base);
+	if (arbitraryProp) return `arbitrary:${arbitraryProp[1]}`;
+	const background = backgroundKey(base);
+	if (background) return background;
 	if (FONT_FAMILY_RE.test(base) || FONT_ARBITRARY_FAMILY_RE.test(base)) return "font-family";
 	if (ORIGIN_RE.test(base)) return "transform-origin";
 	if (base.startsWith("leading-")) return "line-height";
@@ -6075,7 +6136,8 @@ function applyHtml(root, parsed, opts) {
 		removed: 0,
 		refused: [],
 		warnings: [],
-		diagnostics: []
+		diagnostics: [],
+		carried: []
 	};
 	const project = opts.project;
 	const components = project.components ?? [];
@@ -6114,6 +6176,8 @@ function applyHtml(root, parsed, opts) {
 	for (const node of addressable) if (node.ref) byRef.set(node.ref, node);
 	const claim = /* @__PURE__ */ new Map();
 	const claimed = /* @__PURE__ */ new Set();
+	/** the claims the LCS made, as opposed to an id or a ref the agent wrote */
+	const byPosition = /* @__PURE__ */ new Set();
 	const eachParsed = (nodes, visit) => {
 		for (const node of nodes) {
 			visit(node);
@@ -6188,8 +6252,11 @@ function applyHtml(root, parsed, opts) {
 				if (!target || !source) continue;
 				if (claim.has(target.node) || claimed.has(source.node)) continue;
 				if (!sameType(source.node.type, target.node.type)) continue;
+				const wanted = target.node.attrs["data-ref"];
+				if (wanted && source.node.ref && wanted !== source.node.ref) continue;
 				claim.set(target.node, source.node);
 				claimed.add(source.node);
+				byPosition.add(target.node);
 			}
 		}
 		const next = [];
@@ -6213,6 +6280,17 @@ function applyHtml(root, parsed, opts) {
 			}
 			const childPath = under(path, node);
 			applyState(node, child, child.type, childPath);
+			if (adopted && byPosition.has(child)) {
+				const interactions = node.interactions?.length ?? 0;
+				const animations = node.animations?.length ?? 0;
+				if (interactions || animations) result.carried.push({
+					id: node.id,
+					...node.ref ? { ref: node.ref } : {},
+					type: node.type,
+					interactions,
+					animations
+				});
+			}
 			if (isComponentType(node.type)) fillInstance(node, child, childPath);
 			else if (!isLeafType(node.type)) alignLevel(node, child.children, childPath);
 			next.push(node);
@@ -7715,7 +7793,8 @@ function validateAnimation(animation) {
 		for (const track of step.tracks) {
 			if (!track || !MOTION_PROPS[track.prop]) return fail$1(`${at} has an unknown property "${track && track.prop}" — use one of: ${Object.keys(MOTION_PROPS).join(", ")}`);
 			const meta = MOTION_PROPS[track.prop];
-			if (track.to === void 0 || track.to === null || track.to === "") return fail$1(`${at} property "${track.prop}" needs a "to" value`);
+			const hasTo = !(track.to === void 0 || track.to === null || track.to === "");
+			if (!hasTo && meta.kind !== "text") return fail$1(`${at} property "${track.prop}" needs a "to" value`);
 			if (meta.kind === "color") {
 				if (!parseColor(track.to)) return fail$1(`${at} property "${track.prop}" needs a hex color`);
 				if (track.from !== void 0 && !parseColor(track.from)) return fail$1(`${at} property "${track.prop}" "from" must be a hex color`);
@@ -7739,7 +7818,10 @@ function validateAnimation(animation) {
 				}
 			}
 			const units = meta.units.length ? ` (units: ${meta.units.join(", ")})` : " (no unit)";
-			const to = parseTrackValue(track.to, track.prop);
+			const to = hasTo ? parseTrackValue(track.to, track.prop) : {
+				n: meta.def,
+				unit: meta.unit
+			};
 			if (!to) return fail$1(`${at} property "${track.prop}" has an invalid "to" value${units}`);
 			if (track.from !== void 0 && track.from !== null) {
 				const from = parseTrackValue(track.from, track.prop);
@@ -7820,6 +7902,10 @@ function validateBinding(binding, ctx) {
 	}
 	if (binding.appearAt !== void 0) {
 		if (typeof binding.appearAt !== "number" || binding.appearAt < 0 || binding.appearAt > 1) return fail$1("appearAt must be a number between 0 and 1 (viewport fraction)");
+	}
+	if (binding.delay !== void 0) {
+		if (typeof binding.delay !== "number" || !isFinite(binding.delay) || binding.delay < 0 || Math.floor(binding.delay) !== binding.delay) return fail$1("delay must be a whole number of milliseconds (0 or more)");
+		if (binding.trigger === "scrub") return fail$1("delay does not apply to a 'scrub' binding — it follows the scroll, nothing fires it");
 	}
 	if (binding.scrub !== void 0) {
 		if (typeof binding.scrub !== "object" || binding.scrub === null) return fail$1("scrub must be an object with start/end");

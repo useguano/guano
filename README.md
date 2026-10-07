@@ -12,7 +12,7 @@ ships as a zip, or pushes straight to a GitHub repo. The admin editor lives at
 ## Quickstart
 
 ```sh
-npm create @useguano   # asks for a folder name, installs guano into it
+npm create @useguano   # asks for a folder name, installs guano, connects Claude Desktop
 cd my-site
 npm run dev            # → http://localhost:4174
 ```
@@ -21,6 +21,13 @@ Or from a clone of this repo: `npm install && npm run build && npm run serve`.
 
 Open `http://localhost:4174/admin`, create the first (admin) account, build,
 publish. The published site is served at `http://localhost:4174/`.
+
+The scaffolder also asks whether to connect **Claude Desktop** over MCP and the
+two permissions a connected agent needs answered — may it edit the live
+project, may it publish (both default no). It does the connect right there,
+so after `npm run dev` and the admin account there is nothing else to set up:
+open Claude and the agent is working. See [Working with an AI
+agent](#working-with-an-ai-agent).
 
 Requires Node `^22.18.0 || >=24.12.0`.
 
@@ -151,14 +158,43 @@ A second signal exits immediately. Give the process ~45s to stop.
 
 `PORT + 1` serves the preview site, which renders UNPUBLISHED pages. It is
 token-gated — the url `POST /api/preview` returns carries a signed token, good
-for an hour, which the preview exchanges for a cookie — but do not publish the
-port unless you need to reach previews from another machine.
+for an hour; the first request with it is answered directly and sets a cookie
+for the rest, so a plain `fetch` or an agent can read the page too — but do not
+publish the port unless you need to reach previews from another machine. A
+bare `http://localhost:4175/` answers "preview link missing or expired": open
+a fresh preview from the editor or the `preview` tool and use the whole url.
 
 ### HSTS
 
 Terminate TLS at the proxy, and set `Strict-Transport-Security` there. Guano
 does not send it: the header belongs to the origin as a whole, including
 whatever else that hostname serves.
+
+## Working with an AI agent
+
+Guano ships an MCP server (`guano mcp`) that lets an agent read and write the
+same project the editor does — pages as a strict HTML subset, components,
+collections, interactions, animations, translations — through the authed HTTP
+API with a `guano_` token. The agent handbook it serves is
+`packages/guano/mcp/GUIDE.md`.
+
+`npm create @useguano` connects Claude Desktop for you: it mints the token into
+`./data`, writes the two permissions beside it, and writes the `mcpServers`
+entry into Claude's config (quit Claude first — it overwrites its config from
+memory on quit; the scaffolder waits if it is open). The token is **pending**
+until the admin account is created at `/admin`, which binds it, and the setup
+form shows the permissions you chose instead of asking again. When Main is
+allowed the config also carries `GUANO_MCP_TARGET=main`, so the agent never
+asks "Main or a draft?".
+
+Everything an agent may do is **off by default** and server-enforced,
+whatever the agent claims a human approved: write Main (otherwise it works in
+a draft you apply yourself), publish (otherwise it can still preview), ship
+custom code, read form submissions. Change any of them in **Settings → MCP →
+Agent permissions**. To connect later, or another machine running the
+instance: `npm run connect` (`--main` / `--publish` answer the questions,
+`--print` emits the snippet for any other MCP client). Details and the manual
+setup for other clients are in `packages/guano/README.md`.
 
 ## Backup
 

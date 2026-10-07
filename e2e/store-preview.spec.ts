@@ -149,7 +149,7 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   const stranger = await pwRequest.newContext({ baseURL: origin })
   const cold = await stranger.get('/')
   expect(cold.status()).toBe(401)
-  expect(await cold.text()).toContain('open this preview from the editor')
+  expect(await cold.text()).toContain('preview link missing or expired')
   // ...including the assets, or the markup would leak through a stylesheet
   expect((await stranger.get('/assets/style.css')).status()).toBe(401)
   // ...and a draft route, which is the content that matters here
@@ -165,6 +165,22 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   const opened = await visitor.get(url)
   expect(opened.ok()).toBeTruthy()
   expect(await opened.text()).toContain('Live home')
+
+  // ...and the token hit serves the page DIRECTLY, with the cookie on that
+  // same response. It used to 303 to the bare path, which a client without a
+  // cookie jar (curl, fetch, an MCP agent) followed cookieless into the 401 —
+  // so the `preview` tool's "open the url and look" could never be done by
+  // the agent itself.
+  const cookieless = await pwRequest.newContext({ baseURL: origin })
+  const direct = await cookieless.get(url, { maxRedirects: 0 })
+  expect(direct.status()).toBe(200)
+  expect(await direct.text()).toContain('Live home')
+  expect(direct.headers()['set-cookie']).toContain('guano_preview=')
+  expect(direct.headers()['cache-control']).toContain('no-store')
+  // a token on a deeper route serves THAT route, not the home page
+  const deep = await cookieless.get(`/draft/?t=${url.split('?t=')[1]}`, { maxRedirects: 0 })
+  expect(deep.status()).toBe(200)
+  await cookieless.dispose()
   expect((await visitor.get('/assets/style.css')).ok()).toBeTruthy()
   expect((await visitor.get('/draft/')).ok()).toBeTruthy()
 

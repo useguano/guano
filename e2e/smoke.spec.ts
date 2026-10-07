@@ -19,6 +19,17 @@ test('setup, edit content, publish, view live, auth guard', async ({ page, conte
   await page.getByPlaceholder('Email').fill('smoke@example.com')
   await page.getByPlaceholder('Password (min. 8 characters)').fill('supersecret1')
   await page.getByPlaceholder('Confirm password').fill('supersecret1')
+  // the form asks the two agent questions (Main writes, publish); both are
+  // off by default and the rest of the suite relies on the all-off policy,
+  // so assert they are present and leave them alone
+  await expect(page.getByRole('switch', { name: 'Let agents edit the live project (Main)' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  )
+  await expect(page.getByRole('switch', { name: 'Let agents publish the site' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  )
   await page.getByRole('button', { name: 'Setup project' }).click()
   await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
 

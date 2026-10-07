@@ -460,7 +460,11 @@ edit_structure {pageId, version, ops: [
 Ops run in order. One that cannot land refuses the **whole** batch, so a page is never
 left half-edited. `parent` lands inside, last; `before`/`after` beside. A `replace` that
 echoes the target's own `data-id` adopts it rather than replacing it, keeping everything
-the markup does not carry. **`replaceChildren` swaps what is INSIDE the target and
+the markup does not carry. A root that declares a **different `data-ref`** than the target
+is a new element and replaces it outright (the old node's bindings go with it). Nodes
+matched by position that kept bindings the markup never mentioned are listed in
+`carriedBindings` — unbind by `bindingId` if the element was meant to be new.
+**`replaceChildren` swaps what is INSIDE the target and
 leaves the element alone** — which is how an instance's SLOT is filled: a `replace` of
 the slot element would have to re-send its classes and attributes, i.e. edit the master
 by accident. The same tool edits a component master with `componentId` instead of
@@ -522,7 +526,10 @@ editor's Style panel:
 - **Conflicts auto-resolve**: adding `p-8` when `p-4` is present replaces it. All
   display utilities are one conflict group (`hidden` vs `flex` vs `inline-flex` …),
   and background-COLOR classes conflict across forms — `bg-paper`, `bg-red-500`, and
-  `bg-[#f5f3edee]` replace each other. Font-family is one group too: `font-mono`,
+  `bg-[#f5f3edee]` replace each other. A background's colour, image, size, position,
+  repeat and attachment are SEPARATE groups, decided by the value's shape: `bg-[#070707]`
+  + `bg-[radial-gradient(…)]` + `bg-[size:24px_24px]` coexist, while two gradients
+  (`bg-linear-to-b` vs `bg-[linear-gradient(…)]`) replace each other. Font-family is one group too: `font-mono`,
   `font-serif`, and `font-[Instrument_Serif]` replace each other (so a keyword and an
   arbitrary family never coexist with one silently winning).
 - **Prerequisites auto-add**: adding `grid-cols-3` auto-adds `grid`; `flex-row` adds
@@ -581,8 +588,12 @@ The validator accepts:
   the palette and `bg-`/`text-` equivalents.
 - **Any arbitrary VALUE**: `p-[13px]`, `text-[2.2rem]`, `bg-[#fffff9]`,
   `text-[clamp(2.75rem,7vw,5.25rem)]`. When a scale class is rejected, an arbitrary
-  value is the escape hatch. Arbitrary **PROPERTIES** (`[white-space:pre-wrap]`) are
-  NOT supported — only value slots on known utilities.
+  value is the escape hatch. Arbitrary **PROPERTIES** — `[mask-image:radial-gradient(…)]`,
+  `hover:[white-space:pre-wrap]` — are accepted too, for a property no utility covers;
+  two with the same property name replace each other.
+- **Gradients** need a direction class beside the stops: `bg-linear-to-b from-[#161616]
+  to-[#0a0a0a]` (v4; `bg-gradient-to-b` still compiles), `bg-radial`, `bg-conic`.
+  `bg-fixed` / `bg-local` / `bg-scroll` set the attachment.
 - Useful non-obvious accepted forms: `bg-[#0d0d0cbb]` (8-digit hex = translucent
   overlays; there is no `bg-token/60` opacity syntax), `font-[Instrument_Serif]`
   (arbitrary font-family — run a display face against the project body font), and
@@ -1888,6 +1899,18 @@ rotate, % for clip). A STRING carries its own — `"110%"`, `"-50%"`, `"1em"`, `
 viewport instead of only at the width you measured. Both sides of one tween must use the
 same unit. `scale`, `opacity`, `brightness` and `saturate` are unitless.
 
+**What an element wears before anything plays** — the exporter bakes a `load`/`appear`
+timeline's first frame into the element's inline `style`, so an entrance never flashes
+its end state before the runtime boots. With SEVERAL timelines on one element the rule
+is: per property, the explicit `from` of the timeline that STARTS EARLIEST wins (its
+binding `delay` plus the track's offset; a tie goes to the later-listed binding). So an
+"open" (opacity `0 → 1` at once) plus a "close" (`1 → 0`, with `delay: 5000`) primes
+the element invisible, because the open happens first. Two consequences worth knowing:
+a track that OMITS `from` primes nothing (it starts from whatever the element renders),
+and the baked inline style beats a static class — `opacity-0` on an element whose
+earliest `from` is `1` still paints visible. Put the pre-play state in the timeline's
+`from`, not in a class.
+
 **Clip wipes**: `clipBottom: 100 → 0` reveals an element downward (the classic
 `clip-path: inset(0 0 100% 0)` move) in one track — no wrapper elements, no mask
 pattern. The four edges compose into a single `inset()`.
@@ -1898,8 +1921,8 @@ pattern. The four edges compose into a single `inset()`.
 `power3`/`power4`.)
 
 **Delaying a step** — a step starts at the previous step's end plus its `offset`,
-and `cursor` is 0 for the first step, so a positive `offset` on step 1 IS the
-delay. There is no need for a leading "hold" step with `from == to`:
+and `cursor` is 0 for the first step, so a positive `offset` on step 1 delays the
+timeline itself. There is no need for a leading "hold" step with `from == to`:
 
 ```
 steps: [
@@ -1908,11 +1931,28 @@ steps: [
 ]
 ```
 
+**Delaying a BINDING** — `delay` (ms) on the binding waits that long after the trigger
+fires before the timeline starts. This is how ONE library animation serves every beat
+of a sequence: bind the same `pop-in` at `delay: 0`, `delay: 600` and `delay: 1200`
+instead of making three copies that differ only in offset — name effects by what they
+do, and put the timing on the binding. Any trigger but `scrub` (a scrub follows the
+scroll; nothing fires it). Only the FORWARD play waits: a hover-out, a click `off` and
+an appear `reverse` rewind at once. While it waits the element holds the timeline's
+first frame, which is also what gets baked (above).
+
+```
+bindAnimations: [
+  {animationId: popIn, trigger: "load"},
+  {animationId: popIn, trigger: "load", targetRef: "card-2", delay: 600},
+  {animationId: fadeOut, trigger: "load", delay: 5000},
+]
+```
+
 **Triggers**:
 
 | trigger | when it plays | options |
 |---|---|---|
-| `load` | as soon as the page renders | — |
+| `load` | as soon as the page renders | `delay` (ms), like every trigger but `scrub` |
 | `appear` | the element scrolls into view | `appearMode`: omit = inherit the site default (`settings.motion.appearMode`, itself `once`); `once` = first entry only; `replay` = every entry; `reverse` = plays in, rewinds out. `appearAt`: the viewport fraction the top must cross first (0.8 ≈ "top 80%"); omit = first visible pixel |
 | `scrub` | progress follows scroll position | `scrub: {start, end, smooth?}` — viewport fractions the element's top travels between (default `{start: 1, end: 0.25}`); `smooth` (seconds, 0–3) makes the play LAG scroll with an exponential catch-up — per-tween scroll smoothing |
 | `hover` | pointer enters (rewinds on leave) | — |
@@ -2088,7 +2128,8 @@ the usual way to build a row of stats:
 ```
 
 Each counts 0 → its own number. `to` is only the fallback for an element whose text
-holds no number at all.
+holds no number at all, and it may be left out — `count` is the one property whose
+track needs no `to`.
 
 Why the text and not the track decides the final value: the export bakes an entrance's
 first frame into the markup so nothing flashes its end state before the runtime boots.
@@ -2298,10 +2339,11 @@ is a capability the server runs, not something an agent writes into a page.
 url. Open it and look. It touches nothing live, needs no publish permission, and includes
 DRAFT pages — which a publish drops and which are exactly what you need while building.
 
-The url carries a **one-time access token and is good for an hour**: the preview port
-renders unpublished work, so it is not readable without it. Hand the whole url to the
-person, including its query string — a trimmed one gets them a 401. Expired, just call
-`preview` again.
+The url carries an **access token good for an hour**: the preview port renders unpublished
+work, so it is not readable without it. The token hit serves the page directly (and sets a
+cookie for the page's own assets), so you can fetch the url yourself to read the HTML, and
+a person can open it in a browser. Hand over the whole url, including its query string — a
+trimmed one gets a 401 naming the cause. Expired, just call `preview` again.
 
 **Use it after every page.** Publishing is the only other way to render anything, and it
 puts bytes on the live origin: a half-built draft goes live every time you want to check a

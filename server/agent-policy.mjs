@@ -12,7 +12,7 @@
 // draft, cannot publish, and cannot write custom code — so the worst a
 // successful injection achieves is a bad draft that a human reviews before it
 // ever reaches Main or the live site.
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DATA_DIR, writeAtomic } from './util.mjs'
 
@@ -54,6 +54,34 @@ export async function readAgentPolicy() {
     }
   }
   return out
+}
+
+/**
+ * The two switches a first-run asks about (the setup form, `guano connect`).
+ * Narrowed on purpose: custom code and reading form submissions are decisions
+ * worth making with the product in front of you, not a checkbox during
+ * install. Returns only the keys present as booleans — an empty object when
+ * nothing was answered, so the caller can tell "left alone" from "set off".
+ */
+export const ONBOARDING_KEYS = ['allowMainWrites', 'allowPublish']
+export function onboardingPolicy(input) {
+  const out = {}
+  if (!input || typeof input !== 'object') return out
+  for (const k of ONBOARDING_KEYS) {
+    if (typeof input[k] === 'boolean') out[k] = input[k]
+  }
+  return out
+}
+
+/** was the policy already answered — by the scaffolder, `guano connect` or an
+ *  earlier admin? The setup form reads this to skip its two switches. */
+export async function agentPolicyPreset() {
+  try {
+    await access(POLICY_FILE)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** merge a patch of known boolean flags and persist (0600 via writeAtomic) */

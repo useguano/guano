@@ -10,6 +10,10 @@ const role = ref<Role | null>(null)
 /** the signed-in user's id — stamped onto drafts so ownership is knowable */
 const userId = ref<string | null>(null)
 const needsSetup = ref(false)
+/** the two agent switches when they were answered BEFORE the first account
+ * (the scaffolder's questions, `guano connect --offline`) — the setup form
+ * then shows them instead of asking again. Null when nothing was preset. */
+const presetAgentPolicy = ref<{ allowMainWrites: boolean; allowPublish: boolean } | null>(null)
 /** when this user last opened the comments panel — everything newer, by
  * somebody else, is what the rail's unseen dot is about. Per user and stored
  * on their server record, so it is the same on every machine they sign in
@@ -37,6 +41,11 @@ export function useAuth() {
       } else {
         const detail = await res.json().catch(() => null)
         needsSetup.value = !!detail?.needsSetup
+        const preset = detail?.agentPolicy
+        presetAgentPolicy.value =
+          preset && typeof preset === 'object'
+            ? { allowMainWrites: preset.allowMainWrites === true, allowPublish: preset.allowPublish === true }
+            : null
       }
     } catch {
       // server unreachable — treated as unauthenticated; the editor
@@ -89,8 +98,24 @@ export function useAuth() {
    * the project blob with it, so a fresh instance is usable before anyone
    * opens the editor (the localStorage stash in SetupView stays as the
    * fallback for a server that couldn't seed). */
-  async function setup(e: string, password: string, projectName = '') {
-    applyProfile(await post('/api/auth/setup', { email: e, password, projectName }))
+  async function setup(
+    e: string,
+    password: string,
+    projectName = '',
+    agentPolicy: { allowMainWrites: boolean; allowPublish: boolean } | null = {
+      allowMainWrites: false,
+      allowPublish: false,
+    },
+  ) {
+    // null = the policy was preset before setup; leave the stored answers alone
+    applyProfile(
+      await post('/api/auth/setup', {
+        email: e,
+        password,
+        projectName,
+        ...(agentPolicy ? { agentPolicy } : {}),
+      }),
+    )
   }
 
   /** update name / email / password (password needs currentPassword) */
@@ -132,6 +157,7 @@ export function useAuth() {
     canEditContent,
     isReviewer,
     needsSetup,
+    presetAgentPolicy,
     commentsSeenAt,
     markCommentsSeen,
     check,

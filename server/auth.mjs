@@ -248,7 +248,12 @@ async function createUser({ name, email, password, role }) {
 /** first-run bootstrap: only succeeds when no users exist yet */
 export async function createFirstAdmin(email, password, name = '') {
   if (!needsSetup()) return null
-  return createUser({ name, email, password, role: 'admin' })
+  const user = await createUser({ name, email, password, role: 'admin' })
+  // a token minted BEFORE this account existed (`guano connect --offline`, the
+  // scaffolder) was waiting for exactly this person — bind it here, in the auth
+  // module, so a headless setup binds it too
+  await bindPendingTokens(user.id)
+  return user
 }
 
 /** constant-time-ish login: returns the user on success, null otherwise.
@@ -530,11 +535,18 @@ export async function acceptInvite(token, password) {
 
 // ---------- API tokens (bearer credential for the MCP server & CI) ----------
 
-// { id, tokenHash, userId, name, createdAt, lastUsedAt }
+// { id, tokenHash, userId, name, createdAt, lastUsedAt, pendingFirstAdmin? }
 // Raw token format `guano_<48 hex>`, shown EXACTLY once at creation. Only the
 // sha256 hash is stored — a leaked api-tokens.json can't be replayed. The
 // owning user's role is read LIVE at auth time (findUserById), so demotion or
 // deletion takes effect on the very next request. Mirrors the invite pattern.
+//
+// A PENDING record (`userId: null, pendingFirstAdmin: true`) is one minted
+// before any account existed — `npm create @useguano` connects Claude Desktop
+// at scaffold time, and `guano connect --offline` does the same by hand. It
+// authenticates nobody (apiTokenUser finds no user) until `createFirstAdmin`
+// binds every pending record to the first admin. Whoever can write the data
+// dir before setup owns the instance anyway, so this grants nothing new.
 let apiTokens = readJson(API_TOKENS_FILE) ?? []
 const persistApiTokens = () =>
   persist(API_TOKENS_FILE, JSON.stringify(apiTokens), 'api tokens')
@@ -546,16 +558,35 @@ const apiTokenView = (t) => ({
   lastUsedAt: t.lastUsedAt,
 })
 
-/** a user's tokens, newest first, without hashes */
+/** a user's tokens, newest first, without hashes. A pending record has no
+ *  owner and is listed under nobody. */
 export const listApiTokens = (userId) =>
   apiTokens
-    .filter((t) => t.userId === userId)
+    .filter((t) => userId != null && t.userId === userId)
     .sort((a, b) => b.createdAt - a.createdAt)
     .map(apiTokenView)
 
-export const apiTokenCount = (userId) => apiTokens.filter((t) => t.userId === userId).length
+export const apiTokenCount = (userId) =>
+  apiTokens.filter((t) => userId != null && t.userId === userId).length
 
-/** create a token for a user; returns { token: raw (shown once), record } */
+/** tokens waiting for the first admin (the banner names them on first run) */
+export const pendingTokenCount = () => apiTokens.filter((t) => t.pendingFirstAdmin).length
+
+/** hand every pending record to the user who just became the first admin */
+export async function bindPendingTokens(userId) {
+  let bound = 0
+  for (const t of apiTokens) {
+    if (!t.pendingFirstAdmin) continue
+    t.userId = userId
+    delete t.pendingFirstAdmin
+    bound++
+  }
+  if (bound) await persistApiTokens()
+  return bound
+}
+
+/** create a token for a user; returns { token: raw (shown once), record }.
+ *  `userId: null` makes a PENDING record (see above). */
 export async function createApiToken(userId, name) {
   const raw = 'guano_' + randomBytes(24).toString('hex') // 48 hex chars
   const token = {
@@ -565,6 +596,7 @@ export async function createApiToken(userId, name) {
     name: typeof name === 'string' ? name.slice(0, 100) : '',
     createdAt: Date.now(),
     lastUsedAt: null,
+    ...(userId == null ? { pendingFirstAdmin: true } : {}),
   }
   apiTokens.push(token)
   await persistApiTokens()
@@ -576,7 +608,11 @@ export async function createApiToken(userId, name) {
  *  by the /api/auth/connect route) — filesystem access = owner. */
 export async function bootstrapConnectToken(name) {
   const admin = loadUsers().find((u) => u.role === 'admin')
-  if (!admin) return null
+  if (!admin) {
+    // no account yet: a PENDING token, bound to the first admin at setup
+    const { token } = await createApiToken(null, name || 'guano connect')
+    return { token, email: null, pending: true }
+  }
   const { token } = await createApiToken(admin.id, name || 'guano connect')
   return { token, email: admin.email }
 }
@@ -585,7 +621,8 @@ export async function bootstrapConnectToken(name) {
 export async function revokeApiToken(id, requester) {
   const token = apiTokens.find((t) => t.id === id)
   if (!token) return false
-  const isOwner = requester?.id === token.userId
+  // a pending record has no owner (userId null) — only an admin may revoke it
+  const isOwner = token.userId != null && requester?.id === token.userId
   const isAdmin = requester?.role === 'admin'
   if (!isOwner && !isAdmin) return false
   apiTokens = apiTokens.filter((t) => t.id !== id)
@@ -612,7 +649,7 @@ export function apiTokenUser(rawToken) {
   // timed (the set is tiny, so scanning all of it is negligible)
   let match = null
   for (const t of apiTokens) if (timingSafeEqualStr(t.tokenHash, hash)) match = t
-  if (!match) return null
+  if (!match || match.userId == null) return null // pending → nobody yet
   const user = findUserById(match.userId)
   if (!hasValidRole(user)) return null // deleted / de-roled → dead token
   const now = Date.now()

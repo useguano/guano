@@ -20,8 +20,14 @@ Usage:
   guano build [--out d]  export the published project as a static site
                          (default ./dist-site)
   guano connect          set up Claude Desktop automatically: mints an API
-                         token and writes the MCP config (quit Claude first;
-                         --print emits the snippet for other MCP clients)
+                         token, settles what the agent may do (--main lets it
+                         edit the live project, --publish lets it publish;
+                         with neither it asks, --yes skips) and writes the MCP
+                         config (quit Claude first; --print emits the snippet
+                         for other MCP clients). Works before /admin setup
+                         too — the token is bound to the first admin.
+                         --offline never talks to a server (what
+                         `npm create @useguano` runs for you)
   guano mcp              run the MCP server (stdio) for AI agents
   guano --version
 

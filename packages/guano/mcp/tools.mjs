@@ -192,6 +192,7 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     contextFromProject,
     validateTree,
     tagForType,
+    typeForTag,
     sameType,
     slugify,
     entryRoutePath,
@@ -500,8 +501,8 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
             from: { description: "start value; omit to start from the element's current value" },
             to: {
               description:
-                "end value (number, or #hex for colors). A 'count' ends on the number the ELEMENT " +
-                'says, so this is only the fallback for text holding no number.',
+                "end value (number, or #hex for colors); required except for 'count', which ends " +
+                'on the number the ELEMENT says — there it is only the fallback for text holding no number.',
             },
             format: {
               type: 'object',
@@ -517,10 +518,11 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
               additionalProperties: false,
             },
           },
-          required: ['prop', 'to'],
+          required: ['prop'],
           additionalProperties: false,
         },
       },
+      id: { type: 'string', description: 'keep a step id when echoing a read-back timeline' },
       duration: { type: 'number', description: 'milliseconds' },
       easing: { type: 'string', description: 'see list_animations.easings' },
       offset: { type: 'number', description: "ms from the previous step's end; negative overlaps" },
@@ -683,6 +685,15 @@ let target = null
  * to write anything at all.
  */
 const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
+// `main` and a draft ID need nothing from the server to be a target, so they
+// ARE the target from the first call: the operator already decided, and
+// get_status answering `targetSet: false` beside `configuredTarget` sent every
+// agent through a set_target round it did not need. `new:<Name>` stays lazy —
+// finding or creating that draft needs the server, and set_target does it.
+// A stale draft id surfaces on the first load (loadTargetProject names the
+// env var), never as a crash here.
+if (ENV_TARGET && ENV_TARGET !== 'main' && !ENV_TARGET.startsWith('new:')) target = ENV_TARGET
+if (ENV_TARGET === 'main') target = 'main'
 
 /** set once a dialog comes back unanswerable — reported by get_status, so
  *  "the client supports dialogs" stops meaning "declared" alone */
@@ -874,6 +885,13 @@ async function loadTargetProject() {
   if (store && !store.lock) store.lock = await acquireProjectLock()
   const raw = await storeGetRaw(projectKey(target))
   if (raw === null) {
+    if (target !== MAIN_ID && target === ENV_TARGET) {
+      throw new Error(
+        `GUANO_MCP_TARGET names draft "${target}", which has no stored project — it was deleted ` +
+        `or belongs to another instance. Ask the human to fix the MCP config (or set it to ` +
+        `"new:<Name>"), or call set_target to choose a target for this session.`,
+      )
+    }
     throw new Error(
       `target "${target}" has no stored project. On a fresh instance the server seeds Main on ` +
       `first access, so retry once; if the target is a draft, it was deleted — call get_status ` +
@@ -1162,8 +1180,63 @@ function elementSummary(project, page, opts = {}) {
     for (const c of nodes) n += 1 + countDescendants(c.children ?? [])
     return n
   }
+  // with includeInteractions: the BINDING ids, without which a binding can
+  // never be removed (unbindInteractionIds needs the id, and a count is not
+  // an id). Bindings inside an instance live on the master.
+  const bindingView = (list) =>
+    list.map((b) => ({
+      bindingId: b.id,
+      interactionId: b.interactionId,
+      trigger: b.trigger,
+      // a page target prints short; a MASTER target (an in-component
+      // binding) is not in this tree, so it keeps its full id — which is
+      // what `edit_elements {componentId}` resolves against anyway
+      ...(b.targetId ? { targetId: shorts.get(b.targetId) ?? b.targetId } : {}),
+      ...(b.action ? { action: b.action } : {}),
+      ...(b.closeOn?.length ? { closeOn: b.closeOn } : {}),
+      ...(b.group ? { group: b.group } : {}),
+      ...(b.once ? { once: b.once } : {}),
+      ...(b.scrollAt !== undefined ? { scrollAt: b.scrollAt } : {}),
+      ...(b.breakpoints?.length ? { breakpoints: b.breakpoints } : {}),
+    }))
+  // animation bindings read the same way — the id is what unbindAnimationIds needs
+  const animBindingView = (list) =>
+    list.map((b) => ({
+      bindingId: b.id,
+      animationId: b.animationId,
+      trigger: b.trigger,
+      ...(b.targetId ? { targetId: shorts.get(b.targetId) ?? b.targetId } : {}),
+      ...(b.appearMode ? { appearMode: b.appearMode } : {}),
+      ...(b.appearAt ? { appearAt: b.appearAt } : {}),
+      ...(b.scrub ? { scrub: b.scrub } : {}),
+      ...(b.delay ? { delay: b.delay } : {}),
+      ...(b.breakpoints ? { breakpoints: b.breakpoints } : {}),
+    }))
+  // The same fields in EVERY mode, "refs" and "ref-parts" included. "refs"
+  // used to return before this was computed, so the cheap read an agent
+  // reaches for to verify what a replace adopted answered with no bindings
+  // at all — and silently, the flag was simply not read.
+  const interactionFieldFor = (n) => {
+    if (!opts.includeInteractions) return {}
+    const mapping = instMap.get(n.id)
+    const master = mapping?.master
+    const field = {}
+    if (n.interactions?.length) field.interactions = bindingView(n.interactions)
+    if (master && master !== n && master.interactions?.length) {
+      field.masterInteractions = bindingView(master.interactions)
+      field.masterId = master.id
+    }
+    if (n.animations?.length) field.animations = animBindingView(n.animations)
+    if (master && master !== n && master.animations?.length) {
+      field.masterAnimations = animBindingView(master.animations)
+      field.masterId = master.id
+    }
+    return field
+  }
   const summarize = (n, path) => {
-    if (mode === 'refs') return { path, id: sid(n), type: n.type, ...(n.ref ? { ref: n.ref } : {}) }
+    if (mode === 'refs') {
+      return { path, id: sid(n), type: n.type, ...(n.ref ? { ref: n.ref } : {}), ...interactionFieldFor(n) }
+    }
     const mapping = instMap.get(n.id)
     const master = mapping?.master
     // what the node shows when it says nothing itself: the first host that
@@ -1185,50 +1258,7 @@ function elementSummary(project, page, opts = {}) {
     // write, and there is no other way to read them.
     const masterClasses =
       mode === 'all' && master && master !== n && master.classes ? master.classes : undefined
-    // with includeInteractions: the BINDING ids, without which a binding can
-    // never be removed (unbindInteractionIds needs the id, and a count is not
-    // an id). Bindings inside an instance live on the master.
-    const bindingView = (list) =>
-      list.map((b) => ({
-        bindingId: b.id,
-        interactionId: b.interactionId,
-        trigger: b.trigger,
-        // a page target prints short; a MASTER target (an in-component
-        // binding) is not in this tree, so it keeps its full id — which is
-        // what `edit_elements {componentId}` resolves against anyway
-        ...(b.targetId ? { targetId: shorts.get(b.targetId) ?? b.targetId } : {}),
-        ...(b.action ? { action: b.action } : {}),
-        ...(b.closeOn?.length ? { closeOn: b.closeOn } : {}),
-        ...(b.group ? { group: b.group } : {}),
-        ...(b.once ? { once: b.once } : {}),
-        ...(b.scrollAt !== undefined ? { scrollAt: b.scrollAt } : {}),
-        ...(b.breakpoints?.length ? { breakpoints: b.breakpoints } : {}),
-      }))
-    // animation bindings read the same way — the id is what unbindAnimationIds needs
-    const animBindingView = (list) =>
-      list.map((b) => ({
-        bindingId: b.id,
-        animationId: b.animationId,
-        trigger: b.trigger,
-        ...(b.targetId ? { targetId: shorts.get(b.targetId) ?? b.targetId } : {}),
-        ...(b.appearMode ? { appearMode: b.appearMode } : {}),
-        ...(b.appearAt ? { appearAt: b.appearAt } : {}),
-        ...(b.scrub ? { scrub: b.scrub } : {}),
-        ...(b.breakpoints ? { breakpoints: b.breakpoints } : {}),
-      }))
-    let interactionField = {}
-    if (opts.includeInteractions) {
-      if (n.interactions?.length) interactionField.interactions = bindingView(n.interactions)
-      if (masterInteractions) {
-        interactionField.masterInteractions = bindingView(master.interactions)
-        interactionField.masterId = master.id
-      }
-      if (n.animations?.length) interactionField.animations = animBindingView(n.animations)
-      if (master && master !== n && master.animations?.length) {
-        interactionField.masterAnimations = animBindingView(master.animations)
-        interactionField.masterId = master.id
-      }
-    }
+    const interactionField = interactionFieldFor(n)
     return {
       // where it sits: the child-index path from the body, which is also this
       // list's order. The HTML carries the same `data-id`, so a row and its
@@ -1370,6 +1400,7 @@ function elementSummary(project, page, opts = {}) {
             ref: n.ref,
             component: n.type,
             ...(n.variants ? { variants: n.variants } : {}),
+            ...interactionFieldFor(n),
             parts: partsOf(n),
           })
           // its SLOTS still hold page structure, including other ref'd instances
@@ -1391,6 +1422,7 @@ function elementSummary(project, page, opts = {}) {
           childCount: countDescendants(n.children ?? []),
           ...(n.variants ? { variants: n.variants } : {}),
           ...(n.hidden !== undefined ? { hidden: n.hidden } : {}),
+          ...interactionFieldFor(n),
           ...(mode === 'own' ? { parts: partsOf(n) } : {}),
         })
         // collapse the instance's own structure, but NOT a slot's contents:
@@ -1468,6 +1500,29 @@ function instanceParts(wrapper) {
 }
 
 /**
+ * A part by its name — the registry type — OR by the HTML tag the page read
+ * prints for it. The parts list says `paragraph`, the markup beside it says
+ * `<p>`, and `{part: "p"}` failed three times in one session before
+ * `paragraph` was guessed. `[n]` counts per TYPE, so `p[1]` is `paragraph[1]`.
+ */
+function findPart(parts, wanted, project) {
+  const exact = parts.find((x) => x.part === wanted)
+  if (exact) return exact
+  const m = /^(.+?)(?:\[(\d+)\])?$/.exec(String(wanted ?? ''))
+  if (!m) return null
+  const base = m[1]
+  const index = m[2] ? Number(m[2]) : 0
+  const resolved = typeForTag(base, {}, (project?.components ?? []).map((c) => c.name))?.type ?? base
+  return (
+    parts.find((x) => {
+      const pm = /^(.+?)(?:\[(\d+)\])?$/.exec(x.part)
+      if (!pm) return false
+      return sameType(pm[1], resolved) && (pm[2] ? Number(pm[2]) : 0) === index
+    }) ?? null
+  )
+}
+
+/**
  * Resolve an edit's element by stable `id` (preferred — survives structural
  * edits), tracking whether the node sits inside a component instance.
  */
@@ -1515,12 +1570,12 @@ function resolveEditNode(page, edit, project = null, scopeDef = null) {
         )
       }
       const parts = instanceParts(node)
-      const hit = parts.find((x) => x.part === edit.part)
+      const hit = findPart(parts, edit.part, project)
       if (!hit) {
         throw new Error(
           `":${node.type}#${edit.ref}" has no part "${edit.part}". Its parts are: ` +
             `${parts.map((x) => x.part).join(', ') || '(none)'} ` +
-            '(get_page elements:"ref-parts" lists them).',
+            '(get_page elements:"ref-parts" lists them; the HTML tag works too — "p" for "paragraph").',
         )
       }
       return { node: hit.node, inComponent: true }
@@ -2702,6 +2757,7 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
             ...(bind.appearMode ? { appearMode: bind.appearMode } : {}),
             ...(bind.appearAt ? { appearAt: bind.appearAt } : {}),
             ...(bind.scrub ? { scrub: bind.scrub } : {}),
+            ...(bind.delay ? { delay: bind.delay } : {}),
             ...(bind.breakpoints?.length ? { breakpoints: bind.breakpoints } : {}),
           })
           applied.push(`bind animation${onShared}`)
@@ -2964,6 +3020,7 @@ function masterNodeRows(project, def, opts = {}) {
                     ...(b.appearMode ? { appearMode: b.appearMode } : {}),
                     ...(b.appearAt ? { appearAt: b.appearAt } : {}),
                     ...(b.scrub ? { scrub: b.scrub } : {}),
+                    ...(b.delay ? { delay: b.delay } : {}),
                     ...(b.breakpoints?.length ? { breakpoints: b.breakpoints } : {}),
                   })),
                 }
@@ -3020,6 +3077,7 @@ async function applyComponentHtml(project, def, html) {
     ok: true,
     applied: { kept: result.kept, created: result.created, removed: result.removed },
     ...(result.warnings.length ? { warnings: result.warnings } : {}),
+    ...(result.carried?.length ? { carriedBindings: carriedView(result.carried, def.root) } : {}),
     diagnostics: result.diagnostics,
     updatedInstances,
     // What the push THREW AWAY on the pages. `applied.removed` counts MASTER
@@ -3325,6 +3383,25 @@ function makeComponentFrom(project, page, elementId, rawName, category) {
  * read. `inserted div#box, p#line under #hero` costs a few dozen bytes and
  * replaces a 9 KB one.
  */
+/**
+ * `applyHtml`'s `carried` for a response: short ids against the tree they
+ * live in, plus the one sentence that says what to do about it. These nodes
+ * were adopted by POSITION and kept bindings the markup never mentioned —
+ * which is right when the agent restated an element and wrong when it meant
+ * a new one. Only the agent knows which, so it is told.
+ */
+function carriedView(carried, root) {
+  const shorts = shortIdMap([root])
+  return {
+    note:
+      'these elements were matched by position (no data-id/data-ref claimed them) and KEPT ' +
+      'the interaction/animation bindings of the node they replaced. Intended for an element ' +
+      'you restated; if it was meant to be new, unbind by bindingId (get_page ' +
+      '{includeInteractions: true}) or re-send it with a different data-ref.',
+    elements: carried.map((c) => ({ ...c, id: shorts.get(c.id) ?? c.id })),
+  }
+}
+
 function describeOp(op, outcome, root) {
   const name = (n) => `${n.type}${n.ref ? `#${n.ref}` : ''}`
   const placed = (outcome.placed ?? []).map(name).join(', ')
@@ -3537,13 +3614,40 @@ function runStructureOp(project, root, op, def, where) {
     // its id was re-seated onto whichever child the LCS paired it with, and
     // the response said `saved: true` with nothing refused. The type test is
     // what makes the adopt-onto case explicit instead of accidental.
-    if (parsed.roots.length === 1 && sameType(parsed.roots[0].type, node.type)) {
+    //
+    // Same kind is not enough when the markup NAMES a different element: a
+    // `<div data-ref="ed-ring">` replacing `#hero-ring` is a new element, and
+    // adopting it onto the old node carried the old ring's binding onto the
+    // new ref — it fired at the wrong time, and the response read
+    // `1 kept`. A root that keeps the target's ref, or declares none, is the
+    // same element restated and adopts as before.
+    const declaredRef = parsed.roots[0]?.attrs?.['data-ref']
+    const renames = !!(parsed.roots.length === 1 && declaredRef && node.ref && declaredRef !== node.ref)
+    if (parsed.roots.length === 1 && sameType(parsed.roots[0].type, node.type) && !renames) {
+      // the root itself is adopted by position when the markup carries
+      // neither its id nor its ref — report its bindings like any other
+      const attrs = parsed.roots[0].attrs ?? {}
+      const positional = !attrs['data-id'] && !attrs['data-ref']
+      const rootInteractions = node.interactions?.length ?? 0
+      const rootAnimations = node.animations?.length ?? 0
       const res = applyHtml(node, parsed.roots, {
         project,
         def,
         validate: contextFromProject(project),
         resolveIcon: iconResolver(),
       })
+      if (positional && (rootInteractions || rootAnimations)) {
+        res.carried = [
+          {
+            id: node.id,
+            ...(node.ref ? { ref: node.ref } : {}),
+            type: node.type,
+            interactions: rootInteractions,
+            animations: rootAnimations,
+          },
+          ...(res.carried ?? []),
+        ]
+      }
       return {
         ...res,
         kept: (res.kept ?? 0) + 1,
@@ -5128,6 +5232,7 @@ const tools = [
           message: e?.message ?? String(e),
           target: target ?? null,
           targetSet: !!target,
+          ...(ENV_TARGET ? { configuredTarget: ENV_TARGET } : {}),
         }
       }
       const drafts = meta.branches
@@ -5822,6 +5927,7 @@ const tools = [
         },
         ...(result.refused.length ? { refused: result.refused } : {}),
         ...(result.warnings.length ? { warnings: result.warnings } : {}),
+        ...(result.carried?.length ? { carriedBindings: carriedView(result.carried, body) } : {}),
         diagnostics: result.diagnostics,
         ...(args.elements === 'none'
           ? {}
@@ -5925,6 +6031,7 @@ const tools = [
       const touched = new Set()
       const refused = []
       const warnings = []
+      const carried = []
       const applied = []
 
       for (let i = 0; i < args.ops.length; i++) {
@@ -5968,6 +6075,7 @@ const tools = [
         }
         if (outcome.refused?.length) refused.push(...outcome.refused)
         if (outcome.warnings?.length) warnings.push(...outcome.warnings)
+        if (outcome.carried?.length) carried.push(...outcome.carried)
         totals.kept += outcome.kept ?? 0
         totals.created += outcome.created ?? 0
         totals.removed += outcome.removed ?? 0
@@ -5997,6 +6105,7 @@ const tools = [
         applied,
         changed: totals,
         ...(warnings.length ? { warnings } : {}),
+        ...(carried.length ? { carriedBindings: carriedView(carried, def ? def.root : root) } : {}),
         diagnostics,
         ...(def
           ? {
@@ -6434,6 +6543,7 @@ const tools = [
           nodes: masterNodeRows(project, def),
           usage: `style it with edit_elements {componentId: "${def.id}", edits: [...]}, then write '<${name} />' on any page`,
           ...(done.warnings ? { warnings: done.warnings } : {}),
+          ...(done.carriedBindings ? { carriedBindings: done.carriedBindings } : {}),
         }
       }
       if (!args.pageId || (!args.id && !args.ref) || !args.version) {
@@ -6657,6 +6767,7 @@ const tools = [
         out.updatedInstances = done.updatedInstances
         out.diagnostics = done.diagnostics
         if (done.warnings) out.warnings = done.warnings
+        if (done.carriedBindings) out.carriedBindings = done.carriedBindings
         out.notes = []
         if (done.applied.removed) {
           out.notes.push(
@@ -7770,9 +7881,9 @@ const tools = [
                 type: 'string',
                 description:
                   'WITH `ref` on a component instance: which part inside it to edit — the ' +
-                  'element type plus [n] for the nth of that type ("span", "span[1]", "Badge"). ' +
-                  'get_page {elements: "ref-parts"} lists them. Parts carry no ref of their own, ' +
-                  'so this is the only symbolic way to reach one.',
+                  'element type (or its HTML tag) plus [n] for the nth of that type ("span", ' +
+                  '"p[1]", "Badge"). get_page {elements: "ref-parts"} lists them. Parts carry ' +
+                  'no ref of their own, so this is the only symbolic way to reach one.',
               },
               setRef: {
                 type: 'string',
@@ -8046,6 +8157,13 @@ const tools = [
                         smooth: { type: 'number' },
                       },
                       additionalProperties: false,
+                    },
+                    delay: {
+                      type: 'integer',
+                      minimum: 0,
+                      description:
+                        'ms the play waits after the trigger fires (not scrub) — one "pop in" ' +
+                        'serves every beat of a sequence; a reverse never waits',
                     },
                     breakpoints: {
                       type: 'array',
@@ -9114,8 +9232,8 @@ const tools = [
         name: { type: 'string' },
         steps: {
           type: 'array',
-          items: { type: 'object' },
-          description: 'REPLACES the timeline; same step shape as create_animations',
+          items: ANIMATION_STEP_SCHEMA,
+          description: 'REPLACES the timeline',
         },
       },
       required: ['animationId'],
@@ -10401,7 +10519,8 @@ const tools = [
         bytes: stats.bytes,
         ...(warnings.length ? { warnings } : {}),
         note:
-          'Nothing live changed. Open the url to look; draft pages are included here and are ' +
+          'Nothing live changed. Open the url to look — fetching it yourself returns the HTML ' +
+          '(the ?t= token serves the page directly); draft pages are included here and are ' +
           'NOT in a publish.' +
           (warnings.length
             ? ' `warnings` are the same design checks publish runs — fix them here, before you ship.'

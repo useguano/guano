@@ -397,6 +397,30 @@ test('set_target: a target in the MCP config is the human having decided', async
   }
 })
 
+test('GUANO_MCP_TARGET=main is the target from the first call, no set_target round needed', async () => {
+  const { api } = fixture()
+  const runtime = await runtimePromise
+  test.skip(!runtime, 'runtime bundle missing')
+
+  // get_status used to answer `targetSet: false` beside `configuredTarget`,
+  // which sent every agent through a set_target it did not need
+  process.env.GUANO_MCP_TARGET = 'main'
+  try {
+    const set = createToolSet({ api, runtime })
+    expect(set.getTarget()).toBe('main')
+    const status = await set.toolMap.get('get_status')!.handler({})
+    expect(status.target).toBe('main')
+    expect(status.targetSet).toBe(true)
+    expect(status.configuredTarget).toBe('main')
+    // `new:<Name>` stays lazy — it needs the server to find or create the draft
+    process.env.GUANO_MCP_TARGET = 'new:Lazy draft'
+    const lazy = createToolSet({ api, runtime })
+    expect(lazy.getTarget()).toBeNull()
+  } finally {
+    delete process.env.GUANO_MCP_TARGET
+  }
+})
+
 test('set_target: no elicitation capability falls back to the attestation gates', async () => {
   const { api } = fixture()
   const runtime = await runtimePromise
