@@ -321,3 +321,55 @@ test.describe('a slot’s contents are page structure, so a read lists them', ()
     expect(await s.html()).toContain('Changed')
   })
 })
+
+// B3: `elements: "refs"` returned before `includeInteractions` was read, so the
+// cheap read an agent uses to verify what a replace adopted had no bindings.
+test('"refs" honours includeInteractions', async () => {
+  const { s, pageId } = await built()
+  const { created } = await s.call('create_interactions', {
+    items: [{ name: 'Lift', toClasses: 'shadow-lg' }],
+  })
+  const page = await s.home()
+  await s.call('edit_elements', {
+    pageId,
+    version: page.version,
+    edits: [{ ref: 'hero', bindInteractions: [{ interactionId: created[0].id, trigger: 'hover' }] }],
+  })
+  const r = await s.call('get_page', { pageId, elements: 'refs', includeInteractions: true })
+  const hero = (r.elements as { ref?: string; interactions?: { bindingId: string }[] }[]).find(
+    (e) => e.ref === 'hero',
+  )!
+  expect(hero.interactions).toHaveLength(1)
+  expect(hero.interactions![0].bindingId).toBeTruthy()
+  const bare = await s.call('get_page', { pageId, elements: 'refs' })
+  const heroBare = (bare.elements as { ref?: string; interactions?: unknown }[]).find((e) => e.ref === 'hero')!
+  expect(heroBare.interactions).toBeUndefined()
+})
+
+// B2: parts are named by registry type (`paragraph`) while the HTML beside
+// them says `<p>`; the tag is accepted as an alias, `[n]` included.
+test('a part is addressable by its HTML tag', async () => {
+  const s = await mcpSession()
+  await s.call('create_component', {
+    name: 'Note',
+    html: '<div class="p-2"><p>one</p><p>two</p></div>',
+  })
+  const home = await s.home()
+  await s.call('set_page_html', { pageId: home.id, html: pageHtml('<Note data-ref="n" />'), version: home.version })
+  const page = await s.home()
+  const parts = await s.call('get_page', { pageId: page.id, elements: 'ref-parts' })
+  const names = (parts.elements as { parts: { part: string }[] }[])[0].parts.map((p) => p.part)
+  expect(names).toEqual(['paragraph', 'paragraph[1]'])
+  const r = await s.call('edit_elements', {
+    pageId: page.id,
+    version: page.version,
+    edits: [
+      { ref: 'n', part: 'p', content: 'first' },
+      { ref: 'n', part: 'p[1]', content: 'second' },
+    ],
+  })
+  expect(r.failed).toBe(0)
+  const html = await s.html()
+  expect(html).toContain('first')
+  expect(html).toContain('second')
+})

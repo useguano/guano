@@ -262,6 +262,46 @@ const ids = (n: ElementNode) => { const out: string[] = []; walkNodes([n], (x) =
   ok(res.removed === 1, 'the dropped element is reported as removed')
   ok(!body.children[0]!.interactions, 'and the binding that pointed at it is gone')
 }
+{
+  // B1: two different refs are two different elements. A `<div data-ref="new">`
+  // sitting where `#old` sat must NOT adopt the old node — and with it the
+  // old node's bindings — because the LCS paired them by position.
+  const p = fresh()
+  write(p, '<section data-ref="wrap"><div data-ref="old" /><p>t</p></section>')
+  const body = bodyOf(p)
+  const old = body.children[0]!.children[0]!
+  old.animations = [{ id: 'a1', animationId: 'anim', trigger: 'load', targetId: old.id }]
+  const res = write(p, '<section data-ref="wrap"><div data-ref="new" /><p>t</p></section>')
+  const now = body.children[0]!.children[0]!
+  ok(now.id !== old.id, 'a differing data-ref is not adopted by position')
+  ok(res.created === 1 && res.removed === 1, `it is created new and the old one removed (created ${res.created}, removed ${res.removed})`)
+  ok(!now.animations, 'so the old binding did not carry onto the new ref')
+  ok(res.carried.length === 0, 'and nothing is reported as carried')
+}
+{
+  // B1: an old ref against NO ref stays adoptable (dropping a name keeps the
+  // node), and a positional adoption that kept bindings is REPORTED
+  const p = fresh()
+  write(p, '<section data-ref="wrap"><div data-ref="old" /><p>t</p></section>')
+  const body = bodyOf(p)
+  const old = body.children[0]!.children[0]!
+  old.interactions = [{ id: 'b1', interactionId: 'i1', trigger: 'click', targetId: old.id }]
+  const res = write(p, '<section data-ref="wrap"><div /><p>t</p></section>')
+  const now = body.children[0]!.children[0]!
+  ok(now.id === old.id, 'dropping the ref keeps the node')
+  ok(res.carried.length === 1 && res.carried[0]!.id === old.id && res.carried[0]!.interactions === 1,
+     `a positional adoption that kept bindings is reported in carried (${JSON.stringify(res.carried)})`)
+  ok(res.carried[0]!.ref === undefined, 'with the ref as it is AFTER the write')
+}
+{
+  // B1: a claim by ref is not "carried" — the agent named the node
+  const p = fresh()
+  write(p, '<div data-ref="a" />')
+  const body = bodyOf(p)
+  body.children[0]!.interactions = [{ id: 'b1', interactionId: 'i1', trigger: 'click', targetId: body.children[0]!.id }]
+  const res = write(p, '<div data-ref="a" class="p-2" />')
+  ok(res.kept === 1 && res.carried.length === 0, 'a ref claim is never reported as carried')
+}
 
 // ---------- components ----------
 {

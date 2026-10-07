@@ -57,6 +57,24 @@ export interface ApplyResult {
   /** what landed but is worth saying out loud */
   warnings: Refusal[]
   diagnostics: TreeDiagnostic[]
+  /**
+   * Nodes adopted by POSITION (the LCS, never a `data-id`/`data-ref` claim)
+   * that carry interaction or animation bindings. The bindings rode along
+   * with the node object, which the write did not say and the agent did not
+   * ask for — a `hero-ring` rewritten as `ed-ring` kept the old ring's
+   * timing and fired at the wrong moment, found only by reading three
+   * subtrees back. Named so a caller can unbind or re-read exactly these.
+   */
+  carried: CarriedBindings[]
+}
+
+export interface CarriedBindings {
+  /** the node's full id (tools print it short) */
+  id: string
+  ref?: string
+  type: string
+  interactions: number
+  animations: number
 }
 
 export interface ApplyOptions {
@@ -170,6 +188,7 @@ export function applyHtml(
     refused: [],
     warnings: [],
     diagnostics: [],
+    carried: [],
   }
   const project = opts.project
   const components = project.components ?? []
@@ -228,6 +247,8 @@ export function applyHtml(
   for (const node of addressable) if (node.ref) byRef.set(node.ref, node)
   const claim = new Map<ParsedNode, ElementNode>()
   const claimed = new Set<ElementNode>()
+  /** the claims the LCS made, as opposed to an id or a ref the agent wrote */
+  const byPosition = new Set<ParsedNode>()
   const eachParsed = (nodes: ParsedNode[], visit: (n: ParsedNode) => void) => {
     for (const node of nodes) {
       visit(node)
@@ -345,8 +366,17 @@ export function applyHtml(
         if (!target || !source) continue
         if (claim.has(target.node) || claimed.has(source.node)) continue
         if (!sameType(source.node.type, target.node.type)) continue
+        // Two different refs are two different elements. A node that writes
+        // `data-ref="x"` either claimed the existing `x` above or is new; it
+        // must never inherit a sibling's node — and with it that sibling's
+        // bindings — because it happened to sit where the sibling sat. An
+        // old ref against NO ref stays adoptable: dropping a name keeps the
+        // node, and keeping identity is the safer side of that call.
+        const wanted = target.node.attrs['data-ref']
+        if (wanted && source.node.ref && wanted !== source.node.ref) continue
         claim.set(target.node, source.node)
         claimed.add(source.node)
+        byPosition.add(target.node)
       }
     }
 
@@ -386,6 +416,21 @@ export function applyHtml(
       }
       const childPath = under(path, node)
       applyState(node, child, child.type, childPath)
+      // reported AFTER the state landed, so the ref is the one the agent will
+      // see on its next read, not the one the write may have just dropped
+      if (adopted && byPosition.has(child)) {
+        const interactions = node.interactions?.length ?? 0
+        const animations = node.animations?.length ?? 0
+        if (interactions || animations) {
+          result.carried.push({
+            id: node.id,
+            ...(node.ref ? { ref: node.ref } : {}),
+            type: node.type,
+            interactions,
+            animations,
+          })
+        }
+      }
       if (isComponentType(node.type)) fillInstance(node, child, childPath)
       else if (!isLeafType(node.type)) alignLevel(node, child.children, childPath)
       next.push(node)

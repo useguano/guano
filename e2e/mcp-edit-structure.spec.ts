@@ -200,3 +200,76 @@ test.describe('replaceChildren', () => {
     expect(r.message).toContain('is a leaf')
   })
 })
+
+// B1: a `replace` whose markup root declares a DIFFERENT data-ref than the
+// target used to adopt the target's node anyway (same type was the only test),
+// so the old node's bindings rode onto the new ref and fired at the wrong
+// time while the response said `1 kept`. Two refs are two elements.
+test.describe('replace and refs', () => {
+  const build = async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('set_page_html', {
+      pageId: home.id,
+      html: pageHtml(
+        '<section data-ref="wrap"><div data-ref="old" class="p-1"><span>a</span></div><p>t</p></section>',
+      ),
+      version: home.version,
+    })
+    const { created } = await s.call('create_interactions', {
+      items: [{ name: 'Ring', toClasses: 'ring-2' }],
+    })
+    const page = await s.home()
+    await s.call('edit_elements', {
+      pageId: page.id,
+      version: page.version,
+      edits: [{ ref: 'old', bindInteractions: [{ interactionId: created[0].id, trigger: 'hover' }] }],
+    })
+    return s
+  }
+
+  test('a different data-ref replaces the element outright, bindings included', async () => {
+    const s = await build()
+    const before = await s.call('get_page', { pageId: (await s.home()).id, elements: 'refs' })
+    const oldId = (before.elements as { ref?: string; id: string }[]).find((e) => e.ref === 'old')!.id
+    const r = await s.call('edit_structure', {
+      pageId: before.pageId,
+      version: before.version,
+      ops: [{ op: 'replace', target: 'old', html: '<div data-ref="fresh" class="p-1"><span>a</span></div>' }],
+      elements: 'none',
+    })
+    expect(r.saved).toBe(true)
+    expect(r.changed.removed).toBeGreaterThan(0)
+    expect(r.carriedBindings).toBeUndefined()
+    const after = await s.call('get_page', {
+      pageId: before.pageId,
+      elements: 'refs',
+      includeInteractions: true,
+    })
+    const rows = after.elements as { ref?: string; id: string; interactions?: unknown[] }[]
+    const fresh = rows.find((e) => e.ref === 'fresh')!
+    expect(fresh.id).not.toBe(oldId)
+    expect(fresh.interactions).toBeUndefined()
+    expect(rows.find((e) => e.ref === 'old')).toBeUndefined()
+  })
+
+  test('the same ref, or none, still adopts — and a positional carry is reported', async () => {
+    const s = await build()
+    const before = await s.call('get_page', { pageId: (await s.home()).id, elements: 'refs' })
+    const oldId = (before.elements as { ref?: string; id: string }[]).find((e) => e.ref === 'old')!.id
+    const r = await s.call('edit_structure', {
+      pageId: before.pageId,
+      version: before.version,
+      ops: [{ op: 'replace', target: 'old', html: '<div class="p-2"><span>b</span></div>' }],
+      elements: 'none',
+    })
+    expect(r.saved).toBe(true)
+    expect(r.carriedBindings).toBeTruthy()
+    const carried = r.carriedBindings.elements as { id: string; interactions: number }[]
+    expect(carried).toHaveLength(1)
+    expect(carried[0].interactions).toBe(1)
+    const after = await s.call('get_page', { pageId: before.pageId, elements: 'own' })
+    const row = (after.elements as { id: string; classes?: string }[]).find((e) => e.id === oldId)
+    expect(row?.classes).toBe('p-2')
+  })
+})
