@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import {
+  bindingDelay,
   compileAnimation,
   composeMotionStyle,
   countToFor,
@@ -51,6 +52,10 @@ interface PlayState {
   dist?: number
   /** paused plays hold their frame (a finished non-looping play) */
   running: boolean
+  /** ms still to wait before `time` advances — the binding's `delay`. The play
+   * samples frame 0 meanwhile, so the element holds its first frame. Only a
+   * forward play waits (the published runtime does the same). */
+  wait?: number
   /** highest childIndex that sampled this play's staggered tracks — the DOM
    * side of the stagger tail (compiled.duration cannot include it: the child
    * count is unknown at compile time). Recorded by staggerValuesFor. */
@@ -134,7 +139,18 @@ function loop(now: number) {
     // must not pin this clock alive (that kept the loop — and every motion
     // computed — running forever once any scrub binding had fired)
     if (!play.running || play.scrubbed) continue
-    play.time += dt * play.direction
+    if (play.wait && play.wait > 0) {
+      play.wait -= dt
+      if (play.wait > 0) {
+        live = true
+        continue
+      }
+      // carry the overshoot into the timeline so the delay is exact
+      play.time = -play.wait
+      play.wait = 0
+    } else {
+      play.time += dt * play.direction
+    }
     const end = playEnd(play)
     if (play.direction === 1 && play.time >= end && !hasInfinite(play.compiled)) {
       play.time = end
@@ -204,6 +220,8 @@ export function useMotion() {
       direction: reverse ? -1 : 1,
       scrubbed: false,
       running: true,
+      // a resumed play (restart: false) has already waited
+      wait: reverse || (opts.restart === false && existing) ? 0 : bindingDelay(binding),
     })
     plays.value = new Map(plays.value)
     ensureLoop()
@@ -219,6 +237,7 @@ export function useMotion() {
     // an infinite loop that ran for a minute must not rewind for a minute
     existing.time = foldReverseTime(existing.compiled, existing.time)
     existing.direction = -1
+    existing.wait = 0 // a reverse starts at once
     existing.running = true
     plays.value = new Map(plays.value)
     ensureLoop()

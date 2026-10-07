@@ -198,6 +198,14 @@ export interface AnimationBinding {
   /** breakpoint ids this binding is active on; omitted = all (see
    * InteractionBinding — same byte-stability discipline) */
   breakpoints?: string[]
+  /** ms the FORWARD play waits after its trigger fires before the timeline
+   * starts — the knob that lets one library "pop in" serve every beat of a
+   * sequence instead of one copy per start time. A reverse (hover-out,
+   * click `off`, appear `reverse`) starts at once. Never on `scrub` (a scrub
+   * has no moment to wait from). Omitted = 0; never stored as 0. During the
+   * wait the element holds the timeline's FIRST frame, which is also what the
+   * exporter bakes (see primeFirstFrame in lib/shared/motion.js). */
+  delay?: number
 }
 
 export interface ElementNode {

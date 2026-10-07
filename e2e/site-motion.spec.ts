@@ -509,3 +509,142 @@ test.describe('a count on a shared component master', () => {
     }
   })
 })
+
+// Several `load` timelines on ONE element, and a binding-level `delay`. The
+// exporter used to merge each binding's first frame in binding order with the
+// last one winning, so an element with an "open" (opacity 0 → 1) and a later
+// "close" (1 → 0) was primed on the close's `from` and sat fully VISIBLE at
+// t=0 — both of its states painted at once. The rule is now the earliest
+// start wins per property (binding delay + track offset), shared by the
+// exporter and the runtime (primeFirstFrame).
+
+const OPEN = 'a-open'
+const CLOSE = 'a-close'
+const DROP = 'a-drop'
+
+function primingFixture() {
+  const fade = (id: string, name: string, from: number, to: number) => ({
+    id,
+    name,
+    steps: [{ id: `${id}-s`, tracks: [{ prop: 'opacity', from, to }], duration: 400, easing: 'linear' }],
+  })
+  return {
+    pages: [
+      {
+        id: 'p1',
+        name: 'Home',
+        path: '/',
+        status: 'published',
+        elements: [
+          node('body', 'body', {
+            children: [
+              // open listed FIRST, close (delayed) second — the order that
+              // used to prime it visible
+              node('both', 'div', {
+                htmlId: 'both',
+                content: 'panel',
+                animations: [
+                  { id: 'b-open', animationId: OPEN, trigger: 'load' },
+                  { id: 'b-close', animationId: CLOSE, trigger: 'load', delay: 3000 },
+                ],
+              }),
+              // the same two, listed the other way round: position must not matter
+              node('both-rev', 'div', {
+                htmlId: 'both-rev',
+                content: 'panel',
+                animations: [
+                  { id: 'r-close', animationId: CLOSE, trigger: 'load', delay: 3000 },
+                  { id: 'r-open', animationId: OPEN, trigger: 'load' },
+                ],
+              }),
+              // one delayed entrance: holds frame 0 for the wait, then plays
+              node('late', 'div', {
+                htmlId: 'late',
+                content: 'late',
+                animations: [{ id: 'b-late', animationId: DROP, trigger: 'load', delay: 1500 }],
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+    components: [],
+    collections: [],
+    interactions: [],
+    animations: [
+      fade(OPEN, 'Open', 0, 1),
+      fade(CLOSE, 'Close', 1, 0),
+      {
+        id: DROP,
+        name: 'Drop in',
+        steps: [{ id: 'd-s', tracks: [{ prop: 'y', from: 40, to: 0 }], duration: 300, easing: 'linear' }],
+      },
+    ],
+    breakpoints: [],
+    comments: [],
+    locales: ['en'],
+    defaultLocale: 'en',
+    settings: {
+      publishing: { method: 'server', github: { repo: '', branch: '' } },
+      seo: { siteName: 'T', titleTemplate: '%s', description: '' },
+      domain: '',
+      smtp: {},
+      integrations: { stripe: {}, mailing: {} },
+      tokens: [],
+      customCode: { head: '' },
+      fonts: { family: 'sans' },
+    },
+  }
+}
+
+test.describe('several entrances on one element, and a delayed binding', () => {
+  test.beforeAll(async () => {
+    await exportSite(primingFixture(), SITE)
+  })
+
+  test('the earliest-starting timeline decides the baked first frame, whatever the order', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    for (const id of ['both', 'both-rev']) {
+      const tag = new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+      // the open (opacity 0 → 1, at once) starts before the close (delay 3000),
+      // so the element is primed INVISIBLE — not on the close's `from: 1`
+      expect(tag).toMatch(/style="[^"]*opacity:\s*0[;"]/)
+      expect(tag).not.toMatch(/opacity:\s*1/)
+    }
+  })
+
+  test('the delay rides on the wire as `d`, and only when set', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const metas = animMetas(html) as { k: string; d?: number }[]
+    const byBinding = new Map(metas.map((m) => [m.k, m]))
+    expect(byBinding.get('b-close')?.d).toBe(3000)
+    expect(byBinding.get('b-late')?.d).toBe(1500)
+    expect(byBinding.get('b-open')).toBeDefined()
+    expect('d' in byBinding.get('b-open')!).toBe(false)
+  })
+
+  test('the runtime holds the first frame through the wait, then plays', async ({ page }) => {
+    await page.goto('/')
+    const late = page.locator('#late')
+    // primed by the export, and the runtime keeps writing frame 0 while it waits
+    expect(await late.evaluate((el) => (el as HTMLElement).style.transform)).toContain('40px')
+    await page.waitForTimeout(600)
+    expect(await late.evaluate((el) => (el as HTMLElement).style.transform)).toContain('40px')
+    // 1500 ms of wait + 300 ms of travel: well before 4 s it has landed
+    await expect
+      .poll(() => late.evaluate((el) => (el as HTMLElement).style.transform), { timeout: 4000 })
+      .not.toContain('40px')
+    await expect
+      .poll(() => late.evaluate((el) => (el as HTMLElement).style.transform), { timeout: 2000 })
+      .toMatch(/translateY\(0(px)?\)/)
+  })
+
+  test('the open plays, and the delayed close takes the element back out', async ({ page }) => {
+    await page.goto('/')
+    const both = page.locator('#both')
+    // the open runs first: opacity climbs to 1 inside the first second
+    await expect.poll(() => both.evaluate((el) => (el as HTMLElement).style.opacity), { timeout: 2000 }).toBe('1')
+    // and the close, 3 s in, takes it back to 0
+    await expect.poll(() => both.evaluate((el) => (el as HTMLElement).style.opacity), { timeout: 5000 }).toBe('0')
+  })
+})

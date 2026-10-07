@@ -26,6 +26,8 @@ import {
   countTargetError as countTargetErrorRaw,
   splitByStagger as splitByStaggerRaw,
   initialStyle as initialStyleRaw,
+  primeFirstFrame as primeFirstFrameRaw,
+  bindingDelay as bindingDelayRaw,
   endStyle as endStyleRaw,
   foldReverseTime as foldReverseTimeRaw,
   hasInfinite as hasInfiniteRaw,
@@ -200,6 +202,12 @@ export const countToFor = countToForRaw as (
 ) => Partial<Record<AnimProp, number>> | undefined
 export const splitByStagger = splitByStaggerRaw as (c: CompiledAnimation) => StaggerSplit
 export const initialStyle = initialStyleRaw as (c: CompiledAnimation) => MotionStyle
+/** the pre-play state of SEVERAL timelines on one element — per property, the
+ * `from` of the one that starts earliest (binding delay + track offset) */
+export const primeFirstFrame = primeFirstFrameRaw as (
+  entries: { compiled: CompiledAnimation; delay?: number }[],
+) => MotionStyle
+export const bindingDelay = bindingDelayRaw as (b: { delay?: number } | null | undefined) => number
 export const foldReverseTime = foldReverseTimeRaw as (c: CompiledAnimation, t: number) => number
 export const hasInfinite = hasInfiniteRaw as (c: CompiledAnimation) => boolean
 export const parseTrackValue = parseTrackValueRaw as (

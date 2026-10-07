@@ -217,6 +217,16 @@ function toggleBreakpoint(id: string) {
       </RowUI>
 
       <template v-if="anim">
+        <!-- the wait between the trigger and the timeline; a scrub has no
+             moment to wait from, so it is not offered there -->
+        <RowUI v-if="anim.trigger !== 'scrub'" label="Delay">
+          <InputUI
+            type="number"
+            :model-value="String(anim.delay ?? 0)"
+            @update:model-value="(v) => (anim!.delay = Math.max(0, Math.round(Number(v))) || undefined)"
+          />
+          <span class="w-6 shrink-0 text-right text-xs text-muted-foreground">ms</span>
+        </RowUI>
         <template v-if="anim.trigger === 'appear'">
           <RowUI label="Replay">
             <SelectUI

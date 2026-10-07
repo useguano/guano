@@ -10,7 +10,7 @@
 //   #anim-bp    { [key]: breakpointId[] }           (scoped bindings only)
 //   #int-bp     [{ id, w }]                         (shared with interactions)
 //   #site-fx    { t?: {x?, e?}, s?: {l} }           (settings.motion, site-wide)
-//   data-anim   [{ k, t, a, o? }] on trigger elements
+//   data-anim   [{ k, t, a, o?, d? }] on trigger elements
 //   data-atgt   "key key" on animated elements
 // The page-transition timelines in #site-fx.t are ids INTO #anim-lib, so
 // transitions reuse the library wire format rather than adding a second one.
@@ -24,6 +24,7 @@ import {
   composeMotionStyle,
   splitByStagger,
   initialStyle,
+  primeFirstFrame,
   foldReverseTime,
   motionBreakpointId,
   appearRootMargin,
@@ -51,6 +52,9 @@ interface BindingMeta {
   t: 'load' | 'appear' | 'scrub' | 'hover' | 'click' | 'scrolled' | 'change'
   /** 'scrolled' only: the px threshold (default 50) */
   at2?: number
+  /** ms the FORWARD play waits after the trigger before the timeline starts;
+   *  absent = 0. A reverse never waits. Never emitted for a scrub. */
+  d?: number
   /** animation id */
   a: string
   /** options: appearMode / appearAt / scrub range (+ optional smoothing) */
@@ -71,6 +75,10 @@ interface Play {
   time: number
   direction: 1 | -1
   running: boolean
+  /** ms still to wait before `time` starts advancing — the binding's delay.
+   *  While waiting the play writes frame 0, so the element holds its primed
+   *  first frame instead of snapping to its natural state. */
+  wait: number
   /** full run length INCLUDING the stagger tail — compiled.duration only covers
    * the element-level tracks (the compiler can't know the child count), so a
    * cascade clamped to it froze mid-flight with late children part-faded */
@@ -241,7 +249,20 @@ if (Object.keys(lib).length || siteFx) {
     let live = false
     plays.forEach((play, key) => {
       if (!play.running) return
-      play.time += dt * play.direction
+      if (play.wait > 0) {
+        play.wait -= dt
+        if (play.wait > 0) {
+          live = true
+          write(play)
+          return
+        }
+        // the frame that crosses the end of the wait carries its overshoot
+        // into the timeline, so a delay is exact rather than rounded to a frame
+        play.time = -play.wait
+        play.wait = 0
+      } else {
+        play.time += dt * play.direction
+      }
       const infinite = play.compiled.tracks.some((t) => t.repeat === Infinity)
       if (play.direction === 1 && play.time >= play.total && !infinite) {
         play.time = play.total
@@ -290,6 +311,8 @@ if (Object.keys(lib).length || siteFx) {
         time: reverse ? foldReverseTime(c, existing ? existing.time : c.duration) : 0,
         direction: reverse ? -1 : 1,
         running: !jump,
+        // only the forward play waits, and never when jumping to the end state
+        wait: !reverse && !jump ? meta.d || 0 : 0,
         total,
         // read before the first write(), which replaces textContent
         to: existing ? existing.to : countTo(el, split.element),
@@ -317,6 +340,8 @@ if (Object.keys(lib).length || siteFx) {
       // an infinite loop that ran for minutes must not rewind for minutes
       play.time = foldReverseTime(play.compiled, play.time)
       play.direction = -1
+      // a reverse starts at once — a hover-out that waited would read as stuck
+      play.wait = 0
       play.running = !still
     })
     if (!still) ensureLoop()
@@ -342,6 +367,7 @@ if (Object.keys(lib).length || siteFx) {
       time: 0,
       direction: 1,
       running: !still,
+      wait: 0,
       total,
       to: countTo(el, split.element),
     }
@@ -573,18 +599,35 @@ if (Object.keys(lib).length || siteFx) {
             .filter((m) => m.t === 'load')
             .map((meta) => ({ meta, el })),
         )
+    // Gathered PER ELEMENT first, then primed through the one shared rule
+    // (primeFirstFrame: per property, the earliest-starting timeline's `from`
+    // wins, start = binding delay + track offset) — applying each binding in
+    // turn let the last one listed overwrite the first, so an element with an
+    // entrance and a later exit was primed on the exit's `from` and sat
+    // visible. The exporter bakes with the same helper.
+    const perElement = new Map<HTMLElement, { el: { compiled: Compiled; delay: number }[]; kids: { split: Split; delay: number }[] }>()
     for (const { meta } of appearing.concat(loadToPrime)) {
       const split = splits[meta.a]
       if (!split || !allowed(meta.k)) continue
-      const first = initialStyle(split.element)
-      const firstChild = split.hasStagger ? initialStyle(split.staggered) : null
       for (const el of targets.get(meta.k) || []) {
-        if (Object.keys(first).length) applyStyle(el, first)
-        if (firstChild && Object.keys(firstChild).length) {
+        let box = perElement.get(el)
+        if (!box) perElement.set(el, (box = { el: [], kids: [] }))
+        box.el.push({ compiled: split.element, delay: meta.d || 0 })
+        if (split.hasStagger) box.kids.push({ split, delay: meta.d || 0 })
+      }
+    }
+    perElement.forEach((box, el) => {
+      const first = primeFirstFrame(box.el)
+      if (Object.keys(first).length) applyStyle(el, first)
+      // staggered children: the selector decides WHICH children, so prime per
+      // selector group — one timeline's children are one group
+      for (const { split, delay } of box.kids) {
+        const firstChild = primeFirstFrame([{ compiled: split.staggered, delay }])
+        if (Object.keys(firstChild).length) {
           staggerTargets(el, split.selector).forEach((kid) => applyStyle(kid, firstChild))
         }
       }
-    }
+    })
   }
 
   // ---------- scroll-driven ----------
@@ -655,6 +698,7 @@ if (Object.keys(lib).length || siteFx) {
             time: p * total,
             direction: 1,
             running: false,
+            wait: 0, // never emitted for a scrub; it follows the scroll
             total,
             // the WeakMap is load-bearing here: this Play is rebuilt every
             // scroll frame, and write() has already replaced the text

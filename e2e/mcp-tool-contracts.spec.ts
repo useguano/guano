@@ -1236,3 +1236,99 @@ test.describe('a count track only lands where it can write', () => {
     expect(JSON.stringify(yoyo.failures)).toMatch(/cannot yoyo/)
   })
 })
+
+test.describe('a count needs no `to`, and a binding may wait', () => {
+  test("a count track without `to` is accepted — the element's text is the destination", async () => {
+    const s = await mcpSession()
+    const made = await s.call('create_animations', {
+      items: [
+        {
+          name: 'Count up',
+          steps: [{ tracks: [{ prop: 'count', from: 0, format: { group: true } }], duration: 600, easing: 'linear' }],
+        },
+        // every other property still has nowhere else to take its end from
+        { name: 'Bad', steps: [{ tracks: [{ prop: 'opacity', from: 0 }], duration: 600, easing: 'linear' }] },
+      ],
+    })
+    expect(made.created.map((a: { name: string }) => a.name)).toEqual(['Count up'])
+    expect(made.failures).toHaveLength(1)
+    expect(made.failures[0].error).toMatch(/opacity.*needs a "to"/)
+
+    // and it counts up to what the element says, with nothing to fall back on
+    const home = await s.home()
+    const written = await s.call('set_page_html', {
+      pageId: home.id,
+      version: home.version,
+      html: pageHtml('<span data-ref="n">18,000</span>'),
+    })
+    const bound = await s.call('edit_elements', {
+      pageId: home.id,
+      version: written.version,
+      edits: [{ ref: 'n', bindAnimations: [{ animationId: made.created[0].id, trigger: 'load' }] }],
+    })
+    expect(bound.failed).toBe(0)
+    // the authored number ships untouched — no first frame is baked over a count
+    const html = await s.html()
+    expect(html).toMatch(/<span[^>]*>18,000<\/span>/)
+  })
+
+  test('delay is stored, read back and emitted; a scrub refuses it', async () => {
+    const s = await mcpSession()
+    const made = await s.call('create_animations', {
+      items: [
+        { name: 'Pop in', steps: [{ tracks: [{ prop: 'opacity', from: 0, to: 1 }], duration: 300, easing: 'ease-out' }] },
+      ],
+    })
+    const animationId = made.created[0].id as string
+    const home = await s.home()
+    const written = await s.call('set_page_html', {
+      pageId: home.id,
+      version: home.version,
+      html: pageHtml('<div data-ref="a">one</div>\n<div data-ref="b">two</div>\n<div data-ref="c">three</div>'),
+    })
+    const r = await s.call('edit_elements', {
+      pageId: home.id,
+      version: written.version,
+      edits: [
+        { ref: 'a', bindAnimations: [{ animationId, trigger: 'load' }] },
+        { ref: 'b', bindAnimations: [{ animationId, trigger: 'load', delay: 600 }] },
+        // a scrub follows the scroll — there is no moment for it to wait after
+        { ref: 'c', bindAnimations: [{ animationId, trigger: 'scrub', delay: 600 }] },
+        // and a delay is whole milliseconds, never negative
+        { ref: 'c', bindAnimations: [{ animationId, trigger: 'load', delay: -5 }] },
+      ],
+    })
+    expect(r.failed).toBe(2)
+    expect(JSON.stringify(r.failures)).toMatch(/delay does not apply to a 'scrub'/)
+    expect(JSON.stringify(r.failures)).toMatch(/whole number of milliseconds/)
+
+    // one library animation, two beats — the stored binding carries the wait,
+    // and an undelayed one carries no key at all
+    const page = s.stored().pages[0]
+    const find = (ref: string) => {
+      const walk = (nodes: any[]): any => {
+        for (const n of nodes) {
+          if (n.ref === ref) return n
+          const hit = walk(n.children ?? [])
+          if (hit) return hit
+        }
+      }
+      return walk(page.elements)
+    }
+    expect(find('b').animations[0].delay).toBe(600)
+    expect('delay' in find('a').animations[0]).toBe(false)
+
+    // read back with the bindings
+    const read = await s.call('get_page', { pageId: home.id, elements: 'own', includeInteractions: true })
+    const rows = JSON.stringify(read.elements)
+    expect(rows).toContain('"delay":600')
+
+    // and on the wire as `d`, only where set
+    const html = await s.html()
+    const metas = [...html.matchAll(/data-anim="([^"]*)"/g)]
+      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
+      .flat() as { d?: number }[]
+    expect(metas.filter((m) => m.d === 600)).toHaveLength(1)
+    expect(metas.filter((m) => !('d' in m))).toHaveLength(1)
+  })
+})

@@ -54,6 +54,8 @@ import {
   compileAnimation,
   splitByStagger,
   initialStyle,
+  primeFirstFrame,
+  bindingDelay,
   effectiveAppearMode,
   resolveTransition,
   resolveScrollLerp,
@@ -828,6 +830,10 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // the scroll threshold rides beside the options rather than inside them:
       // `o` is read for appear/scrub, and a flat key keeps the hot path simple
       if (b.trigger === 'scrolled' && b.scrollAt !== undefined) meta.at2 = b.scrollAt
+      // ms the forward play waits after the trigger — omitted when 0, so an
+      // undelayed binding costs the wire nothing
+      const delay = bindingDelay(b)
+      if (delay) meta.d = delay
       list.push(meta)
     }
     if (list.length) attrs.push(`data-anim="${escapeHtml(JSON.stringify(list))}"`)
@@ -851,6 +857,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
   const firstFrame = {}
   if (animDriven.length) {
     const keys = []
+    const toPrime = []
     for (const { b, key, bake } of animDriven) {
       const animation = ctx.animLib.get(b.animationId)
       if (!animation) continue
@@ -867,9 +874,16 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // natural-state paint inside the scope is the accepted tradeoff, same as
       // staggered children).
       if (bake && (b.trigger === 'load' || b.trigger === 'appear') && !b.breakpoints) {
-        Object.assign(firstFrame, initialStyle(splitByStagger(compileAnimation(animation)).element))
+        toPrime.push({ compiled: splitByStagger(compileAnimation(animation)).element, delay: bindingDelay(b) })
       }
     }
+    // ONE rule for several entrances on one node — per property, the `from` of
+    // the timeline that starts earliest (binding delay + track offset). Merged
+    // in binding order with the last one winning, an "open" (0 → 1 at t=0)
+    // followed by a "close" (1 → 0, seconds later) primed the element VISIBLE,
+    // with both states painted at once. The runtime primes with the same
+    // helper, so the two cannot disagree.
+    if (toPrime.length) Object.assign(firstFrame, primeFirstFrame(toPrime))
     if (keys.length) attrs.push(`data-atgt="${escapeHtml(keys.join(' '))}"`)
   }
 

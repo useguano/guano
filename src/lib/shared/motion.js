@@ -580,27 +580,69 @@ export function endStyle(compiled, opts) {
  * @returns {Record<string, string|number>}
  */
 export function initialStyle(compiled) {
+  return primeFirstFrame([{ compiled, delay: 0 }])
+}
+
+/**
+ * The first frame of SEVERAL timelines landing on one element — the one rule
+ * for what an element wears before anything plays, shared by the exporter
+ * (which bakes it into the markup), the published runtime (which primes
+ * staggered children and measured targets) and the editor.
+ *
+ * Per CSS property, the explicit `from` of whichever track STARTS EARLIEST
+ * wins, where a track's start is its binding's `delay` plus its own offset
+ * inside the timeline. That is the only reading that makes sense of an element
+ * with an "open" entrance (opacity 0 → 1 at t=0) and a "close" exit (1 → 0,
+ * seconds later) on the same node: before anything runs it is INVISIBLE,
+ * because the open is what happens first. The previous rule — merge in
+ * binding order, last one wins — primed exactly that element visible, with
+ * both of its states painted at once.
+ *
+ * On a tie the LATER entry wins, which keeps the old last-wins behaviour for
+ * two bindings with the same start. Tracks that omit `from` contribute nothing
+ * (their start value is whatever the element already renders), and a `count`
+ * is never primed — see the note inside.
+ *
+ * @param {{compiled: {tracks: any[], duration: number}, delay?: number}[]} entries
+ * @returns {Record<string, string|number>}
+ */
+export function primeFirstFrame(entries) {
   const earliest = {}
   const values = {}
-  for (const track of compiled.tracks) {
-    if (track.from === undefined || track.from === null) continue
-    if (earliest[track.prop] !== undefined && earliest[track.prop] <= track.start) continue
-    earliest[track.prop] = track.start
-    const meta = MOTION_PROPS[track.prop]
-    // NEVER bake a count's `from` into the HTML. The exporter writes this into
-    // the markup so an entrance does not flash its final state — which for a
-    // number would ship `0` as the text that a visitor without JavaScript, and
-    // every visitor with reduced motion, reads forever. The authored text IS
-    // the final value; the runtime writes the first frame.
-    if (meta.kind === 'text') continue
-    if (meta.kind === 'color') {
-      values[track.prop] = { color: lerpColor(track.from, track.from, 0) }
-    } else {
-      const v = parseTrackValue(track.from, track.prop)
-      if (v) values[track.prop] = v
+  for (const entry of entries) {
+    const compiled = entry && entry.compiled
+    if (!compiled || !compiled.tracks) continue
+    const delay = typeof entry.delay === 'number' && entry.delay > 0 ? entry.delay : 0
+    for (const track of compiled.tracks) {
+      if (track.from === undefined || track.from === null) continue
+      const start = delay + track.start
+      if (earliest[track.prop] !== undefined && earliest[track.prop] < start) continue
+      const meta = MOTION_PROPS[track.prop]
+      // NEVER bake a count's `from` into the HTML. The exporter writes this
+      // into the markup so an entrance does not flash its final state — which
+      // for a number would ship `0` as the text that a visitor without
+      // JavaScript, and every visitor with reduced motion, reads forever. The
+      // authored text IS the final value; the runtime writes the first frame.
+      if (meta.kind === 'text') continue
+      if (meta.kind === 'color') {
+        values[track.prop] = { color: lerpColor(track.from, track.from, 0) }
+        earliest[track.prop] = start
+      } else {
+        const v = parseTrackValue(track.from, track.prop)
+        if (v) {
+          values[track.prop] = v
+          earliest[track.prop] = start
+        }
+      }
     }
   }
   return composeMotionStyle(values)
+}
+
+/** a binding's `delay` as the runtime reads it: a positive number of ms, else 0 */
+export function bindingDelay(binding) {
+  const d = binding && binding.delay
+  return typeof d === 'number' && isFinite(d) && d > 0 ? d : 0
 }
 
 /** the CSS properties this engine can write — what a caller must clear */
@@ -672,7 +714,11 @@ export function validateAnimation(animation) {
         )
       }
       const meta = MOTION_PROPS[track.prop]
-      if (track.to === undefined || track.to === null || track.to === '') {
+      const hasTo = !(track.to === undefined || track.to === null || track.to === '')
+      // a `count` ends on the number the ELEMENT says (countToFor), so its
+      // `to` is only the fallback for text holding no number — optional.
+      // Every other property has nowhere else to take its destination from.
+      if (!hasTo && meta.kind !== 'text') {
         return fail(`${at} property "${track.prop}" needs a "to" value`)
       }
       if (meta.kind === 'color') {
@@ -718,7 +764,9 @@ export function validateAnimation(animation) {
         }
       }
       const units = meta.units.length ? ` (units: ${meta.units.join(', ')})` : ' (no unit)'
-      const to = parseTrackValue(track.to, track.prop)
+      // a count with no `to` has no destination to check here; the element's
+      // own text is checked where the binding lands (countTargetError)
+      const to = hasTo ? parseTrackValue(track.to, track.prop) : { n: meta.def, unit: meta.unit }
       if (!to) return fail(`${at} property "${track.prop}" has an invalid "to" value${units}`)
       if (track.from !== undefined && track.from !== null) {
         const from = parseTrackValue(track.from, track.prop)
@@ -853,6 +901,14 @@ export function validateBinding(binding, ctx) {
     if (typeof binding.appearAt !== 'number' || binding.appearAt < 0 || binding.appearAt > 1) {
       return fail('appearAt must be a number between 0 and 1 (viewport fraction)')
     }
+  }
+  if (binding.delay !== undefined) {
+    if (typeof binding.delay !== 'number' || !isFinite(binding.delay) || binding.delay < 0 || Math.floor(binding.delay) !== binding.delay) {
+      return fail('delay must be a whole number of milliseconds (0 or more)')
+    }
+    // a scrub is driven by scroll position, not by a moment — there is nothing
+    // for it to wait after
+    if (binding.trigger === 'scrub') return fail("delay does not apply to a 'scrub' binding — it follows the scroll, nothing fires it")
   }
   if (binding.scrub !== undefined) {
     if (typeof binding.scrub !== 'object' || binding.scrub === null) {
