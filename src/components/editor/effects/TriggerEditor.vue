@@ -46,9 +46,9 @@ const wrapped = computed(() =>
 )
 
 const defaultType = computed<EffectKind>(() => {
-  if (!triggerAllows(props.trigger, 'interaction')) return 'animation'
+  if (!triggerAllows(props.trigger, 'animation')) return 'interaction'
   const halves = wrapped.value ? effects.halfIds(wrapped.value) : {}
-  return !halves.interactionId && halves.animationId ? 'animation' : 'interaction'
+  return !halves.animationId && halves.interactionId ? 'interaction' : 'animation'
 })
 
 const type = computed<EffectKind>(() => chosenType.value ?? defaultType.value)

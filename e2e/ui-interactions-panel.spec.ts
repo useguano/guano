@@ -61,6 +61,12 @@ async function addTrigger(page: Page, label: RegExp) {
   await expect(actionRows(page)).toHaveCount(1)
 }
 
+/** a trigger opens on Motion, so reaching the class half is a Type pick */
+async function pickClasses(page: Page) {
+  await triggerView(page).getByRole('button', { name: 'Classes', exact: true }).click()
+  await expect(triggerView(page).getByPlaceholder('Add class')).toBeVisible()
+}
+
 const drawer = (page: Page) => page.locator('[data-effects-drawer]')
 /** the drawer's trigger view — where an element's action lives */
 const triggerView = (page: Page) => page.locator('[data-trigger-editor]')
@@ -103,6 +109,7 @@ test('adding a trigger makes its effect, and Cancel discards it completely', asy
   )
 
   // give it a class, so a half-discard would leave a visible trace
+  await pickClasses(page)
   const marker = 'outline-dashed'
   await drawer(page).getByPlaceholder('Add class').fill(marker)
   await page.keyboard.press('Enter')
@@ -139,6 +146,7 @@ test("a trigger's effect is edited in place, and Remove takes it off the element
   await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
 
   // the SHARED effect is right there beside the options — nothing to open
+  await pickClasses(page)
   const marker = 'ring-offset-4'
   await triggerView(page).getByPlaceholder('Add class').fill(marker)
   await page.keyboard.press('Enter')
@@ -220,12 +228,12 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // class swap expresses the slide — but that split is ours, not the author's,
   // so nothing is chosen between.
   await addTrigger(page, /^Click/)
+  // the trigger view shows one half at a time: it opens on motion, and the
+  // class half is one Type pick away
+  await expect(drawer(page).locator('[data-effect-half="animation"]')).toBeVisible()
+  await pickClasses(page)
   await drawer(page).getByPlaceholder('Add class').fill('flex')
   await page.keyboard.press('Enter')
-  // the trigger view shows one half at a time, so the motion half is reached
-  // through the Type switch beside the options
-  await triggerView(page).getByRole('button', { name: 'Motion', exact: true }).click()
-  await expect(drawer(page).locator('[data-effect-half="animation"]')).toBeVisible()
   await drawer(page).getByRole('button', { name: 'Apply' }).click()
   await page.locator('[data-trigger-row]').filter({ hasText: 'On click' }).click()
 
