@@ -7,6 +7,7 @@ import SelectUI from '@/components/ui/SelectUI.vue'
 import ValueFieldUI from '@/components/ui/ValueFieldUI.vue'
 import TrackSettingsPopover from '@/components/editor/effects/TrackSettingsPopover.vue'
 import { useAnimation } from '@/composables/useAnimation'
+import { useMotion } from '@/composables/useMotion'
 import { usePopover } from '@/composables/usePopover'
 import { compileAnimation, EASING_NAMES, MOTION_PROPS } from '@/lib/motion'
 import {
@@ -23,11 +24,21 @@ const collapsed = reactive(new Set<string>())
 const props = defineProps<{ id: string }>()
 
 const { animationFor, animationError } = useAnimation()
+const { previewTime } = useMotion()
 const { openPopover } = usePopover()
 
 const animation = computed(() => animationFor(props.id))
 
 const ROW_GRID = 'grid grid-cols-[13rem_minmax(0,1fr)] items-center gap-2'
+
+const LANE_LEFT = '14rem'
+const LANE_INSET = '14.5rem'
+
+const headTime = computed(() => previewTime(props.id) ?? 0)
+const headLeft = computed(() => {
+  const at = Math.max(0, Math.min(pct(headTime.value), 100)) / 100
+  return `calc(${LANE_LEFT} + (100% - ${LANE_INSET}) * ${at})`
+})
 
 const EASING_OPTIONS = EASING_NAMES.map((e) => ({ label: e, value: e }))
 
@@ -222,6 +233,7 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
 
 <template>
   <div v-if="animation" class="flex flex-col">
+    <div class="relative flex flex-col">
     <header class="h-9 shrink-0 px-2" :class="ROW_GRID">
       <p class="section-label">Motion</p>
       <div class="relative h-3">
@@ -279,21 +291,30 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
               </button>
             </span>
           </div>
-          <div class="relative flex h-7 min-w-0 items-center" :style="gridStyle">
+          <div data-track-area class="relative flex h-7 min-w-0 items-center" :style="gridStyle">
             <div
-              v-if="!group.open && group.bar"
-              class="absolute inset-y-2 rounded-md border"
+              v-if="group.bar"
+              class="absolute inset-y-1.5 flex items-center rounded-md border transition-colors"
               :class="
                 group.index === selectedStep
                   ? 'border-accent bg-accent/40'
-                  : 'border-input bg-secondary'
+                  : 'border-input bg-secondary hover:border-accent'
               "
               :style="{
                 left: `${pct(group.bar.start)}%`,
                 width: `${Math.max(pct(group.bar.duration), 2)}%`,
               }"
-              :title="`Step ${group.index + 1} · ${group.bar.duration}ms`"
-            />
+              :title="`Step ${group.index + 1} · ${group.bar.duration}ms · ${group.bar.easing}`"
+              @pointerdown="onBarDown($event, group.index, 'move')"
+            >
+              <span v-if="group.bar.stagger" class="truncate px-1 text-[9px] text-muted-foreground">
+                +{{ group.bar.stagger }}
+              </span>
+              <span
+                class="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-accent-foreground/30 hover:bg-accent-foreground/60"
+                @pointerdown.stop="onBarDown($event, group.index, 'resize')"
+              />
+            </div>
           </div>
         </div>
 
@@ -348,30 +369,12 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
             </span>
           </div>
 
-          <div
-            data-track-area
-            class="relative h-5 min-w-0 rounded-md bg-muted/40"
-            :style="gridStyle"
-          >
+          <div class="relative h-5 min-w-0" :style="gridStyle">
             <div
-              class="absolute inset-y-0.5 flex items-center rounded-md border transition-colors"
-              :class="
-                row.stepIndex === selectedStep
-                  ? 'border-accent bg-accent/40'
-                  : 'border-input bg-secondary hover:border-accent'
-              "
+              class="absolute inset-y-2 rounded-full"
+              :class="row.stepIndex === selectedStep ? 'bg-accent/60' : 'bg-input'"
               :style="{ left: `${pct(row.start)}%`, width: `${Math.max(pct(row.duration), 2)}%` }"
-              :title="`Step ${row.stepIndex + 1} · ${row.duration}ms · ${row.easing}`"
-              @pointerdown="onBarDown($event, row.stepIndex, 'move')"
-            >
-              <span v-if="row.stagger" class="truncate px-1 text-[9px] text-muted-foreground">
-                +{{ row.stagger }}
-              </span>
-              <span
-                class="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-accent-foreground/30 hover:bg-accent-foreground/60"
-                @pointerdown.stop="onBarDown($event, row.stepIndex, 'resize')"
-              />
-            </div>
+            />
           </div>
         </div>
 
@@ -396,6 +399,14 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
       >
         Step
       </ButtonUI>
+    </div>
+
+    <div
+      class="pointer-events-none absolute top-5 bottom-1 w-px bg-accent-foreground"
+      :style="{ left: headLeft }"
+    >
+      <span class="absolute -top-1 -left-[3px] size-[7px] rounded-full bg-accent-foreground" />
+    </div>
     </div>
 
     <div v-if="step" class="grid grid-cols-5 gap-x-2 gap-y-1.5 p-2">

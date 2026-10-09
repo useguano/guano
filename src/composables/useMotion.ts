@@ -332,6 +332,13 @@ export function useMotion() {
     ensureLoop()
   }
 
+  function previewTime(animationId: string, scope?: string): number | null {
+    void tick.value
+    const key = scope ? `preview:${animationId}@${scope}` : `preview:${animationId}`
+    const play = plays.value.get(key)
+    return play ? play.time : null
+  }
+
   function stopAll() {
     if (!plays.value.size) return
     plays.value = new Map()
@@ -354,6 +361,7 @@ export function useMotion() {
     staggerValuesFor,
     staggeredTargets,
     preview,
+    previewTime,
     isPlaying,
     anyPlaying,
     endStyleFor: (animation: Animation) => endStyle(compiledFor(animation).compiled),
