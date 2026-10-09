@@ -32,7 +32,6 @@ const { activeCollection, activeEntry } = useCollections()
 const { settings } = useSettings()
 useThemeTokens() 
 
-// pan / zoom live in CanvasViewport, shared with the components board
 const vp = ref<InstanceType<typeof CanvasViewport>>()
 const viewport = computed(() => vp.value?.viewportEl ?? null)
 const { commentMode } = useCommentMode()
@@ -53,7 +52,6 @@ function placeComment(e: MouseEvent) {
 }
 
 function onFrameClick(bp: Breakpoint, e: MouseEvent) {
-  // clicking a frame makes it the breakpoint the Style panel edits
   setActiveBreakpoint(bp.id)
   if (!commentMode.value) return
   e.stopPropagation()

@@ -1,15 +1,5 @@
 <script setup lang="ts">
-/**
- * A collection's settings, in the Pages drawer: its fields and where its
- * entries live on the site.
- *
- * Fields could previously be edited in one place only — the Data panel, with
- * the template page's body selected — which a data-only collection (no
- * template page) could not reach at all.
- *
- * Holds an id, never the object: undo, a draft switch and a merge all replace
- * the whole `project` ref, and a held collection would silently detach.
- */
+
 import { computed, ref, watch } from 'vue'
 import { ChevronLeft, Copy, Plus, Trash2, X } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -35,9 +25,6 @@ const collection = computed(
   () => collections.value.find((c) => c.id === props.collectionId) ?? null,
 )
 
-// the collection can vanish under us (deleted, or the project replaced by
-// undo/a draft switch) — the root is `v-if`, so without this the pane would
-// render blank with no way back
 watch(collection, (c) => {
   if (!c) emit('back')
 })
@@ -50,25 +37,14 @@ const onType = (field: CollectionField, type: string | undefined) => {
   if (type) setFieldType(field, type as CollectionField['type'], collections.value)
 }
 
-/** why the name in the box cannot be used, or null — a name an ENTRY already
- *  uses for itself (`slug`, `status`, …) renders from `values` and then
- *  disagrees with the entry's own value wherever a route is computed. Shown
- *  rather than blocked: the box is being typed in, and a half-typed name is
- *  not an error yet. */
 const nameIssue = (field: CollectionField) => fieldNameError(field.name)
 
-/** the options list, deduped and trimmed. Renaming an option does NOT rewrite
- *  the entries holding the old value — they simply read as unset in the picker
- *  until someone picks again, which is visible, where a silent rewrite would
- *  not be. */
 function setOptions(field: CollectionField, text: string) {
   const next = [...new Set(text.split('\n').map((o) => o.trim()).filter(Boolean))]
   if (next.length) field.options = next
   else delete field.options
 }
 
-// --- URL prefix: committed on blur/Enter. Blank restores the default (the
-// collection's own name); '/' puts entries at the site root. ---
 const routed = computed(() => !!collection.value && hasDetailRoutes(collection.value))
 const prefixField = ref('')
 watch(
@@ -97,7 +73,6 @@ const examplePath = computed(() => {
   return base ? `/${base}/my-entry` : '/my-entry'
 })
 
-// --- actions ---
 function onDuplicate() {
   if (collection.value) duplicateCollection(collection.value)
   emit('back')
@@ -122,7 +97,6 @@ async function onDelete() {
 
 <template>
   <div v-if="collection" class="flex min-h-full flex-col">
-    <!-- h-11 matches the list view's search row, so the swap moves nothing -->
     <div class="flex h-11 shrink-0 items-center gap-1 px-1.5">
       <ButtonUI
         variant="icon"
@@ -166,9 +140,7 @@ async function onDelete() {
           <DrawerField v-if="isRefType(field.type)" label="Points to">
             <SelectUI v-model="field.refCollectionId" :options="collectionOptions" />
           </DrawerField>
-          <!-- a choice's options are the VALUES entries store and that
-               `data-[…]:` variants and list filters match on, so they are
-               edited here once rather than typed per entry -->
+
           <DrawerField
             v-if="field.type === 'select'"
             label="Options"

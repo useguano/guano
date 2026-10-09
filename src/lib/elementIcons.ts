@@ -89,7 +89,6 @@ const ICONS: Record<string, Component> = {
   td: Columns3,
 }
 
-/** the palette/header icon for an element type (components → the component glyph) */
 export function elementIcon(type: string | undefined): Component {
   if (!type) return Square
   if (isComponentType(type)) return ComponentIcon

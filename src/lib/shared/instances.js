@@ -1,15 +1,3 @@
-// Component instances — which master node a page node stands for, and what it
-// inherits from it. Plain-JS ESM shared VERBATIM by the editor
-// (useComponents), the whole-project operations (componentOps), the exporter
-// (server/export.mjs) and the MCP tools.
-//
-// This pairing used to exist four times, one per consumer, each a few lines
-// long and each "a mirror of" another. That held while an instance was one
-// flat block. It does not survive per-instance state that resolves through a
-// chain (hidden parts, variant picks) — four walks would be four chances to
-// resolve the chain differently, and the canvas would stop matching the site.
-
-/** component types are Capitalized in the syntax; built-ins stay lowercase */
 export const isComponentType = (type) => /^[A-Z]/.test(type)
 
 /**
@@ -43,13 +31,8 @@ export function isBareWrapper(node, master, state) {
   if (((state && state.classes) || '').trim()) return false
   if (!master) return true
   if (master.background) return false
-  // a declared trigger, and a declared tween, both need an element to hang on
   if (master.interactions && master.interactions.length) return false
   if (master.animations && master.animations.length) return false
-  // a channel LISTENER needs an element to carry data-tgt and to wear the
-  // effect's classes. Tested as a non-empty string rather than a valid name on
-  // purpose: a misspelled channel should render a box and be reported by
-  // validateTree, never disappear.
   if (typeof master.channel === 'string' && master.channel) return false
   if (state && state.targeted) return false
   return true
@@ -94,9 +77,6 @@ export function buildInstanceMap(roots, components) {
 
   const map = new Map()
 
-  // `mirrors` run parallel to `inst`: the nodes standing for it in the masters
-  // of the components it is nested in, outermost host first — which is also
-  // most specific first, since the outermost host is the one placed on the page
   const walk = (inst, master, mirrors, scope) => {
     if (inst.type !== master.type) return
     map.set(inst.id, {
@@ -107,9 +87,6 @@ export function buildInstanceMap(roots, components) {
       mirrors,
       picks: scope.picks,
     })
-    // a SLOT: the node is the component's, what is inside it is the holder's
-    // own — unmapped, so every renderer and every tool treats it as plain
-    // structure, and an instance placed in there is an instance in its own right
     if (master.slot) {
       visit(inst.children)
       return
@@ -123,8 +100,6 @@ export function buildInstanceMap(roots, components) {
         .filter((mirror) => mirror && mirror.type === child.type)
       const inner = isComponentType(below.type) ? byName.get(below.type) : undefined
       if (inner && inner !== scope.def && child.type === below.type) {
-        // `below` is this master's own mirror of the nested instance: the last
-        // and least specific of the places its state can come from
         instance(child, inner, [...childMirrors, below])
       } else {
         walk(child, below, childMirrors, scope)
@@ -132,8 +107,6 @@ export function buildInstanceMap(roots, components) {
     }
   }
 
-  // the instance block itself maps to the master root, and takes its picks
-  // from its own wrapper first, then from its hosts' mirrors of that wrapper
   const instance = (wrapper, def, mirrors) => {
     walk(wrapper, def.root, mirrors, {
       def,
@@ -145,8 +118,6 @@ export function buildInstanceMap(roots, components) {
   const visit = (nodes) => {
     for (const node of nodes ?? []) {
       const def = isComponentType(node.type) ? byName.get(node.type) : undefined
-      // an instance's subtree is paired, not walked: whatever sits inside it —
-      // nested instances included — belongs to it
       if (def) instance(node, def, [])
       else visit(node.children)
     }
@@ -155,19 +126,12 @@ export function buildInstanceMap(roots, components) {
   return map
 }
 
-/** is this mapped node the `:Name` wrapper of its instance, rather than
- * something inside it? */
 export const isInstanceWrapper = (mapping) => !!mapping && mapping.master === mapping.root
 
-/**
- * The components a component's master holds, directly — by name, each once.
- */
 export function nestedComponentNames(def) {
   const names = new Set()
   const visit = (nodes) => {
     for (const node of nodes ?? []) {
-      // a nested instance's own subtree is a mirror of ANOTHER master: what it
-      // holds is that component's business, not this one's
       if (isComponentType(node.type)) names.add(node.type)
       else visit(node.children)
     }
@@ -176,7 +140,6 @@ export function nestedComponentNames(def) {
   return [...names]
 }
 
-/** can `from` reach `to` by following what each component holds? */
 export function componentReaches(components, from, to) {
   const byName = new Map()
   for (const def of components ?? []) if (!byName.has(def.name)) byName.set(def.name, def)
@@ -191,27 +154,17 @@ export function componentReaches(components, from, to) {
   return visit(from)
 }
 
-/**
- * May an instance of `inner` be placed inside `host`'s master? Not when that
- * would make a component hold itself, at any distance: `Card` in `Card`, or
- * `Card` in a `Button` that a `Card` already holds.
- */
 export function canNest(components, host, inner) {
   return host !== inner && !componentReaches(components, inner, host)
 }
 
-/**
- * The components ordered so that each comes AFTER everything it holds. Work
- * that flows outward from a change — an inner component's new structure, then
- * the hosts that mirror it — has to run in this order.
- */
 export function dependencyOrder(components) {
   const byName = new Map()
   for (const def of components ?? []) if (!byName.has(def.name)) byName.set(def.name, def)
   const out = []
-  const state = new Map() // name → 'open' | 'done'
+  const state = new Map()
   const visit = (def) => {
-    if (state.has(def.name)) return // done, or a cycle: either way, not again
+    if (state.has(def.name)) return
     state.set(def.name, 'open')
     for (const name of nestedComponentNames(def)) {
       const inner = byName.get(name)
@@ -221,18 +174,10 @@ export function dependencyOrder(components) {
     out.push(def)
   }
   for (const def of components ?? []) visit(def)
-  // components sharing a name with an earlier one were never visited; keep
-  // them, last, so nothing the caller passed goes missing
   for (const def of components ?? []) if (!out.includes(def)) out.push(def)
   return out
 }
 
-/**
- * The option an instance picks on each of its component's axes: its wrapper's
- * own pick, else one from the components it is nested in, else the axis
- * default. A pick naming an option that no longer exists falls through —
- * a stale name must never leave an instance wearing nothing.
- */
 export function resolvePicks(def, wrapper, mirrors) {
   const picks = {}
   for (const axis of def.variants ?? []) {
@@ -249,13 +194,6 @@ export function resolvePicks(def, wrapper, mirrors) {
   return picks
 }
 
-/**
- * The first DEFINED value of `key` along a node's chain: its own, then each
- * mirror's, then its master's. `undefined` when nothing in the chain sets it.
- *
- * "Defined", not "truthy": `hidden: false` on an instance is how it shows a
- * part its component hides by default.
- */
 export function resolveInstanceValue(node, mapping, key) {
   if (node[key] !== undefined) return node[key]
   if (!mapping) return undefined
@@ -265,7 +203,6 @@ export function resolveInstanceValue(node, mapping, key) {
   return mapping.master[key]
 }
 
-/** what a node would inherit for `key` if it set nothing itself */
 export function inheritedInstanceValue(mapping, key) {
   if (!mapping) return undefined
   for (const mirror of mapping.mirrors) {
@@ -274,18 +211,10 @@ export function inheritedInstanceValue(mapping, key) {
   return mapping.master[key]
 }
 
-/** a hidden node is not rendered and not exported — for this instance only,
- * when the flag is its own */
 export function isNodeHidden(node, mapping) {
   return resolveInstanceValue(node, mapping, 'hidden') === true
 }
 
-/**
- * Show or hide a node, writing only what differs from what it inherits — so
- * hiding a part and showing it again leaves the node byte-identical, which
- * keeps merge signatures (whole-object JSON) from reporting a change that
- * was undone.
- */
 export function setNodeHidden(node, mapping, hidden) {
   const inherited = inheritedInstanceValue(mapping, 'hidden') === true
   if (hidden === inherited) delete node.hidden

@@ -6,14 +6,10 @@ import { suggestClasses, applyClass, isStateClass } from '@/lib/styles'
 const props = withDefaults(
   defineProps<{
     tokens: string[]
-    /** auto-add flex/grid prerequisites (off for transition to-states) */
     prerequisites?: boolean
-    /** tokens inherited from a larger breakpoint — shown dimmed. Removable only
-     * when listed in `removableInherited`; otherwise add a conflicting class to
-     * override (which then shows solid) */
+
     inherited?: string[]
-    /** inherited tokens that can be removed here — removing scopes the class so
-     * it drops on this breakpoint and smaller ones, larger ones keeping it */
+
     removableInherited?: string[]
   }>(),
   { prerequisites: true, inherited: () => [], removableInherited: () => [] },
@@ -23,7 +19,6 @@ function isInherited(token: string): boolean {
   return props.inherited.includes(token)
 }
 
-// removable = a normal (own) token, or a base-inherited token we can scope away
 function isRemovable(token: string): boolean {
   return !isInherited(token) || props.removableInherited.includes(token)
 }
@@ -37,13 +32,10 @@ const query = ref('')
 const active = ref(0)
 const error = ref<string | null>(null)
 
-// a fresh keystroke clears any standing error
 watch(query, () => (error.value = null))
 
 const inputEl = ref<HTMLInputElement>()
 defineExpose({ focus: () => inputEl.value?.focus() })
-
-// --- inline badge editing (double-click a class to edit its value) ---
 
 const editingToken = ref<string | null>(null)
 const editValue = ref('')
@@ -65,7 +57,6 @@ function commitEdit() {
   const token = editingToken.value
   if (!token) return
   const trimmed = editValue.value.trim()
-  // emptied → remove the class entirely
   if (!trimmed) {
     editingToken.value = null
     emit('remove', token)
@@ -75,13 +66,12 @@ function commitEdit() {
     editingToken.value = null
     return
   }
-  // validate the new value against the other tokens (old one dropped)
   const result = applyClass(trimmed, props.tokens.filter((t) => t !== token), {
     prerequisites: props.prerequisites,
   })
   if ('error' in result) {
     if (result.error) error.value = result.error
-    return // keep the editor open so the user can fix it
+    return
   }
   emit('commit', result.tokens)
   editingToken.value = null
@@ -110,7 +100,6 @@ const open = computed(() => query.value.trim().length > 0 && suggestions.value.l
 function commit(cls: string) {
   const value = cls.trim()
   if (!value) return
-  // picking a bare variant prefix ("hover:") continues the query
   if (value.endsWith(':')) {
     query.value = value
     active.value = 0
@@ -138,15 +127,12 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     commit(open.value ? (suggestions.value[active.value] ?? query.value) : query.value)
   } else if (e.key === 'Escape') {
-    // with a query, Escape only clears it; empty, it bubbles up and
-    // closes the panel (returning focus to the Layers tree)
     if (query.value) {
       e.stopPropagation()
       query.value = ''
       active.value = 0
     }
   } else if (e.key === 'Backspace' && !query.value && props.tokens.length) {
-    // remove the last removable token
     const last = [...props.tokens].reverse().find((t) => isRemovable(t))
     if (last) emit('remove', last)
   } else {

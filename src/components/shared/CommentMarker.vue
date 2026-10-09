@@ -8,15 +8,9 @@ import type { Comment } from '@/types/editor'
 
 const props = defineProps<{
   comment: Comment
-  /** canvas zoom, countered so pins keep a constant screen size */
   zoom: number
 }>()
 
-// The pin's tail is its bottom-left corner (`rounded-bl-none`), so that corner
-// is what has to sit on the anchored point — positioned by its top-left, the
-// pin hung a full pin-height below wherever you clicked. `translateY(-100%)`
-// runs AFTER the scale in local space, so the shift is the pin's VISUAL height
-// at any zoom.
 const pinTransform = computed(() => `scale(${1 / props.zoom}) translateY(-100%)`)
 
 const { activeCommentId, openComment, removeComment } = useComments()
@@ -31,8 +25,6 @@ function toggle() {
   else openComment(props.comment.id)
 }
 
-// the thread renders in the app PopoverHost, rAF-anchored to the pin — it
-// follows canvas pan/zoom for free (getBoundingClientRect ignores transforms)
 function openThread() {
   if (!pinEl.value) return
   openPopover({
@@ -43,9 +35,7 @@ function openThread() {
     placement: 'right-start',
     title: 'Comment',
     onClose: () => {
-      // discard pins that never got any text
       if (!props.comment.text && !props.comment.replies.length) removeComment(props.comment.id)
-      // only clear the selection if another comment hasn't already taken it
       if (activeCommentId.value === props.comment.id) openComment(null)
     },
   })
@@ -55,7 +45,6 @@ watch(open, (isOpen) => {
   if (isOpen) openThread()
   else if (currentId.value === popoverId.value) closePopover()
 })
-// the comment may already be active when the marker mounts (jump-to-comment)
 onMounted(() => {
   if (open.value) openThread()
 })

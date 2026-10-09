@@ -1,23 +1,4 @@
 <script setup lang="ts">
-// The effects drawer: the project's whole effect library, and what each effect
-// DOES, under the canvas.
-//
-// An effect is shared by every element using it, so editing it is not a
-// per-element act — but it used to take over the element panel, which meant
-// losing sight of the element you were working on and of the other effects on
-// it. Down here the panel stays up, the canvas stays visible, and a timeline
-// gets the width a timeline needs.
-//
-// It is also where an ELEMENT's actions are managed. The Interactions panel
-// only lists the selected element's triggers; each one opens the drawer's
-// trigger view (TriggerEditor) — the one action it runs, options and effect
-// side by side — so the left column is the drawer's index (the element's
-// triggers on top, the project's effects below) and the main pane is whichever
-// of the two is being edited.
-//
-// It is NOT docked by default: the canvas pays per rendered element per frame,
-// and a drawer that opens itself would shrink the canvas unasked. ⌘⇧E, an
-// effect name in the panel, a trigger in the panel, or "All effects" opens it.
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { X, Zap } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -28,6 +9,7 @@ import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
 import { useElementEffects } from '@/composables/useElementEffects'
 import { useInteraction } from '@/composables/useInteraction'
 import { useModal } from '@/composables/useModal'
+import { usePopover } from '@/composables/usePopover'
 import { isEditable } from '@/composables/useShortcut'
 import { triggerOrder, triggerSentence, uiTrigger } from '@/lib/effectTriggers'
 
@@ -35,11 +17,6 @@ const { open, selected, trigger, view, openTrigger, closeDrawer } = useEffectsDr
 const interactions = useInteraction()
 const { canEdit, elementLabel, sections } = useElementEffects()
 
-/**
- * The element's triggers for the left column: the ones with an action, plus the
- * one being filled when it has none yet, so it has a row the moment it is
- * opened from the panel.
- */
 const triggerRows = computed(() => {
   if (!canEdit.value) return []
   const list = sections.value.map((s) => ({ trigger: s.trigger, count: s.rows.length }))
@@ -49,15 +26,11 @@ const triggerRows = computed(() => {
   return list.sort((a, b) => triggerOrder(a.trigger) - triggerOrder(b.trigger))
 })
 
-// Escape closes the DRAWER and nothing else — one layer per press, like the
-// modal stack. Capture phase + stopPropagation beats SettingsEditor's
-// bubble-phase handler to it, which would otherwise close the whole panel.
-// It yields to a target pick (which cancels first), to an open modal, and to a
-// focused field, whose own Escape reverts the text being typed.
 function onKeydownCapture(e: KeyboardEvent) {
   if (e.key !== 'Escape' || !open.value) return
   if (interactions.pickingFor.value) return
   if (useModal().stack.value.length) return
+  if (usePopover().current.value) return
   if (isEditable(document.activeElement)) return
   e.stopPropagation()
   closeDrawer()
@@ -73,7 +46,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydownCapture, tr
     class="flex h-72 min-h-0 shrink-0 border-t border-input bg-background"
   >
     <aside class="flex w-52 shrink-0 flex-col border-r border-input">
-      <!-- the selected element's triggers — what the panel hands here -->
       <div v-if="triggerRows.length" class="flex shrink-0 flex-col border-b border-input">
         <p
           class="flex h-9 shrink-0 items-center gap-1 px-3 section-label"
@@ -87,6 +59,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydownCapture, tr
             :key="row.trigger"
             type="button"
             data-drawer-trigger
+            :aria-current="view === 'trigger' && trigger === row.trigger ? 'true' : undefined"
             class="flex h-7 items-center gap-1.5 rounded-lg px-2 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
             :class="
               view === 'trigger' && trigger === row.trigger ? 'bg-accent/30' : 'hover:bg-accent/15'

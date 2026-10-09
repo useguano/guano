@@ -7,13 +7,12 @@ import ModalActions from '@/components/modal/ModalActions.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import InputUI from '@/components/ui/InputUI.vue'
 import { useComponents } from '@/composables/useComponents'
+import type { ComponentDef } from '@/types/editor'
 
-// opened via useModal from the canvas context menu; targetId is the element
-// being turned into a component
-const props = defineProps<{ targetId: string }>()
-const emit = defineEmits<{ close: [] }>()
+const props = defineProps<{ targetId?: string; category?: string }>()
+const emit = defineEmits<{ close: [def?: ComponentDef] }>()
 
-const { createComponent } = useComponents()
+const { createComponent, createBlankComponent } = useComponents()
 
 const name = ref('')
 const nameInput = ref<InstanceType<typeof InputUI>>()
@@ -22,8 +21,12 @@ onMounted(() => nextTick(() => nameInput.value?.focus()))
 
 function submit() {
   if (!name.value.trim()) return
-  createComponent(name.value, props.targetId)
-  emit('close')
+  if (props.targetId) {
+    createComponent(name.value, props.targetId)
+    emit('close')
+    return
+  }
+  emit('close', createBlankComponent(name.value, props.category))
 }
 </script>
 
@@ -31,9 +34,14 @@ function submit() {
   <ModalHost size="sm" @close="emit('close')">
     <ModalHeader title="Create component" @close="emit('close')" />
     <ModalContent>
-      <p class="text-xs text-muted-foreground">
+      <p v-if="targetId" class="text-xs text-muted-foreground">
         The element becomes a shared component you can reuse anywhere as
         <span class="font-mono">:Name:</span>.
+      </p>
+      <p v-else class="text-xs text-muted-foreground">
+        It starts empty<template v-if="category"> in
+          <span class="font-medium">{{ category }}</span></template>. Insert elements into it with
+        ⌘E, and reuse it anywhere as <span class="font-mono">:Name:</span>.
       </p>
       <InputUI ref="nameInput" v-model="name" placeholder="e.g. Hero" @keydown.enter="submit" />
     </ModalContent>

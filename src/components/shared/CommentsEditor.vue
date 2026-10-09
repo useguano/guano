@@ -13,9 +13,6 @@ import type { Comment } from '@/types/editor'
 const { visibility, displayOnCanvas, filteredComments, goToComment, markCommentsSeen } =
   useComments()
 
-// Opening this panel is what "I have read them" means, so the stamp lives
-// here rather than on the rail button: every way of opening it counts, and
-// the one that doesn't show the comments (closing it again) doesn't.
 onMounted(() => void markCommentsSeen())
 const { pages } = usePage()
 const { breakpoints } = useProject()
@@ -26,7 +23,6 @@ const FILTERS: { label: string; value: CommentVisibility }[] = [
   { label: 'Resolved', value: 'resolved' },
 ]
 
-/** activating a filter deactivates the others; re-clicking clears to none */
 function toggleFilter(value: CommentVisibility) {
   visibility.value = visibility.value === value ? 'none' : value
 }
@@ -37,9 +33,6 @@ function pageOf(comment: Comment) {
 
 function locationOf(comment: Comment): string {
   const page = pageOf(comment)
-  // an anchored comment carries its frame on the anchor; `comment.breakpointId`
-  // is the legacy free-canvas position's. A comment with neither was placed on
-  // the Play surface, which has one render and so no breakpoint to name.
   const bpId = comment.anchor?.breakpointId ?? comment.breakpointId
   const breakpoint = breakpoints.value.find((b) => b.id === bpId)
   return `${page?.name ?? 'Unknown page'} · ${breakpoint?.name ?? 'All screens'}`

@@ -2,9 +2,6 @@
 import { computed } from 'vue'
 import { Ban } from 'lucide-vue-next'
 
-// Border-style as a segmented button group with real line previews
-// (solid / dashed / dotted / double / none), writing the border-<style> class.
-
 const props = defineProps<{ modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [string[]] }>()
 

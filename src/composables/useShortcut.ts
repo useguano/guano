@@ -1,6 +1,5 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-/** true while the event target is a text-editing surface (shortcuts must not fire there) */
 export function isEditable(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
@@ -8,10 +7,6 @@ export function isEditable(target: EventTarget | null) {
   )
 }
 
-/**
- * Tracks a key by KeyboardEvent.code (e.g. 'Space', 'KeyZ').
- * Ignored while typing in inputs/textareas.
- */
 export function useShortcut(
   code: string,
   handlers?: { onDown?: (e: KeyboardEvent) => void; onUp?: (e: KeyboardEvent) => void },
@@ -44,14 +39,10 @@ export function useShortcut(
 }
 
 export interface KeyBinding {
-  /** KeyboardEvent.key, lowercased; may list alternates (e.g. ['=', '+']) */
   key: string | string[]
-  /** requires the platform command key (⌘ on mac, Ctrl elsewhere) */
   mod?: boolean
-  /** when set, Shift must match exactly; when omitted, Shift is ignored */
   shift?: boolean
   handler: (e: KeyboardEvent) => void
-  /** still fire while typing in an input/textarea (default: false) */
   allowInInput?: boolean
 }
 
@@ -62,12 +53,6 @@ function matches(e: KeyboardEvent, b: KeyBinding): boolean {
   return keys.includes(e.key.toLowerCase())
 }
 
-/**
- * Declarative modifier-aware shortcuts. The first matching binding
- * wins; it preventDefaults and fires. Bindings are skipped while
- * typing in an input unless `allowInInput` is set, so native
- * copy/paste/undo keep working inside text fields.
- */
 export function useKeymap(bindings: KeyBinding[]) {
   function onKeydown(e: KeyboardEvent) {
     if (e.repeat) return

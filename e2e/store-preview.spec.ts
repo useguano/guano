@@ -178,8 +178,32 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   expect(direct.headers()['set-cookie']).toContain('guano_preview=')
   expect(direct.headers()['cache-control']).toContain('no-store')
   // a token on a deeper route serves THAT route, not the home page
-  const deep = await cookieless.get(`/draft/?t=${url.split('?t=')[1]}`, { maxRedirects: 0 })
+  const token = url.split('?t=')[1]
+  const deep = await cookieless.get(`/draft/?t=${token}`, { maxRedirects: 0 })
   expect(deep.status()).toBe(200)
+
+  // a '/' or a '#anchor' AFTER the token value is trimmed before the mac is
+  // compared. The link gets pasted, hand-edited and appended to — the MCP tool
+  // itself shipped one with the route glued onto the end of the token — and a
+  // 401 reading "missing or expired" is the least useful answer to a character
+  // of punctuation. The signature still has to verify, so the last probe is a
+  // token with a real character added.
+  //
+  // Each probe gets its OWN context: a request that succeeds leaves the
+  // `guano_preview` cookie in the one it was made from, and every later probe
+  // from there is unlocked by the cookie whatever its token says — which would
+  // make all three of these pass without reading the token at all.
+  const probe = async (path: string) => {
+    const ctx = await pwRequest.newContext({ baseURL: origin })
+    try {
+      return (await ctx.get(path, { maxRedirects: 0 })).status()
+    } finally {
+      await ctx.dispose()
+    }
+  }
+  expect(await probe(`/?t=${token}/`)).toBe(200)
+  expect(await probe(`/?t=${token}%23editor`)).toBe(200)
+  expect(await probe(`/?t=${token}x`)).toBe(401)
   await cookieless.dispose()
   expect((await visitor.get('/assets/style.css')).ok()).toBeTruthy()
   expect((await visitor.get('/draft/')).ok()).toBeTruthy()

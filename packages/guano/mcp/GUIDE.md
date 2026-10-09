@@ -1891,7 +1891,9 @@ the previous step, `stagger` across the target's children, `repeat`, and `yoyo`.
 **Properties**: `x`, `y`, `scale`, `rotate`, `opacity`, `blur`, `brightness`, `saturate`,
 `bgColor`, `textColor`, `borderColor` (hex like `#0b0b0b`), `width`, `height`, and the
 clip edges `clipTop` / `clipRight` / `clipBottom` / `clipLeft`. Omit a track's `from` to
-start from the element's CURRENT computed value — the right default for hover effects.
+start from the element's CURRENT computed value — the right default for a hover that
+nudges whatever is already there. Set `from` and it becomes the element's RESTING value
+(see below), which is how you say "invisible until hovered".
 
 **Units**: a bare number uses the property's own unit (px for moves/sizes, deg for
 rotate, % for clip). A STRING carries its own — `"110%"`, `"-50%"`, `"1em"`, `"50vw"`,
@@ -1899,17 +1901,26 @@ rotate, % for clip). A STRING carries its own — `"110%"`, `"-50%"`, `"1em"`, `
 viewport instead of only at the width you measured. Both sides of one tween must use the
 same unit. `scale`, `opacity`, `brightness` and `saturate` are unitless.
 
-**What an element wears before anything plays** — the exporter bakes a `load`/`appear`
-timeline's first frame into the element's inline `style`, so an entrance never flashes
-its end state before the runtime boots. With SEVERAL timelines on one element the rule
-is: per property, the explicit `from` of the timeline that STARTS EARLIEST wins (its
+**What an element wears before anything plays** — the exporter bakes a timeline's first
+frame into the element's inline `style`, so an entrance never flashes its end state
+before the runtime boots. EVERY trigger, not just the entrances: a `from` is the value
+the element holds until that timeline runs, so a `hover` tweening opacity `0 → 1` ships
+at 0 and comes up under the pointer (and goes back to 0 on leave). With SEVERAL
+timelines on one element the rule is: per property, the explicit `from` of the timeline that STARTS EARLIEST wins (its
 binding `delay` plus the track's offset; a tie goes to the later-listed binding). So an
 "open" (opacity `0 → 1` at once) plus a "close" (`1 → 0`, with `delay: 5000`) primes
 the element invisible, because the open happens first. Two consequences worth knowing:
 a track that OMITS `from` primes nothing (it starts from whatever the element renders),
-and the baked inline style beats a static class — `opacity-0` on an element whose
-earliest `from` is `1` still paints visible. Put the pre-play state in the timeline's
-`from`, not in a class.
+and for a `load`/`appear` entrance the baked style beats a static class — `opacity-0`
+on an element whose earliest `from` is `1` still paints visible, because the frame has
+to defeat the stylesheet before the runtime boots. Put an entrance's pre-play state in
+the timeline's `from`, not in a class.
+
+On a trigger that fires LATER the stylesheet IS the resting state until it runs, so
+there a `from` equal to the property's own default (`rotate: 0`, `scale: 1`,
+`opacity: 1`) primes nothing: it states nothing the element is not already rendering,
+and an inline value would shadow a class like `active:scale-95`. It still decides the
+property, so a `0 → -10 → 8 → 0` hover wiggle rests unrotated rather than at `-10`.
 
 **Clip wipes**: `clipBottom: 100 → 0` reveals an element downward (the classic
 `clip-path: inset(0 0 100% 0)` move) in one track — no wrapper elements, no mask
@@ -2342,8 +2353,14 @@ DRAFT pages — which a publish drops and which are exactly what you need while 
 The url carries an **access token good for an hour**: the preview port renders unpublished
 work, so it is not readable without it. The token hit serves the page directly (and sets a
 cookie for the page's own assets), so you can fetch the url yourself to read the HTML, and
-a person can open it in a browser. Hand over the whole url, including its query string — a
-trimmed one gets a 401 naming the cause. Expired, just call `preview` again.
+a person can open it in a browser.
+
+**Use a url exactly as returned.** The token is the last thing in it, so anything you add
+to the end — a route, a trailing `/`, an `#anchor` — lands inside the token value and the
+check fails with a 401 that reads as "expired". To look at another route, take
+`localeUrls` or build it the way the response does: the path first, then the `?t=` query
+(`http://host:4175/docs?t=<token>` — never `…?t=<token>/docs`). A trimmed url gets the
+same 401. Expired, just call `preview` again.
 
 **Use it after every page.** Publishing is the only other way to render anything, and it
 puts bytes on the live origin: a half-built draft goes live every time you want to check a

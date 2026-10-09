@@ -14,20 +14,8 @@ import {
   sanitizeInlineSvg,
 } from '@/lib/shared/svg.js'
 
-/**
- * The control for an `:icon:` element's markup. Two sources, one model:
- * a bundled Lucide icon picked from the grid, or an SVG file from the media
- * library inlined. Either way the model is sanitized `<svg>` markup — the only
- * thing the renderers ever see — so nothing downstream has to know which.
- *
- * The icon table is the whole Lucide set, so it is imported on demand: it must
- * never ride along in the editor's main bundle for a panel most selections
- * never open.
- */
 const model = defineModel<string>({ default: '' })
 
-/** how many matches the grid draws — every cell is an inline svg, and the
- *  search narrows faster than anyone scrolls */
 const LIMIT = 84
 
 const table = shallowRef<Record<string, string> | null>(null)
@@ -46,8 +34,6 @@ const matches = computed(() => {
   const words = query.value.trim().toLowerCase().split(/[\s-]+/).filter(Boolean)
   if (!words.length) return names.value.slice(0, LIMIT)
   const out: string[] = []
-  // names that START with the query read as the better match: `arrow` should
-  // offer `arrow-right` before `circle-arrow-right`
   const head = words[0]!
   for (const pass of [true, false]) {
     for (const name of names.value) {
@@ -76,8 +62,6 @@ function pick(name: string) {
 const { mediaUrl } = useMedia()
 const { openSelect } = useMediaLibrary()
 
-/** inline an SVG file from the library. It is fetched as text and rebuilt by
- *  the sanitizer, so what lands on the node is never the file's own bytes. */
 async function fromLibrary() {
   const asset = await openSelect(['image'])
   if (!asset) return

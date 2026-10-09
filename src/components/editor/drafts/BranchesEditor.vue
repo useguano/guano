@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// The Drafts panel: create/switch/discard drafts and launch the apply flow.
-// A draft is a private copy of the project (a branch internally); applying
-// it merges into Main via ApplyDraftModal.
 import { defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import { GitBranch, Plus, TriangleAlert } from 'lucide-vue-next'
 import GroupPopover from '@/components/popover/GroupPopover.vue'
@@ -13,7 +10,6 @@ import { changeSummaryLabel, hasChanges } from '@/lib/merge'
 import { timeAgoShort } from '@/lib/time'
 import type { BranchMeta, DraftStatus } from '@/composables/useBranches'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const ApplyDraftModal = defineAsyncComponent(() => import('@/components/editor/drafts/ApplyDraftModal.vue'))
 
 const {
@@ -30,8 +26,6 @@ const {
 
 const drafts = () => branches.value.filter((b) => b.id !== MAIN_ID)
 
-// --- create form ---
-
 const creating = ref(false)
 const newName = ref('')
 
@@ -41,8 +35,6 @@ function create() {
   newName.value = ''
   creating.value = false
 }
-
-// --- per-draft status (change summary + conflict count), loaded lazily ---
 
 const statuses = reactive(new Map<string, DraftStatus>())
 
@@ -54,7 +46,6 @@ async function loadStatuses(fresh = false) {
 }
 
 onMounted(() => loadStatuses(true))
-// switching drafts changes what "changed vs base" means for the one we left
 watch(activeBranchId, () => loadStatuses(true))
 
 function statusLine(id: string): string {
@@ -63,8 +54,6 @@ function statusLine(id: string): string {
   if (!hasChanges(status.summary)) return 'No changes yet'
   return `${changeSummaryLabel(status.summary)} changed`
 }
-
-// --- apply / discard flows ---
 
 const { openModal, confirm } = useModal()
 
@@ -94,7 +83,6 @@ async function discardDraft(draft: BranchMeta) {
 </script>
 
 <template>
-  <!-- where you are -->
   <GroupPopover>
     <div class="flex items-center gap-2">
       <GitBranch class="size-3.5 shrink-0" :class="onMain ? 'text-muted-foreground' : 'text-pending'" />
@@ -112,7 +100,6 @@ async function discardDraft(draft: BranchMeta) {
     </div>
   </GroupPopover>
 
-  <!-- drafts -->
   <GroupPopover v-if="drafts().length" label="Drafts">
     <div
       v-for="draft in drafts()"
@@ -165,7 +152,6 @@ async function discardDraft(draft: BranchMeta) {
     </div>
   </GroupPopover>
 
-  <!-- empty state -->
   <GroupPopover v-else>
     <div
       class="flex aspect-square flex-col items-center justify-center gap-3 mt-1 rounded-xl border border-input p-4 text-center"
@@ -178,7 +164,6 @@ async function discardDraft(draft: BranchMeta) {
     </div>
   </GroupPopover>
 
-  <!-- create: one inline row — name + confirm -->
   <GroupPopover>
     <ButtonUI
       v-if="!creating"

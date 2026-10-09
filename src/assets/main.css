@@ -2,14 +2,8 @@
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/geist-mono';
 
-/* The committed MCP runtime bundle is server-side JavaScript, not markup, and
-   nothing in it ever reaches this stylesheet — but automatic source detection
-   scans it all the same, and a class-shaped token anywhere in it (a bracketed
-   example inside a doc comment, say) becomes a real rule here. One of those
-   was an unresolvable `url()`, which is a build warning on every build. */
 @source not '../../packages';
 
-/* Dark is the default theme */
 :root {
   --background: oklch(14.479% 0.00002 271.152);
   --foreground: oklch(0.985 0 0);
@@ -26,10 +20,7 @@
   --pending: oklch(82.444% 0.12144 90.081);
   --danger: oklch(64.087% 0.17546 20.635);
 
-
-  /* state/variant class badges (hover:, focus:…) — keyword hue, new names */
   --state-class: #c099ff;
-  /* Layers tree row tints: component instances and CMS-bound elements */
   --layer-component: #c099ff;
   --layer-cms: oklch(78% 0.13 180);
 }
@@ -50,16 +41,11 @@
   --pending: oklch(0.681 0.162 75.83);
   --danger: oklch(60.49% 0.08577 16.016);
 
-
   --state-class: #8d5bd6;
   --layer-component: #8d5bd6;
   --layer-cms: oklch(55% 0.12 180);
 }
 
-/* NOTE: the --color-* names below are re-asserted at runtime by
-   useThemeTokens (CHROME_COLOR_VARS) so a project design token sharing a name
-   (e.g. `accent`) can't recolor the app chrome — keep that list in sync when
-   adding/removing entries here. */
 @theme inline {
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
@@ -79,12 +65,10 @@
   --color-pending: var(--pending);
   --color-danger: var(--danger);
 
-
   --color-state-class: var(--state-class);
   --color-layer-component: var(--layer-component);
   --color-layer-cms: var(--layer-cms);
 
-  /* the loading screen (LoadingUI `page`): the logo lands, then floats */
   --animate-land: land 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-float: float 3.2s ease-in-out 0.7s infinite;
   --animate-glow: glow 3.2s ease-in-out 0.7s infinite;
@@ -136,20 +120,11 @@ body {
   @apply bg-background text-foreground font-sans antialiased select-none;
 }
 
-/* text-selection guard: nothing in the app chrome is selectable; form
-   fields re-enable it, and canvas text elements opt back in with
-   `select-text` */
 input,
 textarea {
   user-select: text;
 }
 
-/* browser autofill: WebKit paints its own background/text colors with UA
-   !important rules that plain `background` can't override. The endless
-   background-color transition parks the repaint forever so the input keeps
-   whatever background its classes gave it (works for both the filled and
-   the transparent+border variants, in both themes); text-fill/caret win
-   over the UA's forced text color. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
@@ -157,40 +132,26 @@ input:-webkit-autofill:focus {
   caret-color: var(--foreground);
   transition: background-color 9999999s step-end;
 }
-/* kept separate: an unknown pseudo-class invalidates the whole selector
-   list, so :autofill (Firefox) can't share the -webkit rule above */
+
 input:autofill {
   -webkit-text-fill-color: var(--foreground);
   caret-color: var(--foreground);
   transition: background-color 9999999s step-end;
 }
 
-/* The chrome's section heading — "ELEMENT", "FIELDS", "EFFECTS". Seventeen
-   copies of the same five utilities across twelve files, which is how one of
-   them ends up a shade off. `@apply` rather than hand-written declarations so
-   the output is byte-identical to the class list it replaces, and so a `px-3`
-   or a `flex` beside it still wins by layer order — several call sites rely on
-   that. */
 @utility section-label {
   @apply text-[9px] font-medium tracking-wide text-muted-foreground uppercase;
 }
 
-/* A menu row inside MenuUI's panel: a `<button>` the caller owns (its own
-   handler, its own icon), wearing the one look every menu row has. It was a
-   `MENU_ITEM` const copied into two files. */
 @utility menu-item {
   @apply flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs outline-none;
   @apply hover:bg-accent/30 focus-visible:bg-accent/30;
 }
 
-/* thin muted scrollbar shared across scrollable app chrome (popovers,
-   panels) */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
-  /* gutter only when actually scrollable — 'stable' would reserve a right-edge
-     gutter permanently, which reads as extra padding in short containers
-     (popovers/panels) and is pure waste under macOS overlay scrollbars */
+
   scrollbar-gutter: auto;
 }
 .custom-scrollbar::-webkit-scrollbar {

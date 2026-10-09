@@ -1,35 +1,16 @@
 //#region src/lib/nodeState.ts
-/**
-* List sources that are not collections: `@pages` iterates the site's own
-* published pages. The `@` prefix is reserved, so it can never collide with a
-* collection someone named "pages".
-*
-* This file is what is left of `syntax.ts` after the indentation DSL was
-* deleted. It also held `NODE_STATE_KEYS` / `hasNodeState` / `stripNodeState`,
-* an enumeration of "the state the code cannot express, which `reconcile` had
-* to carry across a reparse". Nothing reads it any more, and the comment that
-* claimed it was still "the state a write preserves on every element it
-* adopts" was false: `applyHtml` preserves that state by REUSING the node
-* object, so there is no list to keep in step — which is exactly why the old
-* one kept drifting. A write's `fresh` path empties the body and lets every
-* node be created clean, which needs no enumeration either.
-*/
 var BUILTIN_LIST_SOURCES = ["@pages"];
 //#endregion
 //#region src/lib/tree.ts
-/** structural deep clone via JSON round-trip — for plain serializable data
-* (pages, nodes, entries, the project itself) */
 function deepClone(value) {
 	return JSON.parse(JSON.stringify(value));
 }
-/** depth-first visit of every node in the element tree */
 function walkNodes(nodes, visit) {
 	for (const node of nodes) {
 		visit(node);
 		walkNodes(node.children, visit);
 	}
 }
-/** finds a node anywhere in the tree by id */
 function findNode(nodes, id) {
 	for (const node of nodes) {
 		if (node.id === id) return node;
@@ -38,7 +19,6 @@ function findNode(nodes, id) {
 	}
 	return null;
 }
-/** finds the parent of a node by id (null for roots / not found) */
 function findParent(nodes, id) {
 	for (const node of nodes) {
 		if (node.children.some((child) => child.id === id)) return node;
@@ -47,7 +27,6 @@ function findParent(nodes, id) {
 	}
 	return null;
 }
-/** true when the node with `id` has an ancestor of the given type */
 function hasAncestorOfType(nodes, id, type) {
 	for (const node of nodes) {
 		if (node.type === type && findNode(node.children, id)) return true;
@@ -57,7 +36,6 @@ function hasAncestorOfType(nodes, id, type) {
 }
 //#endregion
 //#region src/lib/shared/instances.js
-/** component types are Capitalized in the syntax; built-ins stay lowercase */
 var isComponentType$1 = (type) => /^[A-Z]/.test(type);
 /**
 * @typedef {object} Mapping
@@ -136,12 +114,7 @@ function buildInstanceMap(roots, components) {
 	visit(roots);
 	return map;
 }
-/** is this mapped node the `:Name` wrapper of its instance, rather than
-* something inside it? */
 var isInstanceWrapper = (mapping) => !!mapping && mapping.master === mapping.root;
-/**
-* The components a component's master holds, directly — by name, each once.
-*/
 function nestedComponentNames(def) {
 	const names = /* @__PURE__ */ new Set();
 	const visit = (nodes) => {
@@ -151,7 +124,6 @@ function nestedComponentNames(def) {
 	visit(def.root.children);
 	return [...names];
 }
-/** can `from` reach `to` by following what each component holds? */
 function componentReaches(components, from, to) {
 	const byName = /* @__PURE__ */ new Map();
 	for (const def of components ?? []) if (!byName.has(def.name)) byName.set(def.name, def);
@@ -165,19 +137,9 @@ function componentReaches(components, from, to) {
 	};
 	return visit(from);
 }
-/**
-* May an instance of `inner` be placed inside `host`'s master? Not when that
-* would make a component hold itself, at any distance: `Card` in `Card`, or
-* `Card` in a `Button` that a `Card` already holds.
-*/
 function canNest(components, host, inner) {
 	return host !== inner && !componentReaches(components, inner, host);
 }
-/**
-* The components ordered so that each comes AFTER everything it holds. Work
-* that flows outward from a change — an inner component's new structure, then
-* the hosts that mirror it — has to run in this order.
-*/
 function dependencyOrder(components) {
 	const byName = /* @__PURE__ */ new Map();
 	for (const def of components ?? []) if (!byName.has(def.name)) byName.set(def.name, def);
@@ -197,12 +159,6 @@ function dependencyOrder(components) {
 	for (const def of components ?? []) if (!out.includes(def)) out.push(def);
 	return out;
 }
-/**
-* The option an instance picks on each of its component's axes: its wrapper's
-* own pick, else one from the components it is nested in, else the axis
-* default. A pick naming an option that no longer exists falls through —
-* a stale name must never leave an instance wearing nothing.
-*/
 function resolvePicks(def, wrapper, mirrors) {
 	const picks = {};
 	for (const axis of def.variants ?? []) {
@@ -218,36 +174,20 @@ function resolvePicks(def, wrapper, mirrors) {
 	}
 	return picks;
 }
-/**
-* The first DEFINED value of `key` along a node's chain: its own, then each
-* mirror's, then its master's. `undefined` when nothing in the chain sets it.
-*
-* "Defined", not "truthy": `hidden: false` on an instance is how it shows a
-* part its component hides by default.
-*/
 function resolveInstanceValue(node, mapping, key) {
 	if (node[key] !== void 0) return node[key];
 	if (!mapping) return void 0;
 	for (const mirror of mapping.mirrors) if (mirror[key] !== void 0) return mirror[key];
 	return mapping.master[key];
 }
-/** what a node would inherit for `key` if it set nothing itself */
 function inheritedInstanceValue(mapping, key) {
 	if (!mapping) return void 0;
 	for (const mirror of mapping.mirrors) if (mirror[key] !== void 0) return mirror[key];
 	return mapping.master[key];
 }
-/** a hidden node is not rendered and not exported — for this instance only,
-* when the flag is its own */
 function isNodeHidden(node, mapping) {
 	return resolveInstanceValue(node, mapping, "hidden") === true;
 }
-/**
-* Show or hide a node, writing only what differs from what it inherits — so
-* hiding a part and showing it again leaves the node byte-identical, which
-* keeps merge signatures (whole-object JSON) from reporting a change that
-* was undone.
-*/
 function setNodeHidden(node, mapping, hidden) {
 	if (hidden === (inheritedInstanceValue(mapping, "hidden") === true)) delete node.hidden;
 	else node.hidden = hidden;
@@ -256,13 +196,9 @@ function setNodeHidden(node, mapping, hidden) {
 //#region src/lib/instances.ts
 var buildInstanceMap$1 = buildInstanceMap;
 var resolveInstanceValue$1 = resolveInstanceValue;
-/** is this mapped node the `:Name` wrapper of its instance? */
 var isInstanceWrapper$1 = isInstanceWrapper;
-/** the components a component's master holds directly, by name */
 var nestedComponentNames$1 = nestedComponentNames;
-/** may an instance of `inner` sit inside `host`'s master? Never in a cycle. */
 var canNest$1 = canNest;
-/** each component after everything it holds */
 var dependencyOrder$1 = dependencyOrder;
 //#endregion
 //#region src/lib/shared/ids.js
@@ -307,15 +243,6 @@ function effectiveLinkChain(components) {
 	}
 	return chain;
 }
-/**
-* Deep-clone a subtree into the master id space: fresh ids, and
-* interaction/animation binding `targetId`s that point INSIDE the subtree
-* rewritten onto the new ids — without the rewrite every internal binding
-* (a modal's close button, an accordion trigger) keeps aiming at the PAGE
-* node ids and goes dead the moment the block becomes a component.
-* Returns the clone plus the old→new id map (the key set doubles as "which
-* page ids are inside the extracted subtree" for outside-target detection).
-*/
 function cloneForMaster(source) {
 	const cloned = JSON.parse(JSON.stringify(source));
 	const idMap = /* @__PURE__ */ new Map();
@@ -334,14 +261,6 @@ function cloneForMaster(source) {
 		idMap
 	};
 }
-/**
-* After extraction the MASTER owns the subtree's presentation and content —
-* clear the source nodes' node-only state so the new instance INHERITS instead
-* of shadowing. A shadow looks identical at extraction time but bites later:
-* shared chrome gets translated once per page, and a master restructure can
-* re-seat the stale override onto the wrong node. `htmlId` stays (a per-page
-* anchor); `arg` and `link` stay — see adoptCodeOwned for why each one does.
-*/
 function stripExtractedInstanceState(source) {
 	const strip = (n) => {
 		if (!n.slot) n.children.forEach(strip);
@@ -359,13 +278,9 @@ function stripExtractedInstanceState(source) {
 	};
 	strip(source);
 }
-/** component types are Capitalized; built-in elements stay lowercase */
 function isComponentType(type) {
 	return /^[A-Z]/.test(type);
 }
-/** a fresh mirror of a master subtree: its structure, none of its state —
-*  except under a slot, where the master's children are the DEFAULT content
-*  the holder starts from, copied whole (they are its own from then on) */
 function createMirror(master) {
 	const node = {
 		id: uid(),
@@ -377,8 +292,6 @@ function createMirror(master) {
 	if (master.slot) node.slot = true;
 	return node;
 }
-/** a slot's default content, as a holder's own nodes: everything the master
-*  nodes carry, under fresh ids, with bindings between them re-aimed */
 function cloneSlotContent(nodes) {
 	const cloned = JSON.parse(JSON.stringify(nodes));
 	const idMap = /* @__PURE__ */ new Map();
@@ -393,34 +306,6 @@ function cloneSlotContent(nodes) {
 	});
 	return cloned;
 }
-/**
-* `arg` is CODE-OWNED: inside an instance it belongs to the master, so it is
-* copied down rather than kept. A field binding is the component's by
-* definition — every instance of it reads the same field.
-*
-* `link` is NOT, any more. It is per-instance with a component default, like
-* `hidden`, `listQuery` and `slider`: every renderer already resolves it
-* own-first (`node.link ?? master.link`, in useRenderNode AND export.mjs), so
-* a per-instance destination rendered correctly everywhere and only the WRITE
-* path forbade it — half of it here, where the push copied the master's link
-* back down over anything an instance had set. The cost was that a Button
-* component could not be a link, which is the first thing anyone wants from
-* one, and the workaround was a second component.
-*
-* An instance link EQUAL to what the counterpart RESOLVES to is deleted rather
-* than kept, so the key means "this placement differs" and nothing else. That
-* also migrates the copies the old copy-down left behind: they are all equal by
-* construction, so one push normalizes a project to pure inheritance and a
-* later change to the master's link reaches every instance that did not
-* override it.
-*
-* "Resolves to", not `master.link`: see effectiveLinkChain. Without the chain a
-* page copy of a NESTED component's default was never recognized as redundant,
-* because the counterpart is a mirror and a mirror holds no link of its own
-* unless the host overrode it. `chain` is optional so the callers that align a
-* FRESH instance (materializing a `:Card:` leaf, filling one from HTML) keep
-* the cheap path — a node that has no link cannot shadow anything.
-*/
 function adoptCodeOwned(node, master, box, chain) {
 	if ((node.arg ?? void 0) !== (master.arg ?? void 0)) {
 		if (master.arg) node.arg = master.arg;
@@ -438,14 +323,6 @@ function adoptCodeOwned(node, master, box, chain) {
 		box.moved = true;
 	}
 }
-/**
-* The per-instance keys a node can carry — what is LOST when the positional
-* pairing has no counterpart for it and the node is discarded.
-*
-* Not the same list as MIRROR_KEYS (what a host says about a nested instance):
-* this is everything a PLACEMENT owns and nothing above it would give back,
-* so it includes the page-only `htmlId` and the per-placement attribute layer.
-*/
 var INSTANCE_STATE_KEYS = [
 	"content",
 	"src",
@@ -463,7 +340,6 @@ var INSTANCE_STATE_KEYS = [
 	"htmlId",
 	"ref"
 ];
-/** the per-instance keys this node actually holds, in a form worth printing */
 function stateOn(node) {
 	const keys = [];
 	for (const key of INSTANCE_STATE_KEYS) {
@@ -474,18 +350,6 @@ function stateOn(node) {
 	}
 	return keys;
 }
-/**
-* Record a node — and everything under it — that the pairing is about to throw
-* away, with the per-instance state going with it.
-*
-* Why this exists: alignLevel is positional and per level, so when a master
-* node changes DEPTH every instance's counterpart shifts and the nodes that no
-* longer pair are recreated by createMirror, inheriting instead of carrying.
-* Wrapping one div in a master therefore wiped the per-instance icon on nine
-* FeatureCards across three pages — and the only number the caller got back was
-* `updatedInstances: 3`, while `removed` counted MASTER elements (of which none
-* were lost). The loss was invisible in every response and in the HTML.
-*/
 function collectDiscarded(node, into) {
 	const keys = stateOn(node);
 	if (keys.length) into.push({
@@ -494,16 +358,6 @@ function collectDiscarded(node, into) {
 	});
 	for (const child of node.children ?? []) collectDiscarded(child, into);
 }
-/**
-* Reshape one level of children to the master's, KEEPING the node object for
-* each child that survives — which is what carries everything the structure
-* does not: the id, the per-instance text, media, translations, hidden flag and
-* variant picks, and (on a page) the htmlId and comment anchors.
-*
-* Matched like `adoptStructure` matches — by code signature, LCS-aligned, then
-* by type for whatever that left over — so inserting an icon in Button does not
-* slide every Card's button text onto the wrong node.
-*/
 function alignLevel(node, master, box, chain) {
 	if (master.slot) return;
 	const old = node.children;
@@ -532,15 +386,6 @@ function alignLevel(node, master, box, chain) {
 		box.moved = true;
 	}
 }
-/**
-* Bring an INSTANCE's subtree in step with the master it stands for, keeping
-* every per-instance value on the nodes that survive. The node's OWN line is
-* left alone — on a page that is a real page node, with its own ref, htmlId and
-* classes; what is below it is the component's.
-*
-* Returns whether anything moved, so a caller can tell a real change from a
-* push that found everything already current.
-*/
 function alignStructure(instance, master, chain, lost) {
 	const box = {
 		moved: false,
@@ -549,22 +394,12 @@ function alignStructure(instance, master, chain, lost) {
 	alignLevel(instance, master, box, chain);
 	return box.moved;
 }
-/**
-* The same, for a MIRROR a master holds: there the wrapper node is part of the
-* host's own tree, so its `arg`/`link`/`slot` follow the inner master too (a
-* mirror that lacked them would not be structurally identical to it, which is
-* the invariant the positional pairing relies on).
-*/
 function alignMirror(mirror, master, chain) {
 	const box = { moved: false };
 	adoptCodeOwned(mirror, master, box, chain);
 	alignLevel(mirror, master, box, chain);
 	return box.moved;
 }
-/**
-* Bring every mirror a host holds back in step with the component it mirrors.
-* Returns whether anything changed.
-*/
 function alignHostMirrors(host, components, chain) {
 	let moved = false;
 	const visit = (nodes) => {
@@ -580,8 +415,6 @@ function alignHostMirrors(host, components, chain) {
 	visit(host.root.children);
 	return moved;
 }
-/** every nested-instance wrapper a master holds directly (not the ones inside
-*  a mirror, which belong to the component being mirrored) */
 function nestedWrappers(def, name) {
 	const out = [];
 	const visit = (nodes) => {
@@ -591,7 +424,6 @@ function nestedWrappers(def, name) {
 	visit(def.root.children);
 	return out;
 }
-/** turns raw user input into a valid, unique component name ('my card' → 'MyCard') */
 function normalizeComponentName(raw, taken) {
 	const cleaned = raw.split(/[^a-zA-Z0-9]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("");
 	const base = /^[A-Za-z]/.test(cleaned) ? cleaned : `C${cleaned}`;
@@ -601,22 +433,9 @@ function normalizeComponentName(raw, taken) {
 	while (taken.includes(`${name}${n}`)) n++;
 	return `${name}${n}`;
 }
-/** a node's SHALLOW identity: its type, its `[arg]` binding, its link.
-* Deliberately NOT recursive: matching is done one level at a time, so a
-* container keeps its identity even when its children change, while its
-* children realign among themselves. Classes, content and interactions are
-* excluded — they are the per-node state being carried across the edit. An
-* `<h2 href="/a">` and an `<h2 href="/b">` get distinct signatures; two bare
-* `<h2>`s are genuinely indistinguishable, and no algorithm can tell which
-* identical sibling was removed. */
 function nodeSignature(node) {
 	return `${node.type}|${node.arg ?? ""}|${node.link ?? ""}`;
 }
-/** longest-common-subsequence alignment of two signature lists → a map from
-* b-index to the a-index it matches. The same primitive `lib/html/apply.ts`
-* uses for an agent's write, so component adoption and a page write carry
-* identity the same way — a removed sibling no longer shifts the survivors
-* onto the wrong master nodes. */
 function lcsAlign$1(a, b) {
 	const n = a.length;
 	const m = b.length;
@@ -633,19 +452,6 @@ function lcsAlign$1(a, b) {
 	else j++;
 	return map;
 }
-/**
-* Re-derive a component master's children from an edited instance's subtree,
-* CARRYING node identity (id/classes/content/interactions) wherever the code
-* structure still lines up, minting fresh nodes only for genuinely new code.
-*
-* Matching is by code signature (type + arg + link + child structure) aligned
-* with an LCS — NOT greedy first-match-by-type, which silently re-seated a
-* survivor onto a removed sibling's master node (dragging its classes and
-* interaction bindings along) whenever a same-type child was deleted.
-*
-* `arg` belongs to the master, so the edited tree is authoritative for it.
-* Fills `result` with the adopt/create counts and any orphaned master nodes.
-*/
 function adoptStructure(master, edited, selfName, result = {
 	adopted: 0,
 	created: 0,
@@ -700,7 +506,6 @@ function adoptStructure(master, edited, selfName, result = {
 //#endregion
 //#region src/lib/shared/elements.js
 var ELEMENTS_DATA = {
-	/** page root wrap — selectable but never added, removed, or reordered */
 	body: {
 		tag: "div",
 		suggest: "section"
@@ -826,13 +631,6 @@ var ELEMENTS_DATA = {
 		tag: "form",
 		suggest: "input"
 	},
-	/**
-	* A form's SUCCESS and ERROR states: direct children of a `form`, rendered
-	* only after a submission lands (or fails). Their own types rather than a
-	* styled div with a magic class, following the `list-empty` precedent — so
-	* an author styles them like any element, they translate like any content,
-	* and a misplaced one is a diagnostic instead of silently never rendering.
-	*/
 	"form-success": {
 		tag: "div",
 		suggest: "text"
@@ -916,42 +714,22 @@ var ELEMENTS_DATA = {
 		tag: "td",
 		suggest: "text"
 	},
-	/** repeats its children once per entry of the collection in its arg */
 	"collection-list": {
 		tag: "div",
 		suggest: "div"
 	},
-	/**
-	* A list's EMPTY STATE: a direct child of a `:collection-list` (or a bound
-	* `:slider`) that renders only when the list has no entries, and is never
-	* repeated. Without it a filtered list that matched nothing rendered as a
-	* blank gap, and the only workaround was to not filter.
-	*/
 	"list-empty": {
 		tag: "div",
 		suggest: "text"
 	},
-	/** renders one picked entry through its collection's template */
 	"collection-item": {
 		tag: "div",
 		defaultContent: ""
 	},
-	/**
-	* A block of RAW HTML — an embed, a widget's snippet, a script — emitted
-	* verbatim into the published page inside a styleable <div>, and drawn as a
-	* placeholder on the canvas and in Play (it is not rendered live anywhere
-	* in the editor). A leaf: its content IS the code, and it is the one leaf
-	* whose text no sanitizer touches, which is why writing it is gated like
-	* the page's custom code — build roles and `allowCustomCode` agents only
-	* (server/agent-policy.mjs codeSurface).
-	*/
 	"custom-code": {
 		tag: "div",
 		defaultContent: ""
 	},
-	/** carousel. With an arg it repeats its children per entry like a
-	* :collection-list (one slide each); without one, each direct child is a
-	* slide. Arrows/dots are built-in chrome — see shared/slider.js */
 	slider: {
 		tag: "div",
 		suggest: "div"
@@ -959,7 +737,6 @@ var ELEMENTS_DATA = {
 };
 //#endregion
 //#region src/lib/shared/forms.js
-/** per-kind caps, in characters. A textarea is the long one by design. */
 var FIELD_CAPS = {
 	text: 1e3,
 	email: 254,
@@ -971,7 +748,6 @@ var FIELD_CAPS = {
 	checkbox: 200,
 	radio: 200
 };
-/** which element types are form controls, and the kind each defaults to */
 var CONTROL_KINDS = {
 	input: "text",
 	textarea: "textarea",
@@ -980,13 +756,6 @@ var CONTROL_KINDS = {
 	checkbox: "checkbox",
 	radio: "radio"
 };
-/** an `<input type="…">` the browser validates, mapped to our kinds.
-*
-* `radio` and `checkbox` are here as well as being element types of their own:
-* the registry bakes the attribute for `:radio`/`:checkbox`, but a plain
-* `:input` can carry `type="radio"` through the Attributes rows, and reading
-* that as text would lose the value grouping AND the option allowlist the
-* endpoint checks against. */
 var INPUT_TYPE_KINDS = {
 	email: "email",
 	tel: "tel",
@@ -998,32 +767,8 @@ var INPUT_TYPE_KINDS = {
 	radio: "radio",
 	checkbox: "checkbox"
 };
-/** the state blocks, which are never submitted and never repeated */
 var FORM_STATE_TYPES = ["form-success", "form-error"];
-/** is this node a form control that could carry a name? */
 var isFormControl = (type) => Object.hasOwn(CONTROL_KINDS, type);
-/**
-* Every named field of one form, plus the controls that have no name.
-*
-* `resolve(node)` gives the effective attributes of a node — the caller passes
-* the one that knows about component instances (a control inside a `<Field>`
-* reads its name from the master, and its per-placement override from
-* `instanceAttributes`). Without that indirection a form built from components
-* would report no fields at all.
-*
-* `opts.hidden(node)` marks a subtree that is not rendered — a part an
-* instance hides, resolved along the instance chain. Those controls are not
-* emitted on the page and cannot be submitted, so counting them produced the
-* nonsense "N control(s) have no usable name" for a Field component whose
-* optional textarea was hidden, and put a field the page never shows into the
-* manifest's allowlist.
-*
-* `opts.content(node)` is the matching read for an element's TEXT, used for a
-* `<select>`'s option values. Omitted = the node's own.
-*
-* Returns `{fields, unnamed, duplicates}`. `fields` is what the manifest
-* stores and the endpoint allowlists against.
-*/
 function collectFormFields(formNode, resolve, opts) {
 	const fields = [];
 	const unnamed = [];
@@ -1088,16 +833,6 @@ function capFor(kind, maxlength) {
 	const own = Number(maxlength);
 	return Number.isFinite(own) && own > 0 ? Math.min(own, ceiling) : ceiling;
 }
-/**
-* The values a `<select>` offers, from its option children.
-*
-* `attrsOf`/`contentOf` are the caller's resolvers, the same ones the rest of
-* this walk uses — an `<option>` inside a component INSTANCE carries no value
-* and no text of its own, both come from the master. Reading the raw node
-* recorded `options: ["", ""]` in the manifest, and the endpoint then refused
-* every value the page actually offers: a visitor picking "Designer" got a 400
-* saying "role is not one of the offered values".
-*/
 function optionValues(node, attrsOf, contentOf) {
 	const out = [];
 	for (const child of node.children ?? []) {
@@ -1107,7 +842,6 @@ function optionValues(node, attrsOf, contentOf) {
 	}
 	return out;
 }
-/** a redirect must be an internal route: a root-relative path, nothing else */
 function isInternalRoute(value) {
 	const text = String(value ?? "");
 	if (!text) return true;
@@ -1121,7 +855,6 @@ function isInternalRoute(value) {
 	}
 	return true;
 }
-/** the reason this form config is unusable, or null */
 function formConfigError(config) {
 	if (!config || typeof config !== "object") return null;
 	if (config.redirect && !isInternalRoute(config.redirect)) return "redirect must be a path on this site, like /thanks";
@@ -1136,47 +869,20 @@ function formConfigError(config) {
 	}
 	return null;
 }
-/** does this form take submissions on this instance? */
 var formEnabled = (config) => !!config && config.enabled === true;
-/** the label a form is listed under */
 var formName = (config) => {
 	return String(config?.name ?? "").trim() || "Form";
 };
 //#endregion
 //#region src/lib/elements.ts
-/** the element registry — data lives in the shared plain-JS module so the
-* node exporter (server/export.mjs) consumes the exact same source */
 var ELEMENTS = ELEMENTS_DATA;
 function isKnownElement(type) {
 	return type in ELEMENTS;
 }
-/**
-* A leaf element carries text content or is void — it is ALWAYS written as
-* `:name:` and can never be opened as a block. Everything else (section,
-* div, form, list, …) is a container: `:name … name:`.
-*/
 function isLeafElement(type) {
 	const def = ELEMENTS[type];
 	return !!def && (def.defaultContent !== void 0 || def.void === true);
 }
-/**
-* Does an INSTANCE address this element as one of its parts?
-*
-* Leaf-ness used to be the only test, and it is the wrong question. It made an
-* `:input` (void) a part and a `:textarea` (a container, because its value is
-* its text) not one — so a Textarea component exposed its label and hid the
-* control an agent has to name per placement, while the Input beside it
-* exposed both. And an `:link` was not a part at all, which is why a Button
-* component could not be given a destination per placement.
-*
-* The real question is whether an instance has anything of its OWN to say
-* about the element: its text or media (a leaf), its `name`/`placeholder` (a
-* form control), where it goes (a link — per-instance with a component
-* default, which is what lets one Button serve a dozen destinations), or what
-* it does when clicked (a `button`'s `type="submit"` / `"reset"`, which is per
-* placement for the same reason: a Button serving a form's submit and its
-* reset is the whole point of having one Button).
-*/
 function isInstancePart(type) {
 	return isLeafElement(type) || isFormControl(type) || type === "link" || type === "button";
 }
@@ -1188,16 +894,6 @@ function createNode(type) {
 		children: []
 	};
 }
-/**
-* Types an element can switch between (same structural shape per group).
-*
-* The pure aliases (`container`, `grid`, `heading`, `dropdown`) are absent:
-* nothing can create one any more — the v2 migration collapsed every stored
-* one, and the insert dock offers Container/Grid/Heading as PRESETS (a div or
-* an h2 plus classes) rather than as types. They stay in the registry above
-* purely so a blob the migration never saw still renders its real tag instead
-* of degrading to a bare div; that can go one release after launch.
-*/
 var TYPE_GROUPS = [
 	[
 		"section",
@@ -1278,31 +974,17 @@ function tokenError(token) {
 	if (!HEX_RE.test(token?.value ?? "")) return "token values are #hex colours";
 	return null;
 }
-/**
-* Does this name shadow a Tailwind palette name or colour keyword?
-*
-* A token compiles to `--color-<name>`, so `blue` defines `bg-blue` — it does
-* NOT redefine `bg-blue-500`, which is a different variable. So this is a
-* legibility hazard, not a breakage: a real brand palette genuinely has colours
-* called "blue" and "orange", and forcing every one of them to be renamed (and
-* every class rewritten to `bg-brand-blue`) was friction with no safety payoff.
-* Callers warn; they no longer refuse.
-*/
 function isReservedToken(name) {
 	return RESERVED_TOKEN_NAMES.has(String(name));
 }
-/** well-formed AND not shadowing a palette name — the conservative default */
 function isValidToken(token) {
 	return tokenError(token) === null && !isReservedToken(token.name);
 }
-/** well-formed, shadowing allowed — what actually reaches the @theme block, so
-* a deliberately-shadowing token really does render */
 function isEmittableToken(token) {
 	return tokenError(token) === null;
 }
 var LENGTH_RE = /^-?\d*\.?\d+(?:px|rem|em|%|vw|vh|ch|ex|pt)?$/;
 var FUNC_RE = /^(?:clamp|calc|min|max)\([-+*/\s\d.a-z%(),]*\)$/i;
-/** a CSS length/number safe to emit into a custom property */
 function isThemeValue(value) {
 	const v = String(value ?? "").trim();
 	if (!v || v.length > 64) return false;
@@ -1311,8 +993,6 @@ function isThemeValue(value) {
 }
 //#endregion
 //#region src/lib/shared/fonts.js
-/** …and the same by file extension, for https URLs that never went through
-*  the library (the mime isn't knowable without fetching) */
 var FORMAT_BY_EXT = {
 	woff2: "woff2",
 	woff: "woff",
@@ -1326,21 +1006,12 @@ var FONT_FORMATS = [
 	"truetype",
 	"opentype"
 ];
-/** the `format()` hint guessed from a URL's extension, or undefined */
 function fontFormatForUrl(url) {
 	return FORMAT_BY_EXT[String(url ?? "").toLowerCase().split(/[?#]/)[0].split(".").pop()];
 }
-/** family names are interpolated into CSS, so they are restricted to the same
-*  safe character set as settings.fonts.family — letters, digits, spaces and
-*  hyphens. Anything else could close the declaration and inject rules. */
 var FONT_FAMILY_RE$1 = /^[A-Za-z0-9][A-Za-z0-9 -]*$/;
-/** a weight the CSS accepts: 100–900, or a variable-font range ("100 900") */
 var WEIGHT_RE$1 = /^(?:[1-9]00|normal|bold)(?: (?:[1-9]00))?$/;
-/** only same-origin media paths and https URLs may be fetched as fonts —
-*  mirrors SAFE_SRC's intent, minus the data:/mailto:/tel: cases that make no
-*  sense for a font file */
 var SAFE_FONT_SRC = /^(?:\/|https:\/\/)/i;
-/** human-readable reason a font entry is unusable, or null when it is fine */
 function fontError(font, others = []) {
 	const family = String(font?.family ?? "").trim();
 	if (!family) return "Family name required";
@@ -1404,7 +1075,6 @@ function defaultBreakpoints() {
 		}
 	];
 }
-/** a page's root: the `:body` wrap every document is built around */
 function createBody(arg) {
 	const body = createNode("body");
 	if (arg) body.arg = arg;
@@ -1441,18 +1111,6 @@ function createProject(name) {
 }
 //#endregion
 //#region src/lib/html/tags.ts
-/**
-* The element registry ↔ the agent-facing HTML subset.
-*
-* Agents read and write pages as HTML because it is a format every model
-* already knows; the registry is what the app actually renders. This module is
-* the one place the two are reconciled, in both directions.
-*
-* Tag names are CASE-SENSITIVE here. That is what lets `<Card>` mean a
-* component instance, and it is why the parser is hand-rolled rather than
-* parse5 or any other HTML5 parser: they all lowercase tag names.
-*/
-/** registry types whose HTML tag is not their own name */
 var TAG_OF = {
 	body: "body",
 	paragraph: "p",
@@ -1472,43 +1130,18 @@ var TAG_OF = {
 	"form-error": "form-error",
 	"custom-code": "custom-code"
 };
-/**
-* Pure aliases: a type whose tag AND shape are another type's.
-*
-* They serialize as the target's tag, so reading one back has to resolve to
-* the target — and `sameType` has to treat the pair as equal, or every write
-* would re-mint the node for a difference that renders nowhere. The Phase 4
-* migration collapses them in the stored data; until then this keeps the
-* round-trip exact.
-*/
 var ALIAS_OF = {
 	container: "div",
 	grid: "div",
 	heading: "h2",
 	dropdown: "select"
 };
-/**
-* `<slot>` — the write-only shorthand for "fill this instance's slot".
-*
-* Not an element and never stored: it is a parse-time marker that `applyHtml`
-* consumes (see fillInstance). It exists because an instance's interior has to
-* match its master node for node, so filling a slot three levels down meant
-* re-typing the component's whole skeleton on every page that used it — nine
-* times for one funnel shell, each copy stale the moment the shell changed.
-*
-* The type is deliberately unspellable as an element (`@` is not a valid
-* element type, and component names are capitalized), so it can never collide
-* with a real one.
-*/
 var SLOT_FILL_TYPE = "@slot";
-/** the HTML tag a node of this type is written as */
 function tagForType(type) {
 	if (isComponentType(type)) return type;
 	const canonical = ALIAS_OF[type] ?? type;
 	return TAG_OF[canonical] ?? canonical;
 }
-/** the registry type a tag reads back as — the reverse of `tagForType`, with
-*  each ambiguous tag resolved to its canonical type */
 var TYPE_OF_TAG = (() => {
 	const out = {};
 	for (const type of Object.keys(ELEMENTS)) {
@@ -1521,23 +1154,10 @@ var TYPE_OF_TAG = (() => {
 	out.select = "select";
 	return out;
 })();
-/** do these two types mean the same element? (an alias and its target do) */
 function sameType(a, b) {
 	if (a === b) return true;
 	return (ALIAS_OF[a] ?? a) === (ALIAS_OF[b] ?? b);
 }
-/**
-* Which element a tag means.
-*
-* `attrs` disambiguates the two tags that carry more than one type: `<input>`
-* splits on its `type` (checkbox/radio are the registry's own types so an
-* author never has to remember the attribute), and `<div data-type="text">` is
-* the text block.
-*
-* `components` lets a lowercase `<card>` resolve to `Card` when exactly one
-* component matches — models lowercase tag names out of habit, and refusing
-* the whole write over it would be the format's most common papercut.
-*/
 function typeForTag(tag, attrs, components) {
 	if (isComponentType(tag)) return { type: tag };
 	if (tag === "input") {
@@ -1556,14 +1176,6 @@ function typeForTag(tag, attrs, components) {
 	};
 	return null;
 }
-/**
-* Void tags that may be written without the self-closing slash.
-*
-* Matched CASE-SENSITIVELY, and never against a component: a component called
-* `Input` or `Link` is not `<input>`, and lowercasing the tag first made
-* `<Input>` a void element, so its closing tag read as a mismatch and its
-* children landed on whatever contained it.
-*/
 var VOID_TAGS = /* @__PURE__ */ new Set([
 	"img",
 	"input",
@@ -1574,7 +1186,6 @@ var VOID_TAGS = /* @__PURE__ */ new Set([
 	"source"
 ]);
 var isLenientVoidTag = (tag) => !isComponentType(tag) && VOID_TAGS.has(tag);
-/** tags that are never content, whatever they claim to be */
 var FORBIDDEN_TAGS = /* @__PURE__ */ new Set([
 	"script",
 	"style",
@@ -1583,53 +1194,17 @@ var FORBIDDEN_TAGS = /* @__PURE__ */ new Set([
 	"embed",
 	"base"
 ]);
-/** does this element carry text rather than children? Registry-driven. */
 var isLeafType = (type) => !isComponentType(type) && isLeafElement(type);
-/** is this a type the app can render at all? (the slot-fill marker is not an
-*  element, but the PARSER must let it through for applyHtml to act on) */
 var isRenderableType = (type) => type === "@slot" || isComponentType(type) || isKnownElement(type);
-/**
-* `source` carries the collection an element iterates or embeds; `data-field`
-* carries an ordinary element's field binding. Both land on `node.arg` — two
-* names because they read as two different things, and an agent that confuses
-* them is told so rather than silently binding the wrong way.
-*/
 var SOURCE_TYPES = /* @__PURE__ */ new Set([
 	"collection-list",
 	"collection-item",
 	"slider",
 	"body"
 ]);
-/**
-* The attributes an element type IMPLIES — `checkbox` is `<input type="checkbox">`.
-*
-* They are part of the element's identity, not state: the registry carries
-* them, every renderer emits them, and the reader uses them to pick the type
-* back out of the tag. So the writer emits them and the reader consumes them,
-* rather than storing them as custom attributes (which would make the type and
-* the attribute two places to disagree).
-*/
 var impliedAttrs = (type) => !isComponentType(type) && ELEMENTS[type]?.attrs || {};
 //#endregion
 //#region src/lib/legacy/dsl.ts
-/**
-* LEGACY: the indentation DSL's parser, kept for ONE purpose.
-*
-* Until the v2 schema migration, a page carried both a tree (`elements`) and
-* the DSL text it was derived from (`code`). The tree is what every renderer
-* read, so the tree is what the migration keeps — re-deriving from the text
-* would be a chance to change the published site, and over the corpus it
-* demonstrably did (one fixture page carries a `link` its line never had).
-*
-* What is left is the SALVAGE case: a stored page with code but no usable
-* tree. That should not exist — the editor kept the two in sync for as long as
-* both existed — but "should not exist" is not a thing to bet a one-way
-* migration on, so the parser stays until a release has passed with no
-* salvage logged. Nothing else may import this.
-*
-* Reduced to what salvage needs: no `adopt` callback (there is no previous
-* tree to carry identity from), no reconcile, no validation, no markers.
-*/
 var REF = "(?:#(?<ref>[a-zA-Z][a-zA-Z0-9-]?[a-zA-Z0-9-]*)?)?";
 var NAME = "[a-zA-Z][a-zA-Z0-9-]*";
 var ARG = "(?:\\[(?<arg>[a-z0-9.@+-]*)\\]?)?";
@@ -1647,7 +1222,6 @@ var slots = (m) => {
 		link: g.link
 	};
 };
-/** splits a line into its tokens, including glued ones (`:div:h1:`) */
 function lexLine(text) {
 	const tokens = [];
 	let i = 0;
@@ -1685,7 +1259,6 @@ function lexLine(text) {
 	}
 	return tokens;
 }
-/** Parse a stored page document into a tree. Salvage only. */
 function parseLegacyCode(code) {
 	const root = [];
 	const stack = [];
@@ -1730,24 +1303,6 @@ function parseLegacyCode(code) {
 }
 //#endregion
 //#region src/lib/migrate.ts
-/**
-* The v2 schema: the tree is the only source of truth.
-*
-* v1 carried the indentation DSL beside it — `page.code`, plus a `line` and
-* `endLine` on every node — because the text was authoritative for structure.
-* Nothing reads any of it now, so v2
-* drops it, and with it the pure alias types the DSL's registry carried.
-*
-* This runs ONCE per blob, on the server at boot, over every project blob in
-* the store: the drafts, Main, the `guano-base:*` merge snapshots (which are
-* whole project copies, so a 3-way merge against an unmigrated base would see
-* every page as changed) and the published baseline. It is also applied
-* client-side as a defensive no-op and to anything `/api/project-import`
-* brings in.
-*
-* It is IDEMPOTENT: a project already at v2 is returned untouched, which is
-* what makes "run it on everything, every boot" safe.
-*/
 var SCHEMA_VERSION = 2;
 var emptyReport = () => ({
 	changed: false,
@@ -1758,14 +1313,6 @@ var emptyReport = () => ({
 	salvaged: [],
 	textDisagreed: []
 });
-/**
-* Migrate a project in place. Returns the same object, plus a report.
-*
-* Pass `pageToCode` to have the migration compare each page's stored text
-* against the text its tree implies and record the pages that disagree. That
-* is the only reason it would ever want the old serializer, so the caller
-* supplies it rather than this module importing a thing it is deleting.
-*/
 function migrateProject(project, opts = {}) {
 	const report = emptyReport();
 	if (!project || !Array.isArray(project.pages)) return {
@@ -1791,8 +1338,6 @@ function migrateProject(project, opts = {}) {
 		delete node.line;
 		delete node.endLine;
 	};
-	/** an instance that was never materialized (a stored `:Card:` leaf) has no
-	*  nodes at all — nothing ever expanded it, so it rendered as nothing */
 	const materialize = (node) => {
 		if (!isComponentType(node.type) || node.children.length) return;
 		const def = byName.get(node.type);
@@ -1829,7 +1374,6 @@ function migrateProject(project, opts = {}) {
 		report
 	};
 }
-/** a one-line summary for a boot log */
 function describeMigration(key, report) {
 	if (!report.changed) return null;
 	const bits = [`${report.pages} page${report.pages === 1 ? "" : "s"}`];
@@ -1842,7 +1386,6 @@ function describeMigration(key, report) {
 }
 //#endregion
 //#region src/lib/shared/attributes.js
-/** attribute names allowed verbatim */
 var ATTR_ALLOW = /* @__PURE__ */ new Set([
 	"target",
 	"rel",
@@ -1882,30 +1425,7 @@ var ATTR_ALLOW = /* @__PURE__ */ new Set([
 	"accept",
 	"translate"
 ]);
-/** allowed name prefixes (data-*, aria-*) */
 var ATTR_PREFIXES = ["data-", "aria-"];
-/**
-* `data-*` names the RENDERERS own, refused as custom attributes.
-*
-* `data-` is an open prefix, so without this an authored attribute can collide
-* with the wiring a renderer emits — and because a duplicate attribute in HTML
-* resolves to the FIRST occurrence, the authored one SHADOWS the renderer's.
-*
-* That was a real hole: `data-form-redirect` carries the post-submission
-* navigation, validated at write AND at export as an internal route
-* (`isInternalRoute`), and the published runtime calls `location.assign` on it.
-* Set as a custom attribute it bypassed both checks, which bought an
-* unconditional open redirect and — because `location.assign` honours a
-* `javascript:` URL — script execution on the published origin. Under the
-* `server` publish method that origin is the one serving `/admin` and `/api`,
-* and setting an attribute is not gated by the agent policy's
-* `allowCustomCode`, so a prompt-injected agent with publish rights could ship
-* it.
-*
-* Matched by exact name or by prefix for the families (`data-sl-*`). Nothing an
-* author could usefully want is in here: every one of these is a channel
-* between the exporter and its own runtime.
-*/
 var RESERVED_DATA_ATTRS = /* @__PURE__ */ new Set([
 	"data-form",
 	"data-form-redirect",
@@ -1924,16 +1444,12 @@ var RESERVED_DATA_ATTRS = /* @__PURE__ */ new Set([
 	"data-type",
 	"data-source"
 ]);
-/** reserved FAMILIES — a prefix the renderer owns outright */
 var RESERVED_DATA_PREFIXES = ["data-sl-", "data-form-"];
-/** a syntactically valid attribute name (lowercase, no colons/uppercase) */
 var NAME_RE = /^[a-z][a-z0-9-]*$/;
-/** does the renderer own this `data-*` name? (see RESERVED_DATA_ATTRS) */
 function isReservedAttribute(name) {
 	const n = String(name).toLowerCase().trim();
 	return RESERVED_DATA_ATTRS.has(n) || RESERVED_DATA_PREFIXES.some((p) => n.startsWith(p));
 }
-/** is `name` an allowed custom attribute? */
 function isAllowedAttribute(name) {
 	const n = String(name).toLowerCase().trim();
 	if (!NAME_RE.test(n)) return false;
@@ -1941,19 +1457,6 @@ function isAllowedAttribute(name) {
 	if (ATTR_ALLOW.has(n)) return true;
 	return ATTR_PREFIXES.some((p) => n.startsWith(p) && n.length > p.length);
 }
-/**
-* Keep only allowed attributes, lowercased names with string values. Returns a
-* fresh object (never mutates the input).
-*
-* EMPTY VALUES ARE KEPT. They used to be dropped, which made `alt=""` (the
-* correct markup for a decorative image) and every boolean attribute
-* (`download`, `hidden`, `required`) unexpressible — and because callers infer
-* the rejection reason by diffing key names, the loss was reported as
-* "attribute not allowed", pointing at the wrong thing entirely.
-*
-* `true` coerces to the empty string (so an agent can pass a real boolean) and
-* `false` drops the attribute (absence IS false for booleans).
-*/
 function sanitizeAttributes(record) {
 	/** @type {Record<string, string>} */
 	const out = {};
@@ -1966,12 +1469,6 @@ function sanitizeAttributes(record) {
 	}
 	return out;
 }
-/**
-* Attributes whose value is TEXT A VISITOR READS, and so can be translated.
-* `type`, `role` and `name` are structural and never localized; these four are
-* copy, and on a multilingual site they used to render in the default language
-* on every locale route with no way to change it.
-*/
 var LOCALIZABLE_ATTRS = [
 	"placeholder",
 	"aria-label",
@@ -1982,18 +1479,9 @@ var LOCALIZABLE_ATTRS = [
 	"data-dots-label",
 	"data-dot-label"
 ];
-/** true when `name` carries text worth translating */
 function isLocalizableAttribute(name) {
 	return LOCALIZABLE_ATTRS.includes(String(name).toLowerCase().trim());
 }
-/**
-* The attributes an element renders: the component master's, with this
-* placement's own overrides on top, then the active locale's text overrides.
-*
-* Shared by both Vue renderers and the exporter so the canvas, Preview and the
-* published page agree. `localeAttrs` is already narrowed to the locale being
-* rendered (absent on the default locale).
-*/
 function mergeAttributeLayers(shared, instance, localeAttrs) {
 	const out = { ...shared ?? {} };
 	for (const [name, value] of Object.entries(instance ?? {})) out[name] = value;
@@ -2046,7 +1534,6 @@ var TAILWIND_SHADES = [
 	"800",
 	"900"
 ];
-/** hex values per color, index-aligned with TAILWIND_SHADES */
 var TAILWIND_COLORS = {
 	slate: [
 		"#f8fafc",
@@ -2278,7 +1765,6 @@ var TAILWIND_COLORS = {
 	]
 };
 var TOKEN_HEX = {};
-/** 'slate-100' or a design token name → is it a color class value? */
 function isPaletteColor(value) {
 	if (value in TOKEN_HEX) return true;
 	const match = value.match(/^([a-z]+)-(\d{2,3})$/);
@@ -2298,12 +1784,10 @@ var ACCEPTED_UNITS = [
 var esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 new RegExp(`^\\d*\\.?\\d+(?:${ACCEPTED_UNITS.map(esc).join("|")})$`);
 var TAIL_RE = /^(?:\[.+\]|\d+(?:\.\d+)?)$/;
-/** build the class token for a prefix + tail (sign moves before the prefix) */
 function buildTailClass(prefix, tail) {
 	if (tail.startsWith("-")) return `-${prefix}-${tail.slice(1)}`;
 	return `${prefix}-${tail}`;
 }
-/** parse a token into its tail for `prefix` (incl. leading '-'), or null */
 function parseTail(token, prefix, opts = {}) {
 	let neg = false;
 	let rest;
@@ -2316,7 +1800,6 @@ function parseTail(token, prefix, opts = {}) {
 	if (!TAIL_RE.test(rest)) return null;
 	return neg ? `-${rest}` : rest;
 }
-/** the size value text for a token, '' if none (`w-[300px]`→'300px', `w-full`→'full') */
 function sizeClassToText(prefix, token) {
 	if (!token || !token.startsWith(`${prefix}-`)) return "";
 	const rest = token.slice(prefix.length + 1);
@@ -2325,7 +1808,6 @@ function sizeClassToText(prefix, token) {
 var LEN_RE = /^\d*\.?\d+(?:px|rem|em|%)$/;
 var TRACK_RE = /^-?\d*\.?\d+(?:em|rem|px)$/;
 var WEIGHT_RE = /^(?:[1-9]\d{0,2}|1000)$/;
-/** whether free-form text is a valid arbitrary value for a named-scale format */
 function matchesNamedFormat(format, text) {
 	switch (format) {
 		case "length": return LEN_RE.test(text);
@@ -2334,18 +1816,11 @@ function matchesNamedFormat(format, text) {
 		case "weight": return WEIGHT_RE.test(text);
 	}
 }
-/** whether a token is a value for this named-scale prop (known class or in-format arbitrary) */
 function isNamedValueClass(prefix, format, known, token) {
 	if (known.includes(token)) return true;
 	if (!token.startsWith(`${prefix}-`)) return false;
 	return matchesNamedFormat(format, sizeClassToText(prefix, token));
 }
-/**
-* Derive a numeric class prefix from an explicit-class slider's class list
-* (e.g. `['grid-cols-1', …]` → `'grid-cols'`, signed `['-rotate-1', …]` →
-* `'rotate'`). Returns null when the varying tail isn't numeric (named classes
-* like `tracking-tight`), meaning custom input doesn't apply.
-*/
 function derivePrefix(classes) {
 	if (!classes.length) return null;
 	const parts = classes.map((c) => {
@@ -2361,7 +1836,6 @@ function derivePrefix(classes) {
 }
 //#endregion
 //#region src/lib/tieredBox.ts
-/** Tailwind spacing steps (padding/margin) */
 var SPACING = [
 	"0",
 	"1",
@@ -3546,15 +3020,12 @@ var STYLE_SECTIONS = [
 ];
 //#endregion
 //#region src/lib/styles.ts
-/** the ordered tailwind classes a slider steps through */
 function sliderClasses(c) {
 	return c.classes ?? c.stops.map((s) => `${c.prefix}-${s}`);
 }
-/** the class prefix a slider's custom-value input writes to, or null if none */
 function sliderPrefix(c) {
 	return c.custom?.prefix ?? c.prefix ?? (c.classes ? derivePrefix(c.classes) : null);
 }
-/** state/breakpoint prefixes the class input understands (typed as `hover:`) */
 var VARIANTS = [
 	"hover",
 	"focus",
@@ -4118,11 +3589,6 @@ function setStyleTokens(names) {
 		`divide-${n}`
 	]);
 }
-/**
-* Suggests classes for the query, honouring variant prefixes:
-* "hover:bg-r" suggests "hover:bg-red-500". While a variant itself is
-* being typed ("hov"), the prefix completion ("hover:") is offered.
-*/
 function suggestClasses(query, limit = 8) {
 	const split = splitClassVariants(query.trim());
 	const prefix = split.variants.length ? `${split.variants.join(":")}:` : "";
@@ -4141,11 +3607,6 @@ function suggestClasses(query, limit = 8) {
 	}
 	return results.slice(0, limit);
 }
-/**
-* Finds the class token in a class list that this property controls,
-* so the visual editor can read its state straight from the classes
-* string (the single source of truth).
-*/
 function matchClass(prop, classes) {
 	const control = prop.control;
 	switch (control.kind) {
@@ -4187,16 +3648,9 @@ var STATE_VARIANTS = /* @__PURE__ */ new Set([
 	"first",
 	"last"
 ]);
-/** true when a class carries a state variant, e.g. `hover:…`, `focus:…` */
 function isStateClass(cls) {
 	return splitClassVariants(cls).variants.some((v) => STATE_VARIANTS.has(v));
 }
-/** splits `hover:md:bg-red-500` into its variant prefix and base class.
-* Bracket-aware, so `[&_a]:underline` and an arbitrary bg value holding
-* `url(https://x)` both split where they actually should. (Written the long
-* way round on purpose: a bracketed class spelled out in a comment is a class
-* Tailwind's source scan extracts, and an unresolvable `url()` in the emitted
-* stylesheet is a build warning.) */
 function splitVariant(cls) {
 	const { variants, base } = splitClassVariants(cls);
 	return {
@@ -4204,30 +3658,10 @@ function splitVariant(cls) {
 		base
 	};
 }
-/** true when a variant segment is known — a fixed variant, or an arbitrary
-*  min/max-width breakpoint variant like `max-[767px]` / `min-[48rem]` */
-/** an arbitrary variant: `[&_a]`, `[&>*]`, `[&_li]:` — a raw selector with `&`.
-* Length-capped and brace-free because it lands in a stylesheet. */
 var ARBITRARY_VARIANT_RE = /^\[&[^{};]{0,80}\]$/;
-/** the bracketed-parameter variants: data-[...], aria-[...], has-[...], … */
 var PARAM_VARIANT_RE = /^(?:data|aria|has|not|group-has|peer-has|supports|nth|nth-last)-\[[^{};]{1,80}\]$/;
-/** `group-*` / `peer-*` with a named state (`group-focus-visible`, `peer-invalid`) */
 var GROUP_PEER_RE = /^(?:group|peer)-[a-z][a-z-]*$/;
-/** the NAMED screen variants in both directions: `md:` is in VARIANTS, and
-* `max-md:` — the one a mobile override is naturally written with — was not,
-* so a perfectly ordinary `max-sm:hidden` came back "not a known class" and
-* the hint then suggested a different BASE class. `min-md:` is the explicit
-* spelling of `md:` and reads clearer next to a `max-` sibling. */
 var NAMED_SCREEN_VARIANT_RE = /^(?:min|max)-(?:sm|md|lg|xl|2xl)$/;
-/**
-* v4 variants that are ACCEPTED but not suggested.
-*
-* `VARIANTS` is the suggestion list — what the Classes field offers while you
-* type — and padding it with two dozen rare pseudo-classes would bury the ones
-* anyone reaches for. These are real Tailwind v4 variants all the same, and
-* refusing them made the editor the thing standing between an author and valid
-* CSS.
-*/
 var ACCEPTED_VARIANTS = /* @__PURE__ */ new Set([
 	"open",
 	"enabled",
@@ -4270,15 +3704,6 @@ var ACCEPTED_VARIANTS = /* @__PURE__ */ new Set([
 function isKnownVariant(v) {
 	return VARIANT_SET.has(v) || ACCEPTED_VARIANTS.has(v) || NAMED_SCREEN_VARIANT_RE.test(v) || /^(?:min|max)-\[[0-9.]+(?:px|rem|em)\]$/.test(v) || ARBITRARY_VARIANT_RE.test(v) || PARAM_VARIANT_RE.test(v) || GROUP_PEER_RE.test(v);
 }
-/**
-* Split a class into its variant segments and base, respecting brackets.
-*
-* A plain `split(':')` breaks every class whose brackets contain a colon —
-* `[&_a:hover]:underline`, an arbitrary bg value holding `url(https://…)`
-* — which is most of what
-* descendant styling is for. Depth tracking is the difference between those
-* being expressible and being rejected as malformed.
-*/
 function splitClassVariants(cls) {
 	const variants = [];
 	let depth = 0;
@@ -4297,11 +3722,7 @@ function splitClassVariants(cls) {
 		base: cls.slice(start)
 	};
 }
-/** numeric flex shorthand Tailwind v4 accepts on its scale: `flex-2`, `flex-0.5` */
 var FLEX_NUMERIC_RE = /^flex-\d+(?:\.\d+)?$/;
-/** every display utility — one conflict group, whether or not the visual
-* catalog lists it (it omits the inline-* forms), so `inline-flex` replaces
-* `flex` instead of coexisting with it and losing to stylesheet order */
 var DISPLAY_CLASSES = /* @__PURE__ */ new Set([
 	"block",
 	"inline-block",
@@ -4314,26 +3735,9 @@ var DISPLAY_CLASSES = /* @__PURE__ */ new Set([
 	"contents",
 	"flow-root"
 ]);
-/** does the class list already set a display, at any variant? Wider than
-* matching the Style panel's Display property, whose catalog omits the
-* inline-* forms: `inline-flex` IS a display, and treating it as absent makes
-* callers add a second one beside it. */
 function hasDisplayClass(tokens) {
 	return tokens.some((t) => DISPLAY_CLASSES.has(splitVariant(t).base));
 }
-/**
-* Which background property a `bg-*` class sets, decided by its VALUE SHAPE.
-*
-* It used to be one regex of bare keywords and "everything else is the colour",
-* so every arbitrary value — `bg-[radial-gradient(…)]`, `bg-[url(…)]`, even
-* `bg-[size:24px_24px]` — read as background-color and evicted `bg-[#070707]`
-* (and was evicted by it). A layered background (colour + gradient + size) was
-* not expressible through `applyClass`, and a hover effect's `bg-muted` wiped a
-* card's gradient. `shared/interactionClasses.js` already split on value shape;
-* this is the same rule. The data-type hint Tailwind accepts inside the bracket
-* (`bg-[size:…]`, `bg-[position:…]`, `bg-[image:…]`, `bg-[color:…]`) is honoured
-* first, then the function name, then the keyword families.
-*/
 function backgroundKey(base) {
 	if (!base.startsWith("bg-")) return void 0;
 	const value = base.slice(3);
@@ -4356,24 +3760,10 @@ function backgroundKey(base) {
 	if (value.startsWith("blend-")) return "background-blend-mode";
 	return "background-color";
 }
-/** font-family utilities — the keyword forms AND an arbitrary family
-* (`font-[Instrument_Serif]`, letters in the value). One conflict group so
-* `font-mono` and `font-[JetBrains_Mono]` replace each other instead of
-* coexisting (both set font-family; the last emitted would otherwise win at
-* random, leaving the arbitrary face silently inert) */
 var FONT_FAMILY_RE = /^font-(?:sans|serif|mono)$/;
 var FONT_ARBITRARY_FAMILY_RE = /^font-\[[^\]]*[A-Za-z][^\]]*\]$/;
-/** Tailwind v4 spacing/size utilities take ANY numeric step (the scale is
-* `calc(var(--spacing) * n)`, so `h-11`, `h-13`, `p-7` are all valid) plus a
-* few keywords — the old enumerated scale rejected the in-between steps
-* (`h-11` failed while `h-10`/`h-12` passed). Signed for the offset/margin/
-* translate families. */
 var SPACING_PREFIX = "(?:p[xytblr]?|m[xytblr]?|gap(?:-[xy])?|space-[xy]|w|h|size|min-w|min-h|max-w|max-h|basis|top|right|bottom|left|inset(?:-[xy])?|translate-[xy]|scroll-m[xytblr]?|scroll-p[xytblr]?)";
 var SPACING_NUMERIC_RE = new RegExp(`^-?${SPACING_PREFIX}-\\d+(?:\\.\\d+)?$`);
-/** fraction sizing — `basis-1/2`, `w-2/3`, `max-w-1/2`, `-translate-x-1/3`.
-* Tailwind resolves any n/d on these families, and they are everyday classes;
-* the numeric-only rule above rejected them, which read as "not a real class"
-* when it only meant "not enumerated". */
 var SPACING_FRACTION_RE = new RegExp(`^-?${SPACING_PREFIX}-\\d+\\/\\d+$`);
 var SIZE_KEYWORD_RE = new RegExp(`^(?:w|h|size|min-w|min-h|max-w|max-h|basis)-(?:${[
 	"full",
@@ -4386,38 +3776,16 @@ var SIZE_KEYWORD_RE = new RegExp(`^(?:w|h|size|min-w|min-h|max-w|max-h|basis)-(?
 	"prose",
 	"px"
 ].join("|")})$`);
-/** the t-shirt sizing scale on the same families. `max-w-4xl` used to pass only
-* because it happened to be hand-listed in `common` while `max-w-3xl` and
-* `max-w-7xl` were not — an enumeration gap that read as "not a real class".
-* Folds into the `size:<family>` conflict group via sizeFamily(). */
 var SIZE_TSHIRT_RE = /^(?:w|h|size|min-w|min-h|max-w|max-h|basis)-(?:3xs|2xs|xs|sm|md|lg|xl|[2-7]xl)$/;
-/** Tailwind v4 resolves these families from any number, so the enumerated
-* sliders in the catalog (scale 0–150 in steps, z 0/10/20/50) were rejecting
-* perfectly ordinary values like `scale-140` and `z-2`. */
 var DYNAMIC_NUMERIC_RE = /^-?(?:scale|scale-x|scale-y|rotate|skew-x|skew-y|z|opacity|order|grow|shrink|columns|leading)-\d+(?:\.\d+)?$/;
-/** the whole border-radius family incl. v4's `rounded-4xl` and the per-corner /
-* logical-side forms, none of which the icon-group catalog lists */
 var ROUNDED_RE = /^rounded(?:-(t|r|b|l|tl|tr|br|bl|s|e|ss|se|es|ee))?(?:-(?:none|xs|sm|md|lg|xl|[2-4]xl|full))?$/;
-/** background-position keywords — the natural companion of `background` media
-* (`bg-center`, `bg-top`, v4's `bg-top-left` plus the legacy `bg-left-top`
-* order). The catalog covers bg-size and bg-repeat but never listed these, so
-* `bg-center` read as "not a real class" while `bg-cover` passed. One conflict
-* group: a background has one position. */
 var BG_POSITION_RE = /^bg-(?:center|top|bottom|left|right|top-left|top-right|bottom-left|bottom-right|left-top|left-bottom|right-top|right-bottom)$/;
-/** transform-origin keywords (`origin-top-left` …). Authored as whole tokens, so
-* the generic "use the arbitrary form" hint used to suggest the INVALID
-* `origin-top-[…]` by splitting at the last dash. */
 var ORIGIN_RE = /^origin-(?:center|top|top-right|right|bottom-right|bottom|bottom-left|left|top-left)$/;
-/** visibility — a property of its own, NOT part of the display group: `invisible`
-* must not evict `flex` (it hides the box without changing its layout role) */
 var VISIBILITY_CLASSES = /* @__PURE__ */ new Set([
 	"visible",
 	"invisible",
 	"collapse"
 ]);
-/** the conflict groups for the utilities the Style panel has no control for
-*  (see the vocabulary block): one key per CSS property, longest prefix first
-*  so `place-self-*` is never read as a `place-*` of another kind */
 var PANEL_LESS_GROUPS = [
 	[/^place-items-/, "place-items"],
 	[/^place-content-/, "place-content"],
@@ -4435,19 +3803,6 @@ var PANEL_LESS_GROUPS = [
 	[/^overscroll-(?:auto|contain|none)$/, "overscroll-behavior"],
 	[/^hyphens-/, "hyphens"]
 ];
-/**
-* A class is valid if every variant segment is known and the base is either
-* an arbitrary-value class (`p-[13px]`), a numeric flex (`flex-2`), in our
-* vocabulary, or a design token.
-*/
-/** colour families an opacity modifier is meaningful on. `/50` on anything else
-* is either a fraction (`w-1/2`, handled by SPACING_FRACTION_RE) or nonsense, so
-* the stem is only re-checked for these. */
-/** a bare arbitrary PROPERTY — `[mask-image:radial-gradient(…)]`,
-* `[grid-template-areas:"a_b"]` — Tailwind's escape hatch for a property no
-* utility covers. Brace-free because it lands in a stylesheet verbatim. The
-* arbitrary-VALUE rule above needs a dash before the bracket, so these were
-* refused as "not a known class" while `mask-[…]` beside them passed. */
 var ARBITRARY_PROPERTY_RE = /^\[([a-z][a-z-]*):[^{};]+\]$/;
 var OPACITY_MODIFIER_RE = /^((?:bg|text|border|ring|outline|divide|shadow|from|via|to|decoration|caret|accent|placeholder|fill|stroke)-.+)\/(?:\d{1,3}|\[[^\]]+\])$/;
 function isValidClass(cls) {
@@ -4470,10 +3825,6 @@ function isValidClass(cls) {
 	if (VISIBILITY_CLASSES.has(base)) return true;
 	return VOCAB_SET.has(base) || TOKEN_CLASSES.includes(base);
 }
-/** the sizing family a class belongs to (`max-w-full` → "max-w", `w-1/2` → "w"),
-* longest prefix first so `max-w-*` never reads as `w-*`. One conflict group per
-* family, so the fraction/keyword forms replace the enumerated ones instead of
-* coexisting — without this `w-1/2` would simply stack onto `w-full`. */
 var SIZE_FAMILIES = [
 	"min-w",
 	"min-h",
@@ -4487,11 +3838,6 @@ var SIZE_FAMILIES = [
 function sizeFamily(base) {
 	for (const family of SIZE_FAMILIES) if (base.startsWith(`${family}-`) && base.length > family.length + 1) return `size:${family}`;
 }
-/** Offsets are one group per side, like SIZE_FAMILIES — the catalog lists only
-* the numeric stops, so `top-full` used to stack onto `top-0` and the winner was
-* whichever Tailwind emitted last. The value shape is checked rather than the
-* prefix alone, or v4's `inset-ring-*` / `inset-shadow-*` would be read as
-* offsets. Longest prefix first, so `inset-x-0` is not an `inset`. */
 var OFFSET_FAMILIES = [
 	"inset-x",
 	"inset-y",
@@ -4510,13 +3856,6 @@ function offsetFamily(base) {
 		return OFFSET_VALUE_RE.test(value) ? `offset:${family}` : void 0;
 	}
 }
-/** the catalog property a bare class belongs to, if any.
-*
-* Memoized: this scans the whole catalog, and `mergeClassLayers` asks it for
-* every class of every element carrying variant overrides — on a canvas
-* rendering a few thousand Buttons across three frames that was the second
-* largest cost of opening a page. The answer depends only on the class and
-* the token vocabulary, so `setStyleTokens` is what clears it. */
 var propForBaseCache = /* @__PURE__ */ new Map();
 function propForBase(base) {
 	if (propForBaseCache.has(base)) return propForBaseCache.get(base);
@@ -4528,12 +3867,6 @@ function propForBase(base) {
 	propForBaseCache.set(base, found);
 	return found;
 }
-/**
-* A stable identity for the CSS property a bare class controls, used to detect
-* conflicts. Prefers the catalog property; falls back to pattern-based groups
-* (e.g. every `flex-*` shorthand shares one identity) so a typed `flex-2`
-* replaces the icon-picked `flex-1`.
-*/
 function propKey(base) {
 	if (FLEX_NUMERIC_RE.test(base) || [
 		"flex-auto",
@@ -4562,7 +3895,6 @@ function propKey(base) {
 	if (dynamic && DYNAMIC_NUMERIC_RE.test(base)) return `dynamic:${dynamic[1]}`;
 	return propForBase(base);
 }
-/** an existing token on the same property + variant that `cls` would collide with */
 function conflictingToken(cls, tokens) {
 	const { variant, base } = splitVariant(cls);
 	const key = propKey(base);
@@ -4572,11 +3904,6 @@ function conflictingToken(cls, tokens) {
 		return s.variant === variant && s.base !== base && propKey(s.base) === key;
 	});
 }
-/**
-* The prerequisite class `cls` needs (matched to its own variant) when it maps
-* to a display-gated property and no matching display is present yet — e.g.
-* `flex-row` → `flex`, `grid-cols-3` → `grid`, `hover:flex-row` → `hover:flex`.
-*/
 function prerequisiteFor(cls, tokens) {
 	const { variant, base } = splitVariant(cls);
 	const r = propForBase(base)?.relevance;
@@ -4584,19 +3911,11 @@ function prerequisiteFor(cls, tokens) {
 	if (hasDisplayClass(tokens)) return void 0;
 	return `${variant}${r.values.includes("flex") ? "flex" : r.values[0]}`;
 }
-/** true when two bare classes control the same CSS property (e.g. `flex-row`
-* and `flex-col`, or `p-2` and `p-4`) — used to resolve per-breakpoint overrides */
 function sameProperty(a, b) {
 	if (a === b) return true;
 	const ka = propKey(a);
 	return ka !== void 0 && ka === propKey(b);
 }
-/**
-* What `prefix-…` means when it is NOT a colour, per prefix that doubles as
-* one. Defined by the non-colours because those are a closed set, while a
-* colour is a palette name, a project token, a keyword or an arbitrary value —
-* and a project's tokens are not known to every caller of this module.
-*/
 var NOT_A_PAINT = {
 	text: /^(?:xs|sm|base|lg|xl|\dxl|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|\[[\d.].*\])$/,
 	border: /^(?:\d+|[xytrblse](?:-\d+)?|solid|dashed|dotted|double|hidden|none|collapse|separate|spacing-.*|\[[\d.].*\])$/,
@@ -4609,7 +3928,6 @@ var NOT_A_PAINT = {
 	accent: /^$/,
 	caret: /^$/
 };
-/** `text:paint` for a colour class on a prefix that doubles as one, else undefined */
 function paintFamily(base) {
 	const dash = base.indexOf("-");
 	if (dash === -1) return void 0;
@@ -4618,8 +3936,6 @@ function paintFamily(base) {
 	if (!not || not.test(base.slice(dash + 1))) return void 0;
 	return `${prefix}:paint`;
 }
-/** sides and modes that are part of a utility's NAME, not its value: `border-t`
-* is a different property from `border`, where `border-2` is the same one */
 var NAME_TAILS = /* @__PURE__ */ new Set([
 	"x",
 	"y",
@@ -4632,8 +3948,6 @@ var NAME_TAILS = /* @__PURE__ */ new Set([
 	"inset",
 	"reverse"
 ]);
-/** a class minus its value: `px-4` → `px`, `underline-offset-2` →
-* `underline-offset`, `-mt-4` → `mt`, `border-t` → `border-t` */
 function headOf(base) {
 	const bare = base.startsWith("-") ? base.slice(1) : base;
 	if (/^flex-(?:no)?wrap/.test(bare)) return "flex-wrap";
@@ -4642,19 +3956,6 @@ function headOf(base) {
 	if (at <= 0) return bare;
 	return NAME_TAILS.has(bare.slice(at + 1)) ? bare : bare.slice(0, at);
 }
-/**
-* Do two bare classes set the same property, for the purpose of LAYERING one
-* class string over another?
-*
-* Wider than `sameProperty`, which answers from the style catalog and so has
-* no answer for what the catalog does not list — side spacing (`px-4`), rings,
-* outlines, token colours on `text-`. There that is harmless: a class it
-* cannot place is simply added. Here a missed conflict leaves `px-4 px-3` on
-* one element, and which of the two wins is decided by stylesheet order.
-*
-* So: colours first (by prefix), then the catalog where it knows BOTH classes,
-* then the class's own name.
-*/
 function sameLayerProperty(a, b) {
 	if (a === b) return true;
 	const pa = paintFamily(a);
@@ -4665,20 +3966,6 @@ function sameLayerProperty(a, b) {
 	if (ka !== void 0 && kb !== void 0) return ka === kb;
 	return headOf(a) === headOf(b);
 }
-/**
-* Layer class strings, later wins per property: `mergeClassLayers('h-9 px-4
-* bg-primary', 'h-8 px-3')` is `bg-primary h-8 px-3`.
-*
-* A base class an override replaces is REMOVED, not left beside it. Two
-* Tailwind classes on one property do not resolve by their order in the class
-* attribute but by their order in the stylesheet — so `h-9 h-8` is whichever
-* Tailwind happened to emit last, which is not a thing to build variants on.
-*
-* Conflicts are per variant, like everywhere else here: `hover:bg-accent` does
-* not evict `bg-primary`. NOT the published runtime's heuristic
-* (shared/interactionClasses.js), which cannot tell `rounded-lg` from
-* `rounded-md` or `text-sm` from `text-xs` — exactly what a size axis changes.
-*/
 function mergeClassLayers(base, ...layers) {
 	let tokens = base.split(/\s+/).filter(Boolean);
 	for (const layer of layers) for (const cls of (layer ?? "").split(/\s+/).filter(Boolean)) {
@@ -4691,17 +3978,7 @@ function mergeClassLayers(base, ...layers) {
 	}
 	return tokens.join(" ");
 }
-/** families where an off-scale value really is expressible as `prefix-[value]`.
-* The old hint split ANY class at its last dash and offered the arbitrary form,
-* which produced invalid advice for keyword utilities — `origin-top-left` became
-* "use origin-top-[…]", a class that does not exist. */
 var ARBITRARY_CAPABLE = /^(?:p[xytblr]?|m[xytblr]?|gap(?:-[xy])?|w|h|size|min-w|min-h|max-w|max-h|basis|top|right|bottom|left|inset(?:-[xy])?|translate-[xy]|scale|scale-[xy]|rotate|z|opacity|leading|tracking|text|bg|border|rounded|blur|duration|delay|grid-cols|grid-rows|col-span|row-span|aspect|shadow|outline|ring)$/;
-/**
-* Why a class was rejected and what to try instead: the arbitrary form when the
-* family supports one, plus the nearest real classes from the vocabulary. Both
-* halves matter — "not a known class" alone leaves a caller guessing, and a
-* fabricated arbitrary form sends them somewhere that silently does nothing.
-*/
 function unknownClassHint(value) {
 	const { variants, base } = splitClassVariants(value);
 	const variant = variants.length ? `${variants.join(":")}:` : "";
@@ -4717,13 +3994,6 @@ function unknownClassHint(value) {
 	if (near.length) parts.push(`did you mean ${near.map((c) => `"${variant}${c}"`).join(", ")}?`);
 	return parts.length ? ` — ${parts.join("; ")}` : "";
 }
-/**
-* Validates a typed class against the current token list and returns the
-* resulting tokens (conflict replaced, prerequisite auto-added) or an error.
-* `prerequisites: false` skips the flex/grid prerequisite injection — used by
-* fields (e.g. an interaction's to-state) where a display class shouldn't be
-* added implicitly.
-*/
 function applyClass(cls, tokens, opts = {}) {
 	const value = cls.trim();
 	if (!value) return { error: "" };
@@ -4741,31 +4011,11 @@ function applyClass(cls, tokens, opts = {}) {
 }
 //#endregion
 //#region src/lib/variants.ts
-/**
-* Variants — how one component's instances differ in look.
-*
-* A component declares axes (`variant`, `size`); each master node may carry
-* class overrides per option (`node.variantClasses['size:sm']`); an instance
-* picks one option per axis (`node.variants` on its wrapper). What an element
-* wears is its base classes with the picked options layered on, in axis order.
-*
-* Which options an instance picks is resolved with the rest of its chain, in
-* `shared/instances.js`. This module is the other half — turning picks into a
-* class string — and lives in TS because it needs the full style catalog. It
-* is bundled into the MCP runtime, which is also where the exporter gets it.
-*/
-/** the key an option's overrides are stored under on a master node */
 var variantKey = (axis, option) => `${axis}:${option}`;
-/** the name rule for an axis or an option: what reads well in a key and a select */
 var VARIANT_NAME_RE = /^[a-z][a-z0-9-]*$/;
-/** the option `picks` selects on each of a component's axes, defaults filled in */
 function pickedKeys(def, picks) {
 	return (def?.variants ?? []).map((axis) => variantKey(axis.name, axis.options.includes(picks[axis.name] ?? "") ? picks[axis.name] : axis.default));
 }
-/**
-* The classes a master node wears for an instance with these picks. A node
-* with no overrides — most of them — costs nothing.
-*/
 function effectiveClasses(node, def, picks) {
 	const base = node.classes ?? "";
 	const overrides = node.variantClasses;
@@ -4774,32 +4024,6 @@ function effectiveClasses(node, def, picks) {
 }
 //#endregion
 //#region src/lib/componentOps.ts
-/**
-* Whole-project operations on components — rename, duplicate, categorize,
-* detach, delete.
-*
-* These live here rather than in `useComponents` because every one of them
-* spans ALL pages, while the composable's `masterMap` / `detachComponent` are
-* bound to the active page. Editing ONE tree — a master, or a page — is
-* `lib/treeOps`; this is what the rest of the project then has to be told.
-* `pushMasterStructure` and the detach verbs are re-exported into the committed
-* MCP runtime bundle, so the agent path runs this code rather than a copy of
-* it: rebuild the bundle (`npm run build:mcp-runtime`) after changing them.
-*
-* All of it is pure: a `Project` in, mutations out, no Vue. That is what makes
-* it testable headlessly.
-*/
-/**
-* The ONE writer of the optional keys, so their JSON key order is the same
-* everywhere. `computeMerge` compares whole-object `JSON.stringify`, which is
-* key-order sensitive: a def built `{id,name,category,root}` and one built
-* `{id,name,root,category}` are equal in every way that matters and would
-* still read as a conflict. Deleting them all and re-adding them puts them
-* last, in one order, always.
-*
-* `meta` is the WHOLE set: a key left out is a key removed. Pass what the def
-* already has for the ones that are not changing.
-*/
 function setComponentMeta(def, meta) {
 	delete def.category;
 	delete def.variants;
@@ -4811,7 +4035,6 @@ function setComponentMeta(def, meta) {
 		default: axis.default
 	}));
 }
-/** where a component is actually used — the number the delete confirm quotes */
 function componentUsage(project, name) {
 	let count = 0;
 	const pages = [];
@@ -4834,12 +4057,6 @@ function componentUsage(project, name) {
 		hosts
 	};
 }
-/**
-* Renames a component, every instance of it, and every mirror of it.
-*
-* Returns the name actually used (normalized and de-duplicated), or null when
-* the id doesn't resolve.
-*/
 function renameComponent(project, id, rawName) {
 	const def = project.components.find((c) => c.id === id);
 	if (!def) return null;
@@ -4856,7 +4073,6 @@ function renameComponent(project, id, rawName) {
 	});
 	return name;
 }
-/** An independent copy under a new name. Creates no instances. */
 function duplicateComponent(project, id) {
 	const def = project.components.find((c) => c.id === id);
 	if (!def) return null;
@@ -4884,7 +4100,6 @@ function setComponentCategory(project, id, category) {
 	});
 	return true;
 }
-/** what a host says about a nested instance — the state a mirror carries */
 var MIRROR_KEYS = [
 	"content",
 	"src",
@@ -4895,7 +4110,6 @@ var MIRROR_KEYS = [
 	"variants",
 	"link"
 ];
-/** `node` takes, for each key it does not set itself, the first mirror's value */
 function inheritFromMirrors(node, mirrors) {
 	for (const key of MIRROR_KEYS) {
 		if (node[key] !== void 0 && node[key] !== "") continue;
@@ -4903,16 +4117,6 @@ function inheritFromMirrors(node, mirrors) {
 		if (from) node[key] = deepClone(from[key]);
 	}
 }
-/**
-* One instance's nodes with their masters — the shared pairing
-* (lib/instances), over any page rather than only the active one, plus the
-* master → instance direction a detach needs to retarget bindings.
-*
-* Only the nodes that belong to THIS component are paired. An instance nested
-* inside it stays an instance when its host is detached, so its nodes are not
-* baked — they only take over what the host's master said about them, which
-* is about to stop being reachable.
-*/
 function pairWithMaster(instance, def, components) {
 	const pairs = [];
 	const masterToInstance = /* @__PURE__ */ new Map();
@@ -4936,7 +4140,6 @@ function pairWithMaster(instance, def, components) {
 		masterToInstance
 	};
 }
-/** Copies the master's shared state onto the page nodes that were inheriting it. */
 function bakeMasterState(pairs, masterToInstance) {
 	const retarget = (targetId) => targetId ? masterToInstance.get(targetId) ?? targetId : null;
 	for (const { node, master, classes } of pairs) {
@@ -4973,18 +4176,9 @@ function bakeMasterState(pairs, masterToInstance) {
 		}
 	}
 }
-/**
-* The exporter's own test (`server/export.mjs`, renderNode): a `:Name` wrapper
-* with nothing of its own emits NO element at all — its children render
-* inline. Such a wrapper has to be UNWRAPPED on detach, not retyped: a `:div`
-* in its place would add a box the published page never had, and with it
-* whatever `space-y-*` / `divide-*` / `first:` rules the real parent applies
-* to its children.
-*/
 function isBareWrapper(root) {
 	return !root.classes?.trim() && !root.background && !root.interactions?.length;
 }
-/** Detaches one instance. */
 function detachOne(page, def, instanceId, components) {
 	const instance = findNode(page.elements, instanceId);
 	if (!instance || instance.type !== def.name) return false;
@@ -5006,10 +4200,6 @@ function detachOne(page, def, instanceId, components) {
 	parent.children.splice(at, 1, ...instance.children);
 	return true;
 }
-/**
-* Turns every instance of a component, on every page, back into plain
-* elements that look exactly the same. Returns how many were detached.
-*/
 function detachComponentInstances(project, def) {
 	let detached = 0;
 	for (const page of project.pages) {
@@ -5022,7 +4212,6 @@ function detachComponentInstances(project, def) {
 	}
 	return detached;
 }
-/** Detaches a single instance — the canvas context menu's "Detach". */
 function detachInstance(project, page, instanceId) {
 	const node = findNode(page.elements, instanceId);
 	const def = node ? project.components.find((c) => c.name === node.type) : null;
@@ -5054,19 +4243,9 @@ function pushMasterStructure(project, def, report) {
 	}
 	return moved;
 }
-/**
-* Bring every mirror in step with the component it mirrors, inner components
-* first so a host two levels up mirrors an already-current structure.
-*/
 function alignMirrors(components, chain) {
 	for (const host of dependencyOrder$1(components)) alignHostMirrors(host, components, chain);
 }
-/**
-* Deletes a component, detaching every instance first so no page loses its
-* content. Interactions and design tokens the component used stay in the
-* project — they are shared libraries, and the detached elements still use
-* them.
-*/
 function deleteComponent(project, id) {
 	const def = project.components.find((c) => c.id === id);
 	if (!def) return false;
@@ -5081,11 +4260,6 @@ function deleteComponent(project, id) {
 	project.components = project.components.filter((c) => c.id !== id);
 	return true;
 }
-/**
-* Turns one nested instance, in a host's MASTER, into plain elements that look
-* the same: the inner component's structure and look, with what the host said
-* about it on top. The tree-form twin of `detachOne`, same bare-wrapper rule.
-*/
 function detachInMaster(host, wrapper, inner) {
 	const parent = findParent([host.root], wrapper.id);
 	if (!parent) return;
@@ -5116,19 +4290,13 @@ function detachInMaster(host, wrapper, inner) {
 		type: "div"
 	});
 }
-/** what the mirror sets wins over what the clone inherited from the master */
 function clearForOverlay(node, mirror) {
 	for (const key of MIRROR_KEYS) if (mirror[key] !== void 0 && mirror[key] !== "") delete node[key];
 	return node;
 }
 //#endregion
 //#region src/lib/shared/urls.js
-/** hrefs: same-site paths/fragments plus the safe external schemes */
 var SAFE_HREF = /^(\/|#|https?:|mailto:|tel:)/i;
-/** media src/background: the href allowlist plus inline image/video data
-* URLs. Blocks javascript:/data:text-html etc. — harmless today (no
-* iframe/script element exists) but a hard gate before any such element
-* is ever added. */
 var SAFE_SRC = /^(\/|#|https?:|mailto:|tel:|data:image\/|data:video\/)/i;
 //#endregion
 //#region src/lib/shared/richtext.js
@@ -5156,11 +4324,9 @@ var ALLOWED = {
 };
 var escapeText$2 = (s) => s.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 var escapeAttr$1 = (s) => s.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
-/** true when a string uses any of the allowed rich tags */
 function isRich(value) {
 	return typeof value === "string" && /<\/?(b|strong|i|em|u|mark|code|sup|sub|a|ul|ol|li|br|hr|p|h2|h3|h4|blockquote)[\s>/]/i.test(value);
 }
-/** sanitize a rich-text fragment to the allowed subset (idempotent) */
 function sanitizeRich(html) {
 	if (typeof html !== "string" || !html) return "";
 	const out = [];
@@ -5203,21 +4369,7 @@ function sanitizeRich(html) {
 }
 //#endregion
 //#region src/lib/html/ids.ts
-/**
-* Short `data-id`s.
-*
-* A node id is a uuid. Printing 36 characters on every element of a 9,000-node
-* page costs an agent more context than the markup does, and the id only has
-* to be unique within the ONE document the agent is looking at. So the read
-* emits an 8-hex prefix, lengthened only where two ids collide, and the write
-* resolves a prefix back.
-*
-* It is the strongest adoption signal there is: an agent that echoes back the
-* ids it read keeps every node's identity — its interactions, its
-* translations, its comment anchors — whatever else it rewrites.
-*/
 var BASE = 8;
-/** node id → the shortest unique prefix, per tree */
 function shortIds(roots) {
 	const ids = [];
 	walkNodes(roots, (n) => ids.push(n.id));
@@ -5234,7 +4386,6 @@ function shortIds(roots) {
 	}
 	return out;
 }
-/** the inverse: a short id (or a full uuid) → the node it addresses */
 function nodesByShortId(roots) {
 	const out = /* @__PURE__ */ new Map();
 	const shorts = shortIds(roots);
@@ -5251,11 +4402,8 @@ function nodesByShortId(roots) {
 var INDENT = "  ";
 var escapeText$1 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 var escapeAttr = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-/** a `data:` URL is megabytes of base64 nobody can read or edit — the read
-*  shows that it is one, and a write preserves whatever the node already had */
 var ELIDED_DATA_URL = "data:…(elided)";
 var showSrc = (src) => src.startsWith("data:") ? ELIDED_DATA_URL : src;
-/** the attributes one node writes, in canonical order */
 function attrsFor(node, ctx, inInstance) {
 	const mapping = ctx.map.get(node.id);
 	const shared = inInstance || !!mapping && isInstanceWrapper$1(mapping);
@@ -5287,7 +4435,6 @@ function attrsFor(node, ctx, inInstance) {
 	rest.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 	return [...out, ...rest].map(([name, value]) => value === true ? ` ${name}` : ` ${name}="${escapeAttr(String(value))}"`);
 }
-/** which bundled icon a node's svg is, or `custom` for hand-written markup */
 var iconName = (node) => node.svg?.match(/data-icon="([a-z0-9:_-]+)"/)?.[1] ?? (node.svg ? "custom" : "");
 function emit(node, depth, ctx, inInstance, out) {
 	const pad = INDENT.repeat(depth);
@@ -5335,7 +4482,6 @@ function contextFor(project, roots, mapRoots, opts) {
 		}
 	};
 }
-/** one page's body as HTML */
 function pageToHtml(page, project, opts = {}) {
 	const body = page.elements.find((n) => n.type === "body");
 	if (!body) return "<body />";
@@ -5347,7 +4493,6 @@ function pageToHtml(page, project, opts = {}) {
 	emit(root, 0, ctx, !!mapping && !isInstanceWrapper$1(mapping), out);
 	return out.join("\n");
 }
-/** a component master as HTML — its root element IS the component */
 function masterToHtml(def, project, opts = {}) {
 	const ctx = {
 		...contextFor(project, [def.root], def.root.children, opts),
@@ -5415,8 +4560,6 @@ function parseHtml(input, components = []) {
 		});
 	};
 	const stack = [];
-	/** refused open tags, by name, whose matching close must be swallowed so one
-	* bad tag reports once instead of cascading */
 	const unknownOpen = /* @__PURE__ */ new Map();
 	const push = (node) => {
 		const parent = stack[stack.length - 1];
@@ -5480,7 +4623,6 @@ function parseHtml(input, components = []) {
 		};
 		const { attrs, selfClosed } = head;
 		i = head.after;
-		/** a refused open tag whose close must be swallowed rather than reported */
 		const refuseTag = (message) => {
 			fail(start, message);
 			if (!selfClosed && !isLenientVoidTag(tag)) unknownOpen.set(tag, (unknownOpen.get(tag) ?? 0) + 1);
@@ -5532,8 +4674,6 @@ function parseHtml(input, components = []) {
 		errors,
 		notes
 	};
-	/** a structural error leaves the rest of the input meaningless: stop, so the
-	*  report is the one real problem rather than its echoes */
 	function bail(offset, message) {
 		fail(offset, message);
 		return {
@@ -5542,8 +4682,6 @@ function parseHtml(input, components = []) {
 			notes
 		};
 	}
-	/** text outside an element: whitespace is layout, anything else would render
-	*  nowhere */
 	function reportStrayText(text, offset) {
 		if (!text.trim()) return;
 		const parent = stack[stack.length - 1];
@@ -5607,8 +4745,6 @@ function parseHtml(input, components = []) {
 		}
 	}
 }
-/** the five XML entities plus numeric ones — what a model writes, and all this
-*  format promises to understand */
 function decodeEntities(text) {
 	return text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10))).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 }
@@ -5639,9 +4775,7 @@ function interactionStateKey(interactionId, targetId, scope) {
 function interactionGroupKey(group, instanceScope) {
 	return instanceScope ? `${group}@${instanceScope}` : group;
 }
-/** a channel name: lowercase, hyphenated, at most 40 characters */
 var CHANNEL_NAME_RE = /^[a-z][a-z0-9-]{0,39}$/;
-/** `@` names the format already owns, so neither can be a channel */
 var RESERVED_CHANNEL_NAMES = /* @__PURE__ */ new Set(["item", "locale"]);
 /**
 * Is this `targetId` a channel rather than a node id?
@@ -5653,32 +4787,20 @@ function isChannelTarget(targetId) {
 	const name = targetId.slice(1);
 	return CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
 }
-/** the name a channel target carries, or null when it is not one */
 function channelName(targetId) {
 	return isChannelTarget(targetId) ? targetId.slice(1) : null;
 }
-/** the stored `targetId` for a channel name */
 function channelTargetId(name) {
 	return `@${name}`;
 }
-/** is this a name an element may declare as its channel? */
 function isChannelName(name) {
 	return typeof name === "string" && CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
 }
-/** what a trigger does to its target's state. `toggle` is the default. */
 var INTERACTION_ACTIONS = [
 	"toggle",
 	"on",
 	"off"
 ];
-/** every trigger an interaction binding can use.
-* hover   — on while the pointer is over the trigger (symmetric, ignores action)
-* click   — on click; honours action
-* appear  — first time the trigger scrolls into view (fires once, never unfires)
-* scrolled— while the page is scrolled past `scrollAt` px (symmetric)
-* change  — an input's checked/non-empty state (symmetric, for conditional fields)
-* load    — on as soon as the page renders, and never off (like appear, without
-*           waiting for the viewport) */
 var INTERACTION_TRIGGERS = [
 	"hover",
 	"click",
@@ -5687,41 +4809,25 @@ var INTERACTION_TRIGGERS = [
 	"change",
 	"load"
 ];
-/** user gestures that dismiss (force OFF) a fired interaction */
 var INTERACTION_CLOSE_ON = ["outside", "escape"];
-/** where a `once` binding remembers its state */
 var INTERACTION_ONCE = ["session", "local"];
-/** default scroll offset (px) for the `scrolled` trigger */
 var DEFAULT_SCROLL_AT = 50;
-/** triggers whose state is derived from a condition and so ignore `action`
-* (firing and unfiring are both driven by the trigger itself). `load` is here
-* too: it has no second direction to force, so an action on it would be a
-* silent no-op. */
 var SYMMETRIC_TRIGGERS = /* @__PURE__ */ new Set([
 	"hover",
 	"scrolled",
 	"change",
 	"load"
 ]);
-/** true when the trigger drives state in both directions on its own */
 function isSymmetricTrigger(trigger) {
 	return SYMMETRIC_TRIGGERS.has(trigger);
 }
 //#endregion
 //#region src/lib/shared/fields.js
-/** ids stored on a reference/multi-reference field, always as an array */
 function refIds(entry, fieldName) {
 	const v = entry?.values?.[fieldName];
 	if (Array.isArray(v)) return v;
 	return typeof v === "string" && v ? [v] : [];
 }
-/**
-* Resolve a binding path against a collection + entry scope.
-* Returns the collection/field the value lives on and the entry to read it
-* from — `entry` is null when it can't be resolved yet (no scope entry, or a
-* dangling reference), so callers can still show a {field} placeholder.
-* Returns null when the path names no field at all.
-*/
 function resolveBinding(collections, collection, entry, path) {
 	if (!collection || !path) return null;
 	const dot = path.indexOf(".");
@@ -5745,23 +4851,11 @@ function resolveBinding(collections, collection, entry, path) {
 		entry: typeof id === "string" && refCollection.entries.find((e) => e.id === id) || null
 	};
 }
-/** urls stored on a multi-image field, always as an array */
 function mediaUrls(entry, fieldName) {
 	const v = entry?.values?.[fieldName];
 	if (Array.isArray(v)) return v.filter((u) => typeof u === "string" && u);
 	return typeof v === "string" && v ? [v] : [];
 }
-/**
-* The scope a `multi-image` field presents to :collection-list: one synthetic
-* entry per stored url, in a synthetic collection carrying a single image field
-* named after the source field. So inside `:collection-list[gallery]` you bind
-* `:image[gallery]:` and get exactly as many <img> as the entry actually has —
-* the whole point of the type, versus fixed gallery-1…gallery-7 slots that ship
-* empty <img> tags for every image an entry doesn't have.
-*
-* The synthetic collection is not in project.collections, so it mints no entry
-* routes and `@item` inside the list stays inert — it exists only as a scope.
-*/
 function mediaListScope(field, scopeEntry) {
 	const urls = mediaUrls(scopeEntry, field.name);
 	return {
@@ -5784,13 +4878,6 @@ function mediaListScope(field, scopeEntry) {
 		}))
 	};
 }
-/**
-* Entries a :collection-list[arg] iterates: a collection name lists all of
-* its entries; a multi-reference field of the scoped entry lists the
-* referenced entries (dangling ids skipped, order preserved); a multi-image
-* field lists one synthetic entry per stored image url.
-* Returns { collection, entries } or null when arg names none of those.
-*/
 /**
 * The site's own published pages, as a synthetic collection.
 *
@@ -5868,12 +4955,6 @@ function resolveListScope(collections, scopeCollection, scopeEntry, arg, pages) 
 }
 //#endregion
 //#region src/lib/validateTree.ts
-/**
-* The context, from a project. ONE builder: the editor's issues footer and the
-* HTML writer's diagnostics have to agree about what is broken, and they were
-* two copies of the same four lines — so a check added to one reported nothing
-* in the other.
-*/
 function validateContext(project) {
 	const collections = project.collections ?? [];
 	return {
@@ -5885,8 +4966,6 @@ function validateContext(project) {
 		pages: project.pages ?? []
 	};
 }
-/** the types whose `arg` names a SOURCE (and opens an entry scope) rather
-*  than a field of the scope around them */
 var SCOPE_TYPES = /* @__PURE__ */ new Set([
 	"collection-list",
 	"collection-item",
@@ -5895,12 +4974,9 @@ var SCOPE_TYPES = /* @__PURE__ */ new Set([
 ]);
 function validateTree(root, ctx) {
 	const diags = [];
-	/** every ref seen so far → the node that claimed it */
 	const refAt = /* @__PURE__ */ new Map();
-	/** every channel declared so far → the node that declared it */
 	const channelAt = /* @__PURE__ */ new Map();
 	const collections = ctx.collections;
-	/** the collection an arg presents, resolved the way the renderers resolve it */
 	const scopeCollectionFor = (outer, arg) => {
 		if (!collections || !arg) return null;
 		if (arg === "@pages") return pagesListScope(ctx.pages ?? []).collection;
@@ -6053,13 +5129,6 @@ var masterHost = (def) => ({
 	root: def.root,
 	def
 });
-/**
-* The same, by id.
-*
-* An HTML write can move a node OUT of a subtree it is removing, so "every id
-* under the removed roots" is the wrong set there — what went is exactly the
-* ids the document had and no longer has.
-*/
 function clearBindingsToIds(host, gone) {
 	if (!gone.size) return;
 	walkNodes([host.root], (n) => {
@@ -6075,14 +5144,6 @@ function clearBindingsToIds(host, gone) {
 }
 //#endregion
 //#region src/lib/html/apply.ts
-/**
-* Attribute names an agent reaches for instead of `source` / `data-field`.
-*
-* `data-*` is otherwise authorable, so without this a plausible near miss
-* lands as a custom DOM attribute and binds NOTHING, reported as success. The
-* only clue was a downstream "Unknown collection" diagnostic on a list, and on
-* a leaf there was none at all.
-*/
 var NEAR_MISS_BINDINGS = /* @__PURE__ */ new Set([
 	"data-source",
 	"data-collection",
@@ -6091,19 +5152,11 @@ var NEAR_MISS_BINDINGS = /* @__PURE__ */ new Set([
 	"field",
 	"data-bind"
 ]);
-/** a node's shallow identity for the LCS: what its own tag encodes */
 var signature = (node) => `${node.type}|${node.arg ?? ""}|${node.link ?? ""}`;
 var parsedSignature = (node) => `${node.type}|${argOf(node) ?? ""}|${node.attrs.href ?? ""}`;
 function argOf(node) {
 	return (SOURCE_TYPES.has(node.type) ? node.attrs.source : node.attrs["data-field"]) || void 0;
 }
-/**
-* Longest-common-subsequence alignment of two signature lists → a map from
-* b-index to the a-index it matches. The same primitive the component adoption
-* and the instance realign use, so identity is carried the same way
-* everywhere: a removed sibling no longer shifts the survivors onto each
-* other's nodes.
-*/
 function lcsAlign(a, b) {
 	const n = a.length;
 	const m = b.length;
@@ -6120,15 +5173,6 @@ function lcsAlign(a, b) {
 	else j++;
 	return map;
 }
-/**
-* Apply a parsed document to an existing root.
-*
-* `parsed` is either the root element itself (a `<body>`, or a component's own
-* tag) or just its children — the root element is optional on input, because
-* an agent writing a page body naturally writes the elements and nothing
-* around them. Written out, the root's own attributes are applied too; left
-* out, they are left alone.
-*/
 function applyHtml(root, parsed, opts) {
 	const result = {
 		kept: 0,
@@ -6159,9 +5203,7 @@ function applyHtml(root, parsed, opts) {
 		path,
 		message
 	});
-	/** classes already reported in THIS write — see setClasses */
 	const reportedClasses = /* @__PURE__ */ new Set();
-	/** a readable address for a refusal: the element, with its ref when it has one */
 	const name = (node) => node.ref ? `${node.type}#${node.ref}` : node.type;
 	const under = (parent, node) => `${parent} > ${name(node)}`;
 	const addressable = [root];
@@ -6176,7 +5218,6 @@ function applyHtml(root, parsed, opts) {
 	for (const node of addressable) if (node.ref) byRef.set(node.ref, node);
 	const claim = /* @__PURE__ */ new Map();
 	const claimed = /* @__PURE__ */ new Set();
-	/** the claims the LCS made, as opposed to an id or a ref the agent wrote */
 	const byPosition = /* @__PURE__ */ new Set();
 	const eachParsed = (nodes, visit) => {
 		for (const node of nodes) {
@@ -6228,13 +5269,6 @@ function applyHtml(root, parsed, opts) {
 			col: 0
 		};
 	}
-	/**
-	* Pair this level's parsed children with the existing ones, then recurse.
-	*
-	* The claims are already in; what is left is aligned by an LCS on the
-	* shallow signature (type, binding, link), then by type alone for whatever
-	* that left over. Anything still unpaired is new.
-	*/
 	function alignLevel(parent, parsedChildren, path) {
 		const freeOld = parent.children.map((node, i) => ({
 			node,
@@ -6297,20 +5331,6 @@ function applyHtml(root, parsed, opts) {
 		}
 		parent.children = next;
 	}
-	/**
-	* A component instance.
-	*
-	* Self-closed (`<Card />`) means "this instance, as the component defines
-	* it": the subtree is realigned to the master, which fills a fresh instance
-	* and leaves an existing one's per-instance content exactly as it was.
-	*
-	* Written out (`<Card>…</Card>`) fills its PARTS: the structure has to match
-	* the master, and only content, media and `alt` are taken. That is what
-	* makes a page of eight filled-in Cards ONE write. Classes or a different
-	* element inside are refused by name, because every renderer reads a mapped
-	* node's classes from the master — one written here would render nowhere
-	* while the write reported success.
-	*/
 	function fillInstance(node, parsed, path) {
 		const def = components.find((c) => c.name === node.type);
 		if (!def) return;
@@ -6369,17 +5389,6 @@ function applyHtml(root, parsed, opts) {
 		};
 		fill(node.children, def.root.children, parsed.children, path, def.name);
 	}
-	/**
-	* One part of an instance.
-	*
-	* What an instance owns is its CONTENT, its media, its per-placement `alt`,
-	* its hidden flag, its field-bound attributes and its `htmlId` — a per-page
-	* anchor. Everything else on a mapped node (its classes, its binding, its
-	* link, its shared attributes) is the master's: every renderer reads those
-	* from there, so one written here would render nowhere. Writing back what
-	* the read showed is therefore a no-op, and CHANGING it is refused with the
-	* tool that can actually do it.
-	*/
 	function fillPart(node, parsed, component, path) {
 		const shared = (attr, current) => {
 			if ((parsed.attrs[attr] ?? "") === (current ?? "")) return;
@@ -6576,13 +5585,6 @@ function applyHtml(root, parsed, opts) {
 		assign(node, "ref", ref);
 		byRef.set(ref, node);
 	}
-	/**
-	* The `class` attribute is the WHOLE list, so a token the style catalog does
-	* not model is KEPT and reported — every renderer and the exporter use
-	* `node.classes` verbatim, so dropping one would change the published page.
-	* What it costs is that the Style panel cannot show it as a control, which
-	* is what the warning says.
-	*/
 	function setClasses(node, value, path) {
 		const tokens = value.split(/\s+/).filter(Boolean);
 		const unmodelled = tokens.filter((t) => !isValidClass(t) && !reportedClasses.has(t));
@@ -6635,11 +5637,6 @@ function applyHtml(root, parsed, opts) {
 		}
 		assign(node, "content", text);
 	}
-	/**
-	* `data-slot` declares a SLOT on a component's master: a container whose
-	* children are each instance's own. Only a master write can set one — on a
-	* page the flag is the component's and arrives as an echo of the read.
-	*/
 	function setSlot(node, parsed, path) {
 		if (!opts.def) return;
 		if (node === root) {
@@ -6652,16 +5649,6 @@ function applyHtml(root, parsed, opts) {
 		}
 		if (!node.slot) node.slot = true;
 	}
-	/**
-	* `data-channel` declares that this element LISTENS on a channel: every
-	* binding in the project whose target is `@<name>` drives it, wherever it
-	* was declared. Site-wide by definition, so the name is the address and a
-	* malformed one reaches nothing.
-	*
-	* Refused on an instance wrapper for the same reason a class is: the wrapper
-	* emits no element of its own, so the effect's classes would land nowhere
-	* while the write reported success.
-	*/
 	function setChannel(node, value, isInstance, tag, path) {
 		if (isInstance) {
 			refuse(path, `<${tag}> emits no element of its own, so it cannot listen on a channel — declare it on an element inside ${tag} with update_component`);
@@ -6677,22 +5664,10 @@ function applyHtml(root, parsed, opts) {
 		}
 		assign(node, "channel", value);
 	}
-	/** `data-hidden` is the editor's hide, not the HTML `hidden` attribute: a
-	*  bare one means true, and an explicit `false` is how an instance SHOWS a
-	*  part its component hides */
 	function setHidden(node, value) {
 		const next = value !== "false";
 		if (node.hidden !== next) node.hidden = next;
 	}
-	/**
-	* `data-icon` names a bundled icon. Echoing back what the node already has
-	* is a no-op (that is the round-trip); a DIFFERENT name sets the icon, when
-	* the caller supplied a resolver for the table.
-	*
-	* `custom` is the serializer's word for "this svg is not a bundled icon", so
-	* it is never a name to resolve — writing it back means "leave the markup
-	* alone", which is exactly what an unchanged round-trip of a custom icon does.
-	*/
 	function setIcon(node, value, path) {
 		const name = value.trim();
 		if (!name || name === iconNameOf(node) || name === "custom") return;
@@ -6703,8 +5678,6 @@ function applyHtml(root, parsed, opts) {
 		}
 		refuse(path, opts.resolveIcon ? `no bundled icon named "${name}" — find one with list_icons, or set custom markup with edit_elements {svg}` : `an icon's markup is not in the HTML here — set it with edit_elements {icon: "${name}"}`);
 	}
-	/** write only a real change, and let an empty value DELETE the key — which
-	*  is what makes a round-trip of an unchanged document byte-identical */
 	function assign(node, key, value) {
 		const next = key === "content" ? value : value.trim();
 		if (!next && key !== "content") {
@@ -6722,7 +5695,6 @@ function applyHtml(root, parsed, opts) {
 	}
 }
 var iconNameOf = (node) => node.svg?.match(/data-icon="([a-z0-9:_-]+)"/)?.[1] ?? (node.svg ? "custom" : "");
-/** the validation context a project implies */
 function contextFromProject(project) {
 	return validateContext(project);
 }
@@ -6785,7 +5757,6 @@ function entryRoutePath(collection, entry) {
 }
 //#endregion
 //#region src/lib/shared/structuredData.js
-/** validates the `custom` JSON-LD text; null when it is fine, else the reason */
 function customSchemaError(text) {
 	const raw = String(text ?? "").trim();
 	if (!raw) return null;
@@ -6804,7 +5775,6 @@ function customSchemaError(text) {
 }
 //#endregion
 //#region src/lib/shared/svg.js
-/** an inline icon is a few hundred bytes; this is generous and still bounded */
 var MAX_SVG_BYTES = 32768;
 var canonical = (names) => new Map(names.map((n) => [n.toLowerCase(), n]));
 var ELEMENTS$1 = canonical([
@@ -6826,7 +5796,6 @@ var ELEMENTS$1 = canonical([
 	"title",
 	"desc"
 ]);
-/** the only elements whose TEXT is kept (escaped); text anywhere else is dropped */
 var TEXT_ELEMENTS = /* @__PURE__ */ new Set(["title", "desc"]);
 var ATTRIBUTES = canonical([
 	"d",
@@ -6880,13 +5849,9 @@ var ATTRIBUTES = canonical([
 	"aria-label",
 	"data-icon"
 ]);
-/** what a value may be made of. No quotes, no `&` (so no entity can smuggle a
-* scheme past the checks below), no angle brackets, no backslash. */
 var VALUE_RE = /^[A-Za-z0-9\s.,#%()+\-_/:]*$/;
-/** the one `url()` allowed: a reference to something in this same SVG */
 var LOCAL_URL_RE = /^url\(#[A-Za-z0-9_-]+\)$/;
 var ID_RE = /^[A-Za-z][A-Za-z0-9_-]*$/;
-/** the only attributes that may hold a `url(#…)` */
 var URL_ATTRIBUTES = /* @__PURE__ */ new Set([
 	"fill",
 	"stroke",
@@ -6923,20 +5888,10 @@ function cleanAttributes(source, { recolor }) {
 	return out;
 }
 var writeAttributes = (attrs) => attrs.map(([k, v]) => ` ${k}="${v}"`).join("");
-/**
-* Sanitize SVG markup for inlining. Returns '' for anything that is not a
-* single well-formed-enough `<svg>`. Idempotent.
-*
-* `recolor` (default on) makes the icon follow the text colour: every paint
-* other than `none` becomes `currentColor`, and a root that declares no fill
-* gets one — an SVG with no fill at all paints BLACK, not the current colour.
-*/
 function sanitizeInlineSvg(markup, { recolor = true } = {}) {
 	if (typeof markup !== "string" || !markup || markup.length > 32768) return "";
 	const out = [];
-	/** open allowed elements, innermost last */
 	const open = [];
-	/** the disallowed element being skipped, with everything inside it */
 	let skipping = null;
 	let skipDepth = 0;
 	let closed = false;
@@ -6997,7 +5952,6 @@ function sanitizeInlineSvg(markup, { recolor = true } = {}) {
 	const result = out.join("");
 	return result.startsWith("<svg") ? result : "";
 }
-/** the root needs a viewBox to scale with its box, and a paint to inherit */
 function normalizeRoot(attrs, { recolor }) {
 	const get = (k) => attrs.find(([name]) => name === k)?.[1];
 	if (!get("viewBox")) {
@@ -7007,12 +5961,6 @@ function normalizeRoot(attrs, { recolor }) {
 	}
 	if (recolor && !get("fill")) attrs.push(["fill", "currentColor"]);
 }
-/**
-* Split sanitized markup into the root's attributes and its inner markup —
-* the shape a renderer needs, since the `<svg>` IS the element and carries
-* the node's own classes, id and listeners. Returns null for anything
-* `sanitizeInlineSvg` did not produce.
-*/
 function parseInlineSvg(markup) {
 	if (typeof markup !== "string") return null;
 	const m = markup.match(/^<svg([^>]*?)(?:\/>|>([\s\S]*)<\/svg>)$/);
@@ -7024,14 +5972,10 @@ function parseInlineSvg(markup) {
 		inner: m[2] ?? ""
 	};
 }
-/** the root attributes every Lucide icon shares */
 var LUCIDE_ROOT = "width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"";
-/** full markup for a bundled Lucide icon, given its inner markup from the table */
 function lucideSvg(name, inner) {
 	return sanitizeInlineSvg(`<svg data-icon="lucide:${name}" ${LUCIDE_ROOT}>${inner}</svg>`);
 }
-/** the bundled icon this markup came from (`arrow-right`), or undefined for a
-* custom SVG */
 function lucideNameOf(markup) {
 	const icon = parseInlineSvg(markup)?.attrs["data-icon"];
 	return icon?.startsWith("lucide:") ? icon.slice(7) : void 0;
@@ -7048,7 +5992,6 @@ function nameError(kind, name) {
 	if (VARIANT_NAME_RE.test(name)) return null;
 	return `An ${kind} name is lowercase letters, digits and dashes, starting with a letter`;
 }
-/** every instance wrapper of `def`, on every page and inside every other master */
 function instancesOf(project, def) {
 	const out = [];
 	const collect = (nodes) => walkNodes(nodes, (n) => {
@@ -7058,15 +6001,6 @@ function instancesOf(project, def) {
 	for (const other of project.components) if (other !== def) collect(other.root.children);
 	return out;
 }
-/**
-* Apply new axes to the project: the def, the master's overrides, and every
-* instance's picks.
-*
-* An instance keeps the look it HAD. Its old pick is read against the old
-* axes (an axis it never picked on meant the old default), carried through
-* the renames, and stored only where it differs from the new default — so
-* changing which option is the default never restyles an existing instance.
-*/
 function rewrite(project, def, next, renames = {}) {
 	const before = def.variants ?? [];
 	const oldAxisName = (axis) => renames.axes?.[axis] ?? axis;
@@ -7160,7 +6094,6 @@ function renameVariantOption(project, def, axisName, from, to) {
 	rewrite(project, def, axes, { options: { [axisName]: { [to]: from } } });
 	return OK;
 }
-/** Removing an option moves the instances wearing it to the axis default. */
 function removeVariantOption(project, def, axisName, option) {
 	const axes = axesOf(def);
 	const axis = axes.find((a) => a.name === axisName);
@@ -7179,8 +6112,6 @@ function setVariantDefault(project, def, axisName, option) {
 	rewrite(project, def, axes);
 	return OK;
 }
-/** Replace a component's axes wholesale (the agent path, and the catalog). Names
-*  that survive keep their overrides and picks; the rest are dropped. */
 function setVariantAxes(project, def, axes) {
 	const seen = /* @__PURE__ */ new Set();
 	for (const axis of axes) {
@@ -7195,10 +6126,6 @@ function setVariantAxes(project, def, axes) {
 	rewrite(project, def, axes);
 	return OK;
 }
-/**
-* An instance's pick on one axis. Stored only where it differs from the
-* default, and re-seated in axis order — see the header.
-*/
 function setInstancePick(def, wrapper, axisName, option, mirrors = []) {
 	const axis = def.variants?.find((a) => a.name === axisName);
 	if (!axis) return fail$2(`"${def.name}" has no "${axisName}" axis`);
@@ -7213,10 +6140,6 @@ function setInstancePick(def, wrapper, axisName, option, mirrors = []) {
 	else delete wrapper.variants;
 	return OK;
 }
-/**
-* The override classes of one option on a master node. Empty removes the key,
-* and the record itself when it was the last one.
-*/
 function setVariantClasses(def, node, key, classes) {
 	const next = {
 		...node.variantClasses ?? {},
@@ -7262,15 +6185,11 @@ function buildScopeRoots(trees) {
 	for (const { tree, root } of trees) walk(tree, root ?? null);
 	return index;
 }
-/** does this node render its children once per entry? */
 function isEntryScopeRoot(node) {
 	return node.type === "collection-list" || node.type === "slider" && !!node.arg;
 }
 //#endregion
 //#region src/lib/shared/locales.js
-/** delete a locale's SEO overrides everywhere, pruning emptied containers so a
-*  touch-then-clear leaves the blob byte-identical (keeps merge signatures
-*  stable, same rule as node/entry overrides) */
 function purgeLocaleSeo(project, code) {
 	for (const page of project.pages ?? []) {
 		const seo = page.seo;
@@ -7285,8 +6204,6 @@ function purgeLocaleSeo(project, code) {
 		if (!Object.keys(settingsSeo.locales).length) delete settingsSeo.locales;
 	}
 }
-/** how many SEO overrides a locale holds (one per page bucket, one for the
-*  project bucket) — so a removal refusal counts what it would really destroy */
 function countLocaleSeo(project, code) {
 	let n = 0;
 	for (const page of project.pages ?? []) if (page.seo?.locales?.[code]) n++;
@@ -7295,12 +6212,6 @@ function countLocaleSeo(project, code) {
 }
 //#endregion
 //#region src/lib/shared/motion.js
-/**
-* Every tweenable property: how it reaches CSS, its default unit, the units it
-* accepts, and the neutral value used when a track omits `from` and the caller
-* can't measure one. `kind` groups properties that compose into one CSS
-* declaration.
-*/
 var LENGTH_UNITS = [
 	"px",
 	"%",
@@ -7449,7 +6360,6 @@ var MOTION_PROPS = {
 var c1 = 1.70158;
 var c3 = 2.70158;
 var c4 = 2 * Math.PI / 3;
-/** Easing functions, all f(0)=0 f(1)=1. Keys are what a step stores. */
 var EASINGS = {
 	linear: (t) => t,
 	"ease-in": (t) => t * t * t,
@@ -7472,7 +6382,6 @@ var EASINGS = {
 	}
 };
 var EASING_KEYS = Object.keys(EASINGS);
-/** what a click does to the play it drives. `toggle` is the default. */
 var ANIMATION_ACTIONS = [
 	"toggle",
 	"on",
@@ -7576,7 +6485,6 @@ function countToFor(compiled, text) {
 	return out;
 }
 var round = (n) => Math.round(n * 1e3) / 1e3;
-/** '#rgb' | '#rrggbb' | '#rrggbbaa' → [r,g,b,a] (a in 0..1); null if unparseable */
 function parseColor(value) {
 	if (typeof value !== "string") return null;
 	const hex = value.trim().replace(/^#/, "");
@@ -7657,8 +6565,6 @@ function compileAnimation(animation) {
 		duration: end
 	};
 }
-/** local progress 0..1 of one track at absolute time `t`, or null when the
-* track hasn't started (so earlier values don't leak) */
 function trackProgress(track, t, childIndex) {
 	const start = track.start + track.stagger * childIndex;
 	if (t < start) return null;
@@ -7757,8 +6663,6 @@ var TRIGGERS = [
 	"scrolled",
 	"change"
 ];
-/** `once` is explicit; a binding that omits appearMode inherits the site
-* default (settings.motion.appearMode) — see effectiveAppearMode */
 var APPEAR_MODES = [
 	"once",
 	"replay",
@@ -7832,7 +6736,6 @@ function validateAnimation(animation) {
 	}
 	return { ok: true };
 }
-/** does this animation write TEXT — i.e. hold a `count` track? */
 function animationWritesText(animation) {
 	for (const step of animation && animation.steps || []) for (const track of step.tracks || []) {
 		const meta = MOTION_PROPS[track && track.prop];
@@ -7918,26 +6821,14 @@ function validateBinding(binding, ctx) {
 	}
 	return { ok: true };
 }
-/** shared constants — never re-spell these as literals in a consumer */
 var TRANSITION_DEFAULTS = {
 	preset: "fade",
-	/** enter duration, ms */
 	duration: 500,
 	easing: "ease-out",
-	/** leaving should feel quicker than arriving */
 	exitRatio: .75,
-	/** hard cap on how long a click may wait for the exit timeline: a broken or
-	* infinite custom animation must never strand the visitor on the old page */
 	exitTimeoutMs: 1500,
 	maxDuration: 5e3
 };
-/**
-* The built-in exit/enter track pairs, played on the page `body`.
-* Offsets are deliberately small: any transform or filter on body makes it the
-* containing block for `position: fixed` descendants, so a fixed header rides
-* along for the duration of the transition. `fade` avoids that entirely and is
-* the default for exactly that reason.
-*/
 var TRANSITION_PRESETS = {
 	fade: {
 		label: "Fade",
@@ -8116,7 +7007,6 @@ function validateMotionSettings(motion, ctx) {
 }
 //#endregion
 //#region src/lib/shared/slider.js
-/** slides visible at once is capped so a typo can't emit a 10000-column track */
 var PER_VIEW_MIN = 1;
 var PER_VIEW_MAX = 8;
 var GAP_MAX = 500;
@@ -8131,8 +7021,6 @@ var SLIDER_DEFAULTS = {
 	loop: false,
 	drag: true
 };
-/** the perView key for the widest breakpoint — the value that applies everywhere
-* until a narrower breakpoint overrides it (desktop-first, like the class cascade) */
 var PER_VIEW_BASE = "base";
 var SLIDER_KEYS = [
 	"arrows",
@@ -8210,33 +7098,12 @@ function resolveSliderConfig(config, breakpoints = []) {
 var SLIDER_DOT_BASE = "size-2 rounded-full bg-current transition-opacity";
 `${SLIDER_DOT_BASE}`;
 `${SLIDER_DOT_BASE}`;
-/**
-* The chrome's own WORDS. Renderer-invented, like its Tailwind classes — which
-* means they live in no tree, nothing ever translated them, and a French route
-* shipped "Previous slide" on every carousel while the worklist reported
-* `missingTranslatable: 0`. They were also invisible to the
-* `untranslated-attributes` publish warning for the same reason.
-*
-* Overridden per slider AND per locale through the node's ordinary localizable
-* attributes (SLIDER_LABEL_ATTRS below), which is the mechanism
-* `node.locales[code].attributes` already provides for placeholder/alt/title —
-* resolved in all three renderers, enumerated by the worklist, written by
-* set_translations. No second translation mechanism, and no schema change.
-*/
 var SLIDER_LABELS = {
 	prev: "Previous slide",
 	next: "Next slide",
 	dots: "Slides",
-	/** `{n}` is the 1-based slide number */
 	dot: "Go to slide {n}"
 };
-/**
-* Which attribute sets which label. Plain `data-*` names, so they are ordinary
-* authored attributes an agent and the Data panel can already write — NOT under
-* the reserved `data-sl-` prefix, which exists to stop an authored name
-* shadowing a value the renderer owns. Here the renderer WANTS the authored
-* value, so the opposite rule applies. They are consumed, never emitted.
-*/
 var SLIDER_LABEL_ATTRS = {
 	"data-prev-label": "prev",
 	"data-next-label": "next",
@@ -8279,38 +7146,14 @@ function sliderLabelAttributes(attributes, config) {
 }
 //#endregion
 //#region src/lib/collectionFields.ts
-/**
-* Never translated, whatever `localize` says: a quantity, a yes/no and a
-* stored choice key read the same in every language. The worklist and the
-* publish warning both skip them, so "nothing left to translate" stays true.
-*/
 var isTranslatableType = (t) => t === "text";
-/**
-* The two field names that collide with an entry's OWN identity.
-*
-* A value lives in `entry.values[name]`, so almost any name is fine — a
-* `status` field is both ordinary and documented (it is what a
-* `data-[status=waiting]:` class matches on). `name` and `slug` are different:
-* an entry carries each as a PROPERTY, `upsert_entries` takes both as top-level
-* keys, and the route an entry gets is built from `entry.slug`. So a field
-* called `slug` renders `values.slug` wherever it is bound while every route,
-* `@item` link and `entryRoutePath` uses the other one — two values with one
-* name, disagreeing silently (E40).
-*
-* Refused at write rather than patched over at read: the drift is invisible,
-* and the fix after the fact is renaming a field every page already binds.
-*/
 var RESERVED_FIELD_NAMES = ["name", "slug"];
-/** why this field name cannot be used, or null */
 function fieldNameError(name) {
 	const trimmed = String(name ?? "").trim();
 	if (!trimmed) return "a field needs a name";
 	if (RESERVED_FIELD_NAMES.includes(trimmed.toLowerCase())) return `"${trimmed}" is an entry's OWN property (${RESERVED_FIELD_NAMES.join(", ")}), set at the top level of an upsert_entries item — a FIELD by that name would be a second value with the same name, and every route and @item link would use the other one. Pick another name`;
 	return null;
 }
-/** a value this field can actually hold, or the reason it cannot. One
-*  implementation: the panel, `upsert_entries` and the import all ask it, so a
-*  value the editor accepts is one the agent can write and vice versa. */
 function fieldValueError(field, value) {
 	if (value === "") return null;
 	if (field.type === "number") return Number.isFinite(Number(value)) ? null : `"${value}" is not a number`;
@@ -8324,8 +7167,6 @@ function fieldValueError(field, value) {
 }
 //#endregion
 //#region src/lib/shared/channels.js
-/** depth-first over a node list — a local walk so this module stays importable
-*  from the exporter, the browser bundle and the MCP runtime alike */
 function walk(nodes, visit) {
 	for (const node of nodes ?? []) {
 		visit(node);

@@ -21,14 +21,12 @@ const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 onMounted(() => load().catch((e) => (error.value = e.message)))
 
-// --- inline "Add user" form (was a modal) ---
 const adding = ref(false)
 const iName = ref('')
 const iEmail = ref('')
 const iRole = ref<Role>('editor')
 const iBusy = ref(false)
 const iError = ref<string | null>(null)
-// step 2: the created invite link (shown in place before resetting)
 const createdLink = ref<string | null>(null)
 const createdEmail = ref('')
 const createdRole = ref<Role>('editor')
@@ -81,7 +79,6 @@ async function copyCreated() {
 
 const admin = computed(() => isAdmin())
 
-// pending invites shown after members; "(you)" first among members
 const sortedUsers = computed(() =>
   [...users.value].sort((a, b) => (a.email === myEmail.value ? -1 : b.email === myEmail.value ? 1 : 0)),
 )
@@ -111,12 +108,10 @@ function flashNotice(msg: string) {
   noticeTimer = setTimeout(() => (notice.value = null), 2500)
 }
 
-// --- confirm dialog (remove / demote / regenerate) ---
 async function ask(title: string, message: string, label: string, action: () => Promise<void>) {
   if (await confirm({ title, message, confirmLabel: label })) await run(action)
 }
 
-// --- member role change (confirm self-demotion) ---
 function changeUserRole(u: UserRow, role: Role) {
   if (!u.id) return
   const demotingSelf = u.email === myEmail.value && u.role === 'admin' && role !== 'admin'
@@ -142,7 +137,6 @@ function removeMember(u: UserRow) {
   )
 }
 
-// --- invite actions ---
 async function copyInvite(i: InviteRow) {
   if (!i.token) return
   await navigator.clipboard.writeText(inviteLink(i.token)).catch(() => {})
@@ -156,9 +150,6 @@ function regenerate(i: InviteRow) {
     `Create a fresh link for ${i.email}? The current link will stop working immediately.`,
     'Regenerate',
     async () => {
-      // the raw token is no longer stored server-side, so the fresh link is
-      // surfaced once here (copied straight to the clipboard) — there is no
-      // re-copy from the list afterward
       const updated = await updateInvite(i.id!, { regenerate: true })
       if (updated?.token) {
         await navigator.clipboard.writeText(inviteLink(updated.token)).catch(() => {})
@@ -195,9 +186,7 @@ function revoke(i: InviteRow) {
       </ButtonUI>
     </template>
 
-    <!-- inline add-user form (before the list) -->
     <div v-if="admin && adding" class="flex flex-col gap-2 rounded-xl border border-input p-3">
-      <!-- step 1: form -->
       <template v-if="!createdLink">
         <RowUI label="Name"><InputUI v-model="iName" placeholder="Their name" /></RowUI>
         <RowUI label="Email">
@@ -213,7 +202,6 @@ function revoke(i: InviteRow) {
         </div>
       </template>
 
-      <!-- step 2: created link -->
       <template v-else>
         <p class="flex items-center gap-1.5 text-xs">
           <Check class="size-3.5 shrink-0 text-success" />
@@ -233,11 +221,8 @@ function revoke(i: InviteRow) {
       </template>
     </div>
 
-    <!-- the list is never empty once loaded (you are in it) — this is the
-         shape it keeps while the users are still being fetched -->
     <EmptyListUI v-if="!sortedUsers.length && !invites.length">No users yet.</EmptyListUI>
     <div v-else class="flex flex-col rounded-xl border border-input">
-      <!-- members -->
       <div
         v-for="u in sortedUsers"
         :key="u.email"
@@ -266,7 +251,6 @@ function revoke(i: InviteRow) {
         </MenuUI>
       </div>
 
-      <!-- pending invites -->
       <div
         v-for="i in invites"
         :key="i.email"

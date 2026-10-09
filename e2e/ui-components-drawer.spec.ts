@@ -64,6 +64,9 @@ const rail = (page: Page, name: string) => page.getByRole('button', { name, exac
  *  hang off class strings */
 const projectRow = (page: Page, name: string) => page.locator(`[data-component="${name}"]`)
 
+/** the group header rows carry their own hook, like the Pages drawer's */
+const groupRow = (page: Page, name: string) => page.locator(`[data-component-group="${name}"]`)
+
 /** Escape, then wait for the dock to actually be gone.
  *
  * It closes on the next render flush, and the next action can outrun it —
@@ -100,6 +103,54 @@ test('the three left columns share one slot', async ({ page }) => {
   // the App button closes whatever holds it
   await page.getByRole('button', { name: 'App', exact: true }).click()
   await expect(page.getByPlaceholder('Search components…')).toBeHidden()
+})
+
+test('a group and a component are made from the drawer, and the row opens variants', async ({
+  page,
+}) => {
+  await openEditor(page)
+  await rail(page, 'Components').click()
+
+  // the section "+" makes a group. It has no backing store of its own, so it
+  // lives in the drawer until a component lands in it.
+  await page.getByRole('button', { name: 'New group' }).click()
+  const groupName = page.getByPlaceholder('e.g. Cards')
+  await groupName.fill('Widgets')
+  await groupName.press('Enter')
+  await expect(groupName).toBeHidden()
+
+  const group = groupRow(page, 'Widgets')
+  await expect(group).toBeVisible()
+
+  // an empty group says what to do with a button, not with prose; the group
+  // row's hover "+" is the same action for a group that already has cards
+  await group.hover()
+  await expect(group.getByRole('button', { name: 'New component' })).toBeVisible()
+  await page.getByRole('button', { name: 'Create component' }).click()
+  const componentName = page.getByPlaceholder('e.g. Hero')
+  await componentName.fill('Widget')
+  await componentName.press('Enter')
+  await expect(componentName).toBeHidden()
+
+  const row = projectRow(page, 'Widget')
+  await expect(row).toBeVisible()
+  await expect(row.getByText('Widget')).toBeVisible()
+
+  // ...in the group, which is now real
+  await expect(groupRow(page, 'Widgets')).toBeVisible()
+
+  // the row's "+" opens the component's settings with the new-axis field
+  // focused, so a variant is one keystroke away
+  await row.hover()
+  await row.getByRole('button', { name: 'Add a variant' }).click()
+  const newAxis = page.getByPlaceholder('New axis: size, variant…')
+  await expect(newAxis).toBeFocused()
+  await newAxis.fill('size')
+  await newAxis.press('Enter')
+  await expect(page.locator('[data-variant-axis="size"]')).toBeVisible()
+
+  // and the category came across with the component
+  await expect(page.locator('input[placeholder="Uncategorized"]')).toHaveValue('Widgets')
 })
 
 test('Tabs: clicking a tab swaps the panel, and tab one restores the default', async ({ page }) => {

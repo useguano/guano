@@ -3,24 +3,15 @@ import { computed, nextTick, ref } from 'vue'
 import { Check, ChevronDown } from 'lucide-vue-next'
 import { useDropdown } from '@/composables/useDropdown'
 
-// A select with the app's own panel instead of the native browser popup.
-// The API is deliberately unchanged from the native version (options +
-// v-model + placeholder, class falls through to the root) so every call site
-// keeps working. The model only ever changes on a real pick — callers guard
-// with `v && …`, so we never emit an empty value on close.
 const props = defineProps<{
   options: { label: string; value: string }[]
-  /** shown when the model is empty or matches no option */
   placeholder?: string
 }>()
 
 const model = defineModel<string>()
 
-// outside-click only: Escape is handled locally (see onKeydown) because the
-// sidebar panel owns window-level Escape and would close along with us
 const { open, root, toggle, close } = useDropdown()
 const panelEl = ref<HTMLElement>()
-// keyboard cursor, seeded to the selected option each time the panel opens
 const active = ref(0)
 
 const selectedIndex = computed(() => props.options.findIndex((o) => o.value === model.value))
@@ -61,8 +52,6 @@ function onKeydown(e: KeyboardEvent) {
     const option = props.options[active.value]
     if (option) pick(option.value)
   } else if (e.key === 'Escape' && open.value) {
-    // while open, Escape belongs to us; when closed it bubbles so the
-    // surrounding panel can close (the ClassInput convention)
     e.stopPropagation()
     close()
   }

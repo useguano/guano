@@ -18,7 +18,6 @@ export function usePage() {
 
   const pages = computed(() => project.value.pages)
 
-  // A project always has at least one page, so there is always an active one
   const activePage = computed(
     () => pages.value.find((p) => p.id === activePageId.value) ?? pages.value[0]!,
   )
@@ -32,15 +31,13 @@ export function usePage() {
     return page
   }
 
-  /** deep-clones a page — everything an element carries lives on the node, so
-   * a JSON clone with fresh ids keeps all of it */
   function duplicatePage(id: string): Page | null {
     const page = pages.value.find((p) => p.id === id)
     if (!page) return null
     const clone = deepClone(page) as Page
     clone.id = uid()
     walkNodes(clone.elements, (n) => (n.id = uid()))
-    delete clone.collectionId // a duplicated collection template is handled separately
+    delete clone.collectionId
     clone.name = `${page.name} copy`
     let path = `${page.path}-copy`
     let n = 2
@@ -53,7 +50,6 @@ export function usePage() {
   }
 
   function removePage(id: string) {
-    // The home page can never be deleted, so a project always keeps at least one page
     if (id === homePage.value.id) return
     project.value.pages = project.value.pages.filter((p) => p.id !== id)
     if (activePageId.value === id) activePageId.value = homePage.value.id
@@ -64,9 +60,6 @@ export function usePage() {
     if (page) page.name = name
   }
 
-  /** edit a page's identity fields. They live on the Page, and nowhere else:
-   * the DSL `@setup` block that used to own them is a derived mirror now.
-   * Stamps updatedAt/updatedBy. */
   function updatePageMeta(id: string, patch: { name?: string; slug?: string; status?: string }) {
     const page = pages.value.find((p) => p.id === id)
     if (!page) return
@@ -78,13 +71,8 @@ export function usePage() {
   }
 
   function setActivePage(id: string) {
-    // drop the outgoing page's plays (the marquee that kept ticking, the held
-    // end states) — the new page's own triggers re-fire on mount
     if (id !== activePageId.value) useMotion().stopAll()
     activePageId.value = id
-    // opening a page means looking at it: if the components board held the
-    // canvas, hand it back. Here rather than in a watcher because re-opening
-    // the page you are already on must work too.
     useViewMode().setCanvas('page')
   }
 

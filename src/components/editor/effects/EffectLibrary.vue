@@ -1,10 +1,5 @@
 <script setup lang="ts">
-// Every effect in the project, as one list.
-//
-// The two motion systems used to be two libraries in two sections, each
-// labelled with its engine — which made choosing one a question about our
-// implementation. Here they are sorted together by name: an effect is an
-// effect, and what it does is visible the moment you select it.
+import { computed } from 'vue'
 import { CircleAlert, Trash2 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import { useInteraction } from '@/composables/useInteraction'
@@ -12,20 +7,24 @@ import { useAnimation } from '@/composables/useAnimation'
 import { useEffects, type LibraryItem } from '@/composables/useEffects'
 import { useModal } from '@/composables/useModal'
 import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
+import { useElementEffects, drawerRefOf } from '@/composables/useElementEffects'
 
 const interactions = useInteraction()
 const animations = useAnimation()
 const effects = useEffects()
 const { confirm } = useModal()
-const { selected, openEffect } = useEffectsDrawer()
+const { selected, trigger, view, openEffect } = useEffectsDrawer()
+const { sections } = useElementEffects()
 
-/**
- * Names only — a named effect, plus every half no effect has claimed. The usage
- * count walks every page and master, so it is read per ROW in the template
- * rather than inside this computed, which would otherwise walk the whole
- * project just to sort the list.
- */
 const items = effects.libraryItems
+
+const editingIds = computed(() => {
+  if (view.value !== 'trigger' || !trigger.value) return new Set<string>()
+  const rows = sections.value.find((s) => s.trigger === trigger.value)?.rows ?? []
+  return new Set(rows.map((pair) => drawerRefOf(pair).id))
+})
+
+const isOpen = (item: LibraryItem) => selected.value?.id === item.id || editingIds.value.has(item.id)
 
 function usage(item: LibraryItem): number {
   if (item.kind === 'effect') {
@@ -37,8 +36,6 @@ function usage(item: LibraryItem): number {
     : animations.usageCount(item.id)
 }
 
-/** an invalid timeline applied nowhere has no row to report on it, so the
- *  library row is the only place its error can surface */
 function errorFor(item: LibraryItem): string | null {
   const id =
     item.kind === 'animation'
@@ -61,7 +58,6 @@ async function remove(item: LibraryItem) {
     confirmLabel: 'Delete',
   })
   if (!ok) return
-  // the cascading delete also un-applies it from every element
   if (item.kind === 'effect') {
     const effect = effects.effectById(item.id)
     if (effect) effects.deleteEffect(effect)
@@ -91,8 +87,9 @@ async function remove(item: LibraryItem) {
         v-for="item in items"
         :key="item.id"
         data-effect-row
+        :data-open="isOpen(item) ? '' : undefined"
         class="group/row flex h-7 items-center gap-1 rounded-lg px-2"
-        :class="selected?.id === item.id ? 'bg-accent/30' : 'hover:bg-accent/15'"
+        :class="isOpen(item) ? 'bg-accent/30' : 'hover:bg-accent/15'"
       >
         <button
           type="button"

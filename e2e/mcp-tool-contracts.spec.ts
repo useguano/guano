@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { mcpSession, pageHtml } from './fixtures/mcpSession'
+import { mcpSession, pageHtml, PREVIEW_TOKEN } from './fixtures/mcpSession'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
 // comes from something that cost the Cocoapp session real calls: a response too
@@ -1330,5 +1330,50 @@ test.describe('a count needs no `to`, and a binding may wait', () => {
       .flat() as { d?: number }[]
     expect(metas.filter((m) => m.d === 600)).toHaveLength(1)
     expect(metas.filter((m) => !('d' in m))).toHaveLength(1)
+  })
+})
+
+test.describe('preview', () => {
+  // 0.1.5 built these urls by treating the server's whole link — token query
+  // and all — as an origin and appending the route to it, so what came back was
+  // `…/?t=<token>/` for the home page and `…/?t=<token>/fr/` for a locale. The
+  // browser then sent `t=<token>/fr/`, the mac compare failed on the slash, and
+  // EVERY url the tool returned answered 401 "preview link missing or expired".
+  // The one tool whose whole job is "look at your work" could look at nothing.
+  const tokenOf = (url: string) => new URL(url).searchParams.get('t')
+
+  test('the url carries the route in its PATH and the token untouched', async () => {
+    const s = await mcpSession()
+    const res = await s.call('preview')
+
+    const u = new URL(res.url)
+    expect(u.pathname).toBe('/')
+    expect(tokenOf(res.url)).toBe(PREVIEW_TOKEN)
+    // the failure mode in one assertion: nothing after the token
+    expect(res.url.endsWith(PREVIEW_TOKEN)).toBe(true)
+    expect(res.url).not.toContain(`${PREVIEW_TOKEN}/`)
+  })
+
+  test('every locale url is a real route, and each keeps the whole token', async () => {
+    const s = await mcpSession()
+    const project = s.stored()
+    project.locales = ['en', 'fr', 'de']
+    project.defaultLocale = 'en'
+    s.writeStore('guano-project:main', JSON.stringify(project))
+
+    const { localeUrls } = await s.call('preview')
+    expect(new URL(localeUrls.en).pathname).toBe('/')
+    expect(new URL(localeUrls.fr).pathname).toBe('/fr/')
+    expect(new URL(localeUrls.de).pathname).toBe('/de/')
+    for (const [code, url] of Object.entries(localeUrls as Record<string, string>)) {
+      expect(tokenOf(url), code).toBe(PREVIEW_TOKEN)
+    }
+  })
+
+  test('the note tells the agent to use the url exactly as returned', async () => {
+    const s = await mcpSession()
+    const res = await s.call('preview')
+    expect(res.note).toContain('EXACTLY as returned')
+    expect(res.previewed).toBe(true)
   })
 })

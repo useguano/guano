@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// Body of the comment popover (rendered by the app PopoverHost, anchored to
-// the marker pin). Posting, replies, resolve/delete.
 import { ref } from 'vue'
 import { Check, CornerDownLeft, Trash2 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -17,7 +15,6 @@ const draft = ref('')
 
 function submit() {
   if (!draft.value.trim()) return
-  // the first message becomes the comment itself, the rest are replies
   if (!props.comment.text) props.comment.text = draft.value.trim()
   else reply(props.comment.id, draft.value)
   draft.value = ''

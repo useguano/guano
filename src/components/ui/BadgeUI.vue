@@ -5,7 +5,6 @@ import { X } from 'lucide-vue-next'
 const props = withDefaults(
   defineProps<{
     removable?: boolean
-    /** 'state' tints the badge to flag a state/variant class (hover:, focus:…) */
     variant?: 'default' | 'state'
   }>(),
   { variant: 'default' },

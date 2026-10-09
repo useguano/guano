@@ -1,24 +1,16 @@
 <script setup lang="ts">
 import { ImagePlus, Plus, X } from 'lucide-vue-next'
 
-// A square upload tile for icons and logos: the tile IS the control. Empty, it
-// is a dashed drop zone; filled, it previews the image at the size it will be
-// seen and a click replaces it, a corner × clears it. Every tile sits on the
-// editor's own input surface — the light/dark favicon pair used to preview on a
-// white and a near-black ground, which made two controls doing the same job
-// look like two different controls.
 withDefaults(
   defineProps<{
     label?: string
     accept?: string
-    /** a 16:9 tile for images shown wide (OG image, covers): the picture
-     * fills it and the remove action reads as a label on hover */
+
     wide?: boolean
   }>(),
   { accept: 'image/*' },
 )
 
-/** the file's data URL (or a remote URL set elsewhere) */
 const model = defineModel<string>({ default: '' })
 
 function onFile(e: Event) {

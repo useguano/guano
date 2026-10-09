@@ -1,27 +1,9 @@
-// Reference-field resolution shared VERBATIM by the client renderers
-// (via useRenderNode/ContentEditor) and the static exporter
-// (server/export.mjs) — plain JS so both sides import the same file.
-//
-// A binding path is a field name, optionally hopping ONE reference:
-//   'title'        → the scoped entry's own field
-//   'author.name'  → the entry referenced by the 'author' field, its 'name'
-// Reference values live only in an entry's base `values` (never locale
-// overrides): reference = target entry id, multi-reference = array of ids.
-
-/** ids stored on a reference/multi-reference field, always as an array */
 export function refIds(entry, fieldName) {
   const v = entry?.values?.[fieldName]
   if (Array.isArray(v)) return v
   return typeof v === 'string' && v ? [v] : []
 }
 
-/**
- * Resolve a binding path against a collection + entry scope.
- * Returns the collection/field the value lives on and the entry to read it
- * from — `entry` is null when it can't be resolved yet (no scope entry, or a
- * dangling reference), so callers can still show a {field} placeholder.
- * Returns null when the path names no field at all.
- */
 export function resolveBinding(collections, collection, entry, path) {
   if (!collection || !path) return null
   const dot = path.indexOf('.')
@@ -40,24 +22,12 @@ export function resolveBinding(collections, collection, entry, path) {
   return { collection: refCollection, field: refField, entry: refEntry }
 }
 
-/** urls stored on a multi-image field, always as an array */
 export function mediaUrls(entry, fieldName) {
   const v = entry?.values?.[fieldName]
   if (Array.isArray(v)) return v.filter((u) => typeof u === 'string' && u)
   return typeof v === 'string' && v ? [v] : []
 }
 
-/**
- * The scope a `multi-image` field presents to :collection-list: one synthetic
- * entry per stored url, in a synthetic collection carrying a single image field
- * named after the source field. So inside `:collection-list[gallery]` you bind
- * `:image[gallery]:` and get exactly as many <img> as the entry actually has —
- * the whole point of the type, versus fixed gallery-1…gallery-7 slots that ship
- * empty <img> tags for every image an entry doesn't have.
- *
- * The synthetic collection is not in project.collections, so it mints no entry
- * routes and `@item` inside the list stays inert — it exists only as a scope.
- */
 function mediaListScope(field, scopeEntry) {
   const urls = mediaUrls(scopeEntry, field.name)
   return {
@@ -78,13 +48,6 @@ function mediaListScope(field, scopeEntry) {
 }
 
 /**
- * Entries a :collection-list[arg] iterates: a collection name lists all of
- * its entries; a multi-reference field of the scoped entry lists the
- * referenced entries (dangling ids skipped, order preserved); a multi-image
- * field lists one synthetic entry per stored image url.
- * Returns { collection, entries } or null when arg names none of those.
- */
-/**
  * The site's own published pages, as a synthetic collection.
  *
  * `:collection-list[@pages]` repeats over them, so an auto nav / footer menu is
@@ -99,8 +62,6 @@ function mediaListScope(field, scopeEntry) {
  */
 export function pagesListScope(pages) {
   const entries = (pages ?? [])
-    // template pages render per ENTRY, not as themselves — listing them would
-    // put "Post" in the nav next to the real pages
     .filter((p) => p.status === 'published' && !p.collectionId)
     .map((page) => {
       const path = page.path || '/'
@@ -109,8 +70,6 @@ export function pagesListScope(pages) {
         id: page.id,
         name: page.name,
         slug,
-        // the route this row links to — read by entryRoutePath, so `@item`
-        // resolves to the page itself rather than to a collection route
         routePath: path,
         values: { title: page.name, path, slug },
         createdAt: 0,
@@ -133,8 +92,6 @@ export function pagesListScope(pages) {
 
 export function resolveListScope(collections, scopeCollection, scopeEntry, arg, pages) {
   if (!arg) return null
-  // built-in sources are '@'-prefixed and resolve before collections; the
-  // lexer reserves '@' in args so there is no ambiguity to resolve
   if (arg === '@pages') return pagesListScope(pages)
   const named = collections.find((c) => c.name === arg)
   if (named) return { collection: named, entries: named.entries }
@@ -150,28 +107,12 @@ export function resolveListScope(collections, scopeCollection, scopeEntry, arg, 
   return { collection: target, entries }
 }
 
-/**
- * Applies a collection-list node's `listQuery` (node-only state, like
- * classes): filter → sort → limit.
- *   { limit?: number,
- *     sortField?: string,        // a text/date field name, or 'createdAt'
- *     sortDir?: 'asc'|'desc',    // default asc
- *     filter?: { field: string, equals?: string, notEmpty?: boolean } }
- * Field comparison uses base values (locale overrides don't reorder lists),
- * numeric-aware so '2' < '10' and ISO dates sort naturally. Malformed
- * queries fail OPEN (input returned unchanged) — a bad query must never
- * blank a published list.
- */
 export function applyListQuery(entries, query, opts) {
   if (!query || typeof query !== 'object' || Array.isArray(query)) return entries
   let out = entries
-  // drop the entry currently in scope (template "related posts" pattern);
-  // a no-op outside entry scope, where opts.currentEntryId is absent
   if (query.excludeCurrent && opts && opts.currentEntryId) {
     out = out.filter((entry) => entry.id !== opts.currentEntryId)
   }
-  // hand-picked entries (absent = all); membership only — order stays with
-  // the source/sort so pick and sort compose predictably
   if (Array.isArray(query.pick)) {
     const picked = new Set(query.pick)
     out = out.filter((entry) => picked.has(entry.id))
@@ -180,13 +121,6 @@ export function applyListQuery(entries, query, opts) {
   if (f && typeof f.field === 'string') {
     out = out.filter((entry) => {
       const v = entry.values?.[f.field]
-      // `equalsCurrent` matches the entry in scope — the child-collection
-      // pattern: a Conversation's page lists the Messages whose `conversation`
-      // reference IS that conversation. Without it a filter could only compare
-      // against a literal, so the only way to list a child collection was to
-      // mirror the relation as a multi-reference on the parent and keep the two
-      // sides in step by hand. A multi-reference field holds a LIST, so
-      // membership counts.
       if (f.equalsCurrent) {
         if (!opts || !opts.currentEntryId) return false
         return Array.isArray(v) ? v.includes(opts.currentEntryId) : v === opts.currentEntryId
@@ -214,7 +148,6 @@ export function applyListQuery(entries, query, opts) {
       return String(ka).localeCompare(String(kb), undefined, { numeric: true }) * dir
     })
   }
-  // offset after sort, before limit — "skip N" for slot placement
   const offset = Number(query.offset)
   if (Number.isFinite(offset) && offset > 0) out = out.slice(offset)
   const limit = Number(query.limit)
@@ -222,8 +155,6 @@ export function applyListQuery(entries, query, opts) {
   return out
 }
 
-/** display text for a reference-typed field bound directly (no `.field`
- * hop): the referenced entry name(s), comma-joined */
 export function refDisplay(collections, field, entry) {
   const target = collections.find((c) => c.id === field.refCollectionId)
   if (!target || !entry) return ''

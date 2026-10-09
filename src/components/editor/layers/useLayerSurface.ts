@@ -7,17 +7,6 @@ import { findNode } from '@/lib/tree'
 import { useLayerState } from './layerState'
 import type { ElementNode } from '@/types/editor'
 
-/**
- * Everything a surface showing layer rows needs beyond rendering them: row
- * drags, the ⌘E dock's drop target, the keyboard, and keeping the selection in
- * view. One per surface — the Pages drawer's Layers view, the Components
- * drawer's expanded rows — however many trees that surface happens to show.
- *
- * Rows reach it through provide/inject rather than an emit chain: a row is
- * recursive, and re-emitting a pointerdown up through every level of a deep
- * tree is noise.
- */
-
 interface LayerSurface {
   onRowPointerDown: (e: PointerEvent, id: string) => void
 }
@@ -29,13 +18,9 @@ export const useLayerSurfaceRow = () => inject(LAYER_SURFACE, null)
 const DRAG_THRESHOLD = 4
 
 export function useLayerSurface(opts: {
-  /** the focusable element holding the rows; carries `data-insert-surface` */
   surface: Ref<HTMLElement | undefined>
-  /** the trees on this surface, in display order */
   roots: () => ElementNode[]
-  /** refs are page-scope, so only a page surface renames */
   canRename: () => boolean
-  /** called before a node is revealed, to open whatever contains its tree */
   beforeReveal?: (id: string) => void
 }) {
   const {
@@ -47,7 +32,6 @@ export function useLayerSurface(opts: {
   const { activePanelId, openPanel, closePanel } = usePanel()
   const { reveal, isCollapsed, setCollapsed, editingRefId } = useLayerState()
 
-  // the visible rows, in order: what ↑/↓ walk
   const visibleRows = computed<ElementNode[]>(() => {
     const out: ElementNode[] = []
     const walk = (nodes: ElementNode[]) => {
@@ -60,7 +44,6 @@ export function useLayerSurface(opts: {
     return out
   })
 
-  /** ids from a root down to `id`, excluding it */
   function ancestorsOf(id: string): string[] {
     const path: string[] = []
     const walk = (nodes: ElementNode[], trail: string[]): boolean => {
@@ -80,12 +63,8 @@ export function useLayerSurface(opts: {
   const rowEl = (id: string) =>
     opts.surface.value?.querySelector<HTMLElement>(`[data-layer-row="${CSS.escape(id)}"]`) ?? null
 
-  // an explicit reveal (Escape out of a panel, a canvas click, a dock insert)
-  // also takes keyboard focus, so the tree's keys work without a click
   watch(revealTick, () => opts.surface.value?.focus({ preventScroll: true }))
 
-  // a selection made anywhere else — the canvas, a shortcut, the interactions
-  // panel's target picker — has to become visible here
   watch(
     [() => selectedElement.value?.id, revealTick],
     async ([id]) => {
@@ -99,12 +78,6 @@ export function useLayerSurface(opts: {
     { immediate: true },
   )
 
-  /**
-   * Which row is under this pointer Y, and where in it: the top and bottom
-   * quarters mean before/after, the middle means inside — but only for a node
-   * that can actually take children, otherwise a drop on a leaf's middle would
-   * silently become something else.
-   */
   function resolveAt(clientY: number): { id: string; position: DropPosition } | null {
     const box = opts.surface.value?.getBoundingClientRect()
     if (!box) return null
@@ -136,14 +109,10 @@ export function useLayerSurface(opts: {
     const move = (ev: PointerEvent) => {
       if (!active) {
         if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) <= DRAG_THRESHOLD) return
-        // the row being dragged becomes the selection first: on the components
-        // board that is what decides WHICH component the structure ops act on
         selectElement(id)
         const node = getElement(id)
         if (!node || !backend.value.can(node, 'move')) return cleanup()
         active = true
-        // the shared refs: the canvas paints its own drop feedback off them,
-        // so dragging in the tree highlights the element out there too
         draggingId.value = id
         document.body.style.cursor = 'grabbing'
       }
@@ -182,20 +151,14 @@ export function useLayerSurface(opts: {
   provide(LAYER_SURFACE, { onRowPointerDown })
 
   function onKeydown(e: KeyboardEvent) {
-    // a key typed into a field on this surface (the inline ref input, a search
-    // box) is that field's business — and it arrives here on the way up, AFTER
-    // the field has closed itself, so testing `editingRefId` alone would let
-    // Enter immediately re-open what it just committed
     if (editingRefId.value || e.target !== opts.surface.value) return
     const current = selectedElement.value
     const rows = visibleRows.value
     const at = current ? rows.findIndex((n) => n.id === current.id) : -1
 
-    // Shift+↑/↓ MOVES the element; ⌘⇧↑/↓ extends the selection; plain ↑/↓ walk
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const dir = e.key === 'ArrowUp' ? 'up' : 'down'
       if (e.shiftKey && !e.metaKey && !e.ctrlKey) {
-        // the app keymap owns Shift+↑/↓; leave it to bubble there
         return
       }
       if (e.shiftKey && (e.metaKey || e.ctrlKey)) {
@@ -226,9 +189,6 @@ export function useLayerSurface(opts: {
       e.preventDefault()
       return
     }
-    // the keyboard route into the panels, scoped to the focused surface so the
-    // keys can never fire while typing somewhere else. The panel opens with its
-    // primary input focused; Escape closes it and hands focus back here.
     const panelKey = { s: 'style', d: 'data', i: 'interactions' }[e.key.toLowerCase()]
     if (panelKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (activePanelId.value === panelKey) closePanel()

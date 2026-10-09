@@ -1,7 +1,3 @@
-// URL slug helpers shared by the editor (routes, links) and the static
-// exporter (published file paths) — divergence would change published
-// routes vs editor links, so both sides import this one copy.
-
 /**
  * normalizes a string into a url slug segment
  * @param {string} value
@@ -64,8 +60,6 @@ export function hasDetailRoutes(collection) {
  * @returns {string|null}
  */
 export function entryRoutePath(collection, entry) {
-  // a synthetic row (the @pages source) carries the route it stands for — it is
-  // a page, not an entry under a collection base
   if (entry?.routePath) return entry.routePath
   if (!hasDetailRoutes(collection)) return null
   const base = collectionRouteBase(collection)

@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 
-// Segmented icon picker: one joined group with hairline dividers rather than
-// separate buttons, so a row of choices reads as a single control.
-// BorderStyleControl uses the same shell — keep the two in step.
 defineProps<{
   options: { label: string; value: string; icon: Component }[]
 }>()

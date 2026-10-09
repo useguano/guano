@@ -8,8 +8,7 @@ const tabs = inject(tabsKey)!
 </script>
 
 <template>
-  <!-- enter-only: panels are siblings each with their own v-if, so a leave
-       would overlap the next panel; the new one simply settles into place -->
+
   <Transition name="tab-panel" appear>
     <div v-if="tabs.active.value === props.id" class="flex flex-col">
       <slot />

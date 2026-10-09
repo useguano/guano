@@ -11,7 +11,6 @@ const app = createApp(App)
 
 app.use(router)
 app.directive('tooltip', tooltip)
-// before mount: an error thrown during the first render should still be seen
 installErrorReporting(app)
 
 app.mount('#app')

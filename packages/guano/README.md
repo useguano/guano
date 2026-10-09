@@ -47,6 +47,33 @@ The admin needs a persistent Node process with a writable disk (VPS, Railway,
 Fly.io, Render…). It cannot run on Vercel/Netlify — but your published site is
 fully static and can be hosted anywhere.
 
+## Updating
+
+A site is an ordinary npm project, so the thing you update is the package:
+
+```sh
+cd my-site
+npm update @useguano/guano   # within the pinned range: ^0.1.0 is 0.1.x
+npm start                    # the running process keeps serving until you restart it
+guano --version              # what you are now on
+```
+
+`npm update @useguano` does nothing — `@useguano` is the npm *scope*, not a
+package name. To cross a minor (0.1.x → 0.2.0), widen the range yourself with
+`npm install @useguano/guano@latest`.
+
+Your site is **not** in the package: it lives in `$GUANO_DATA_DIR` (`./data`),
+which npm never touches. Two things to do around an update:
+
+- **Back up `data/` first**, or take a snapshot in Settings → Backup. The
+  server brings every project blob up to the current schema at boot, and a
+  schema change is one-way.
+- **Publish once afterwards.** What visitors get is the HTML already on disk in
+  `data/site`, exported by the version you just replaced, and the runtimes it
+  loads (`/assets/script.js`, `motion.js`, `slider.js`) are copied out of the
+  package at export time. Until you publish again, a fix in the exporter or in
+  a runtime reaches nobody.
+
 ## MCP (AI agents)
 
 `guano mcp` exposes a **running** Guano instance to AI agents over the

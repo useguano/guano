@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import SpacingBoxControl from '@/components/editor/style/SpacingBoxControl.vue'
 
-// Padding + Margin, each a cross of four side steppers with a lock (no tier
-// switch). Margin allows negative values.
 defineProps<{ modelValue: string[]; baseline?: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [string[]] }>()
 const update = (v: string[]) => emit('update:modelValue', v)

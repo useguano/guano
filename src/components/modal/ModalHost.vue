@@ -7,14 +7,8 @@ type Size = 'sm' | 'default' | 'lg' | 'xl' | 'full'
 const props = withDefaults(
   defineProps<{
     size?: Size
-    /**
-     * id of the element naming this dialog. Set only when something really
-     * carries that id — an aria-labelledby pointing at nothing is worse than
-     * no label, because assistive tech then reports the dialog as unnamed
-     * having been told it is named.
-     */
+
     labelledBy?: string
-    /** alertdialog for a destructive confirm: it interrupts rather than informs */
     role?: 'dialog' | 'alertdialog'
   }>(),
   { size: 'default', role: 'dialog' },
@@ -28,29 +22,12 @@ const sizes: Record<Size, string> = {
   sm: 'w-80',
   default: 'w-[28rem]',
   lg: 'w-[40rem]',
-  // xl is a fixed-size, two-pane dialog that manages its own inner scrolling
   xl: 'w-[840px] h-[660px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]',
-  // full is a near-viewport surface (media library) that manages its own inner scrolling
   full: 'w-[min(92vw,1200px)] h-[88vh]',
 }
 
-// Escape is handled centrally by ModalStackHost (top-of-stack only)
-
-/**
- * Focus: move it in, keep it in, give it back.
- *
- * None of this was here. A modal opened with focus still on whatever was
- * behind it, so Tab walked the page underneath while a scrim covered it — a
- * keyboard user could reach controls they could not see and could not click.
- * Closing left focus nowhere, which sends the next Tab back to the top of the
- * document.
- */
 const panel = ref<HTMLElement | null>(null)
 
-// Whatever header renders inside registers the id of its own heading, so a
-// dialog is named by its title wherever it is composed from — through
-// ModalDialog or by dropping a ModalHeader into a ModalHost directly, which
-// half of them do.
 const headerLabelId = ref<string | undefined>()
 provide(MODAL_LABEL, (id: string) => (headerLabelId.value = id))
 
@@ -63,6 +40,7 @@ const focusable = () =>
   )
 
 function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault()
   if (e.key !== 'Tab') return
   const items = focusable()
   if (!items.length) return
@@ -81,15 +59,12 @@ function onKeydown(e: KeyboardEvent) {
 let returnTo: HTMLElement | null = null
 onMounted(() => {
   returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  // a component that focuses its own field (rename, create) has already run by
-  // now, so only take focus when nothing inside has it
   if (!panel.value?.contains(document.activeElement)) {
     const items = focusable()
     ;(items[0] ?? panel.value)?.focus()
   }
 })
 onBeforeUnmount(() => {
-  // the opener is often gone by now (a row that was deleted), hence the guard
   if (returnTo?.isConnected) returnTo.focus()
 })
 </script>
@@ -117,9 +92,6 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<!-- unscoped on purpose: the transition classes are applied by the stack
-     host's TransitionGroup to this component's ROOT, and a scoped rule could
-     not reach the panel inside it. Same curve as the popover's pop. -->
 <style>
 .modal-enter-active,
 .modal-leave-active {

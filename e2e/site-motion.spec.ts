@@ -521,6 +521,8 @@ test.describe('a count on a shared component master', () => {
 const OPEN = 'a-open'
 const CLOSE = 'a-close'
 const DROP = 'a-drop'
+const NOFROM = 'a-nofrom'
+const WIGGLE = 'a-wiggle'
 
 function primingFixture() {
   const fade = (id: string, name: string, from: number, to: number) => ({
@@ -557,6 +559,36 @@ function primingFixture() {
                   { id: 'r-open', animationId: OPEN, trigger: 'load' },
                 ],
               }),
+              // a HOVER with an explicit `from`: the `from` is the resting
+              // value, so this ships at opacity 0 and comes up on hover.
+              // Primed only for load/appear, it shipped visible and snapped
+              // to 0 on the first hover frame before fading back in.
+              node('hov', 'div', {
+                htmlId: 'hov',
+                content: 'hover me',
+                classes: 'h-20 w-20',
+                animations: [{ id: 'b-hov', animationId: OPEN, trigger: 'hover' }],
+              }),
+              // a hover with NO `from` tweens from wherever the element is, so
+              // it primes nothing — the ordinary shape of a hover effect
+              node('hov-rel', 'div', {
+                htmlId: 'hov-rel',
+                content: 'hover me too',
+                classes: 'h-20 w-20',
+                animations: [{ id: 'b-hov-rel', animationId: NOFROM, trigger: 'hover' }],
+              }),
+              // a `from` that IS the property's default states nothing the
+              // element does not already render, so it primes nothing and
+              // cannot shadow the class transform — a baked rotate(0deg)
+              // would have killed `rotate-6` at rest. The resting value is
+              // still decided by that first track, not by the next one along,
+              // so the wiggle's -10 never reaches the markup either.
+              node('wig', 'div', {
+                htmlId: 'wig',
+                content: 'wiggle',
+                classes: 'h-20 w-20 rotate-6',
+                animations: [{ id: 'b-wig', animationId: WIGGLE, trigger: 'hover' }],
+              }),
               // one delayed entrance: holds frame 0 for the wait, then plays
               node('late', 'div', {
                 htmlId: 'late',
@@ -578,6 +610,21 @@ function primingFixture() {
         id: DROP,
         name: 'Drop in',
         steps: [{ id: 'd-s', tracks: [{ prop: 'y', from: 40, to: 0 }], duration: 300, easing: 'linear' }],
+      },
+      {
+        id: NOFROM,
+        name: 'Dim',
+        steps: [
+          { id: 'n-s', tracks: [{ prop: 'opacity', to: 0.5 }], duration: 200, easing: 'linear' },
+        ],
+      },
+      {
+        id: WIGGLE,
+        name: 'Wiggle',
+        steps: [
+          { id: 'w1', tracks: [{ prop: 'rotate', from: 0, to: -10 }], duration: 120, easing: 'linear' },
+          { id: 'w2', tracks: [{ prop: 'rotate', from: -10, to: 0 }], duration: 120, easing: 'linear' },
+        ],
       },
     ],
     breakpoints: [],
@@ -637,6 +684,28 @@ test.describe('several entrances on one element, and a delayed binding', () => {
     await expect
       .poll(() => late.evaluate((el) => (el as HTMLElement).style.transform), { timeout: 2000 })
       .toMatch(/translateY\(0(px)?\)/)
+  })
+
+  test("a hover's explicit `from` is the resting state, and an omitted one primes nothing", async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const tag = (id: string) => new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+    expect(tag('hov')).toMatch(/style="[^"]*opacity:\s*0[;"]/)
+    expect(tag('hov-rel')).not.toMatch(/opacity:/)
+    // the default-valued `from` writes nothing AND still owns the property
+    expect(tag('wig')).not.toMatch(/style="/)
+  })
+
+  test('a hover tween comes up from its `from` and goes back to it on leave', async ({ page }) => {
+    await page.goto('/')
+    const hov = page.locator('#hov')
+    const opacity = () => hov.evaluate((el) => (el as HTMLElement).style.opacity)
+    // the runtime agrees with the baked frame: at rest it is the `from`
+    await expect.poll(opacity, { timeout: 2000 }).toBe('0')
+    await hov.hover()
+    await expect.poll(opacity, { timeout: 2000 }).toBe('1')
+    // hover rewinds on leave, back to the resting value — never to 1
+    await page.mouse.move(0, 0)
+    await expect.poll(opacity, { timeout: 2000 }).toBe('0')
   })
 
   test('the open plays, and the delayed close takes the element back out', async ({ page }) => {

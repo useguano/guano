@@ -1,30 +1,3 @@
-// SPDX-License-Identifier: MIT — see LICENSE-EXCEPTIONS.md (embedded in exported sites; deliberately not AGPL)
-// The motion engine's pure math, shared VERBATIM by three consumers:
-//   - the editor canvas + preview (via src/lib/motion.ts → useMotion)
-//   - the published-site runtime (src/motion/runtime.ts → assets/motion.js)
-//   - the MCP server's validators (via src/lib/mcp-runtime.ts)
-// Plain-JS ESM so the node exporter and the browser bundle can both consume it
-// directly, and DOM-free so identical input always produces identical output on
-// every surface — that equivalence is the whole point of this file living here.
-// Types live in src/lib/motion.ts.
-//
-// The model: an Animation is an ordered list of steps; each step tweens a set
-// of property tracks over a duration with an easing. compileAnimation() flattens
-// that into absolute-timed tracks; sampleValues() turns a time into per-property
-// values; composeMotionStyle() turns those into CSS. Nothing here touches an
-// element — the caller applies the result.
-//
-// Values may carry a unit ("110%", "1em", -50) so a move can be relative to the
-// element or the viewport, which is what makes marquees and percentage slides
-// resolution-independent. The unit travels with the value into the CSS, where
-// the browser resolves it natively.
-
-/**
- * Every tweenable property: how it reaches CSS, its default unit, the units it
- * accepts, and the neutral value used when a track omits `from` and the caller
- * can't measure one. `kind` groups properties that compose into one CSS
- * declaration.
- */
 const LENGTH_UNITS = ['px', '%', 'em', 'rem', 'vw', 'vh']
 
 export const MOTION_PROPS = {
@@ -41,20 +14,13 @@ export const MOTION_PROPS = {
   borderColor: { kind: 'color', css: 'borderColor', unit: '', units: [], def: '#00000000', label: 'Border color' },
   width: { kind: 'size', css: 'width', unit: 'px', units: LENGTH_UNITS, def: 0, label: 'Width' },
   height: { kind: 'size', css: 'height', unit: 'px', units: LENGTH_UNITS, def: 0, label: 'Height' },
-  // clip-path inset: how far each edge is pulled IN, as a percentage of the box.
-  // clipBottom 100 → 0 is the classic wipe-up reveal.
   clipTop: { kind: 'clip', unit: '%', units: ['%', 'px'], def: 0, label: 'Clip top' },
   clipRight: { kind: 'clip', unit: '%', units: ['%', 'px'], def: 0, label: 'Clip right' },
   clipBottom: { kind: 'clip', unit: '%', units: ['%', 'px'], def: 0, label: 'Clip bottom' },
   clipLeft: { kind: 'clip', unit: '%', units: ['%', 'px'], def: 0, label: 'Clip left' },
-  // The ONE track that writes TEXT rather than style: a number counting up to
-  // the value the element already says. `kind: 'text'` is what keeps it out of
-  // composeMotionStyle, initialStyle and endStyle — see sampleText for why the
-  // last two matter more than they look.
   count: { kind: 'text', unit: '', units: [], def: 0, label: 'Count' },
 }
 
-/** stable property order so composed transform/filter strings never jitter */
 const TRANSFORM_ORDER = ['x', 'y', 'rotate', 'scale']
 const FILTER_ORDER = ['blur', 'brightness', 'saturate']
 const CLIP_ORDER = ['clipTop', 'clipRight', 'clipBottom', 'clipLeft']
@@ -65,7 +31,6 @@ const c1 = 1.70158
 const c3 = c1 + 1
 const c4 = (2 * Math.PI) / 3
 
-/** Easing functions, all f(0)=0 f(1)=1. Keys are what a step stores. */
 export const EASINGS = {
   linear: (t) => t,
   'ease-in': (t) => t * t * t,
@@ -91,8 +56,6 @@ export const EASINGS = {
 
 export const EASING_KEYS = Object.keys(EASINGS)
 
-/** the key a binding fires under; `@scope` isolates component instances and
- * collection-list repeats (the scope string may compose several parts) */
 export function animationBindingKey(bindingId, scope) {
   return scope ? `${bindingId}@${scope}` : bindingId
 }
@@ -121,7 +84,6 @@ export function animationStateKey(animationId, targetId, scope) {
   return scope ? `${base}@${scope}` : base
 }
 
-/** what a click does to the play it drives. `toggle` is the default. */
 export const ANIMATION_ACTIONS = ['toggle', 'on', 'off']
 
 /**
@@ -154,8 +116,6 @@ export function motionBreakpointId(bps, width) {
   return asc[asc.length - 1].id
 }
 
-// ---------- values and units ----------
-
 const NUMBER_UNIT_RE = /^\s*(-?\d+(?:\.\d+)?)\s*([a-z%]*)\s*$/i
 
 /**
@@ -177,7 +137,6 @@ export function parseTrackValue(value, prop) {
   const n = parseFloat(m[1])
   if (!isFinite(n)) return null
   const unit = m[2] || meta.unit
-  // a unitless property never accepts one; others must use an allowed unit
   if (!meta.units.length) return m[2] ? null : { n, unit: '' }
   return meta.units.indexOf(unit) === -1 ? null : { n, unit }
 }
@@ -217,8 +176,6 @@ export function parseCountText(text, format) {
   if (suffix && suffix.length <= s.length && s.slice(s.length - suffix.length) === suffix) {
     s = s.slice(0, s.length - suffix.length)
   }
-  // Intl writes U+2212 for a minus and groups with a space in several locales
-  // (U+00A0 in fr-FR, U+202F in fr-CA, U+2009 in some others) — all noise here
   s = s.replace(/−/g, '-').replace(/[\s   ']/g, '')
   if (!s || /[^\d.,-]/.test(s)) return null
   const decimals = typeof f.decimals === 'number' && f.decimals > 0 ? Math.min(20, f.decimals) : 0
@@ -261,9 +218,6 @@ export function countToFor(compiled, text) {
 
 const round = (n) => Math.round(n * 1000) / 1000
 
-// ---------- color ----------
-
-/** '#rgb' | '#rrggbb' | '#rrggbbaa' → [r,g,b,a] (a in 0..1); null if unparseable */
 export function parseColor(value) {
   if (typeof value !== 'string') return null
   const hex = value.trim().replace(/^#/, '')
@@ -301,8 +255,6 @@ export function lerpColor(from, to, t) {
   return `rgba(${mix(0)}, ${mix(1)}, ${mix(2)}, ${round(alpha)})`
 }
 
-// ---------- compile ----------
-
 const num = (v, fallback) => (typeof v === 'number' && isFinite(v) ? v : fallback)
 
 /**
@@ -325,7 +277,6 @@ export function compileAnimation(animation) {
     const start = Math.max(0, cursor + num(step.offset, 0))
     const repeat = num(step.repeat, 0)
     const iterations = repeat < 0 ? Infinity : repeat + 1
-    // one iteration's worth of time, used for scrub/finite length
     const span = duration * (repeat < 0 ? 1 : iterations)
     const easing = EASINGS[step.easing] ? step.easing : 'ease-out'
     const stagger = Math.max(0, num(step.stagger, 0))
@@ -340,7 +291,6 @@ export function compileAnimation(animation) {
         duration,
         easing,
         stagger,
-        // a selector narrows a staggered track to matching descendants
         staggerSelector: stagger > 0 ? step.staggerSelector || '' : '',
         repeat: iterations,
         yoyo: !!step.yoyo,
@@ -380,7 +330,6 @@ export function splitByStagger(compiled) {
   }
 }
 
-/** true when the timeline never ends on its own */
 export function hasInfinite(compiled) {
   return compiled.tracks.some((t) => t.repeat === Infinity)
 }
@@ -400,15 +349,12 @@ export function foldReverseTime(compiled, t) {
   return t > span ? span : t
 }
 
-/** local progress 0..1 of one track at absolute time `t`, or null when the
- * track hasn't started (so earlier values don't leak) */
 function trackProgress(track, t, childIndex) {
   const start = track.start + track.stagger * childIndex
   if (t < start) return null
   if (track.duration <= 0) return 1
   const elapsed = t - start
   const total = track.duration * track.repeat
-  // finished: settle on the final iteration's end value
   if (elapsed >= total) {
     const lastIsReverse = track.yoyo && track.repeat !== Infinity && track.repeat % 2 === 0
     return lastIsReverse ? 0 : 1
@@ -456,8 +402,6 @@ export function sampleValues(compiled, t, opts) {
       values[track.prop] = { color: lerpColor(from, track.to, eased) }
       continue
     }
-    // the destination decides the unit; `from` is read in the same unit. A
-    // per-element override (a count's own text) wins over the shared track.
     const rawTo = override[track.prop] !== undefined ? override[track.prop] : track.to
     const to = parseTrackValue(rawTo, track.prop) || { n: meta.def, unit: meta.unit }
     let fromVal
@@ -466,12 +410,8 @@ export function sampleValues(compiled, t, opts) {
     } else if (current[track.prop] !== undefined) {
       fromVal = parseTrackValue(current[track.prop], track.prop)
     }
-    // a measured/absent `from` in a different unit can't be interpolated —
-    // fall back to the property's neutral value in the destination's unit
     const fromN = fromVal && fromVal.unit === to.unit ? fromVal.n : fromVal ? fromVal.n : meta.def
     values[track.prop] = { n: fromN + (to.n - fromN) * eased, unit: to.unit }
-    // the formatting rides with the value so every surface renders the same
-    // separators from the same sample
     if (meta.kind === 'text' && track.format) values[track.prop].format = track.format
   }
   return values
@@ -514,8 +454,6 @@ export function composeMotionStyle(values) {
   for (const prop of SIZE_PROPS) {
     if (values[prop] !== undefined) style[MOTION_PROPS[prop].css] = txt(prop)
   }
-  // any clip edge in play means the whole inset() must be written; untouched
-  // edges read 0 so the box is only cropped where the animation asks
   if (CLIP_ORDER.some((p) => values[p] !== undefined)) {
     const edges = CLIP_ORDER.map((p) => (values[p] === undefined ? '0%' : txt(p)))
     style.clipPath = `inset(${edges.join(' ')})`
@@ -549,7 +487,6 @@ export function sampleText(values, locale) {
       useGrouping: !!f.group,
     }).format(v.n)
   } catch {
-    // an unusable locale tag must not take the number down with it
     body = v.n.toFixed(decimals)
   }
   return `${f.prefix || ''}${body}${f.suffix || ''}`
@@ -563,7 +500,6 @@ export function sampleAnimation(compiled, t, opts) {
   return composeMotionStyle(sampleValues(compiled, t, opts))
 }
 
-/** the style at the animation's end — what reduced-motion and ?noanim apply */
 export function endStyle(compiled, opts) {
   return sampleAnimation(compiled, compiled.duration, opts)
 }
@@ -580,7 +516,7 @@ export function endStyle(compiled, opts) {
  * @returns {Record<string, string|number>}
  */
 export function initialStyle(compiled) {
-  return primeFirstFrame([{ compiled, delay: 0 }])
+  return primeFirstFrame([{ compiled, delay: 0, entrance: true }])
 }
 
 /**
@@ -603,10 +539,37 @@ export function initialStyle(compiled) {
  * (their start value is whatever the element already renders), and a `count`
  * is never primed — see the note inside.
  *
- * @param {{compiled: {tracks: any[], duration: number}, delay?: number}[]} entries
+ * It applies to EVERY trigger, not only the entrances. A track's `from` is the
+ * value the element holds until that timeline runs, whatever starts it: a
+ * hover tweening opacity 0 → 1 rests at 0 and comes up on hover. Priming only
+ * load/appear made the other triggers read their `from` at play time instead,
+ * so the element sat at its natural value and then SNAPPED to the `from` on
+ * the first frame — hovering a 0 → 1 fade flashed it out and faded it back in.
+ * Omitting `from` is still how you tween from wherever the element already is,
+ * which is the usual shape of a hover and primes nothing.
+ *
+ * `entrance` marks a `load`/`appear` binding — see the note on the default
+ * value inside.
+ *
+ * @param {{compiled: {tracks: any[], duration: number}, delay?: number, entrance?: boolean}[]} entries
  * @returns {Record<string, string|number>}
  */
 export function primeFirstFrame(entries) {
+  return composeMotionStyle(primeFirstFrameValues(entries))
+}
+
+/**
+ * `primeFirstFrame` before it is composed into a style object.
+ *
+ * The Vue renderers merge the pre-play frame UNDERNEATH the values of whatever
+ * is playing, and that merge has to happen on VALUES: compose two style
+ * objects and the later `transform` replaces the earlier one wholesale, so a
+ * primed `y` disappears the moment a second timeline tweens `scale`.
+ *
+ * @param {{compiled: {tracks: any[], duration: number}, delay?: number, entrance?: boolean}[]} entries
+ * @returns {Record<string, any>}
+ */
+export function primeFirstFrameValues(entries) {
   const earliest = {}
   const values = {}
   for (const entry of entries) {
@@ -618,12 +581,25 @@ export function primeFirstFrame(entries) {
       const start = delay + track.start
       if (earliest[track.prop] !== undefined && earliest[track.prop] < start) continue
       const meta = MOTION_PROPS[track.prop]
-      // NEVER bake a count's `from` into the HTML. The exporter writes this
-      // into the markup so an entrance does not flash its final state — which
-      // for a number would ship `0` as the text that a visitor without
-      // JavaScript, and every visitor with reduced motion, reads forever. The
-      // authored text IS the final value; the runtime writes the first frame.
       if (meta.kind === 'text') continue
+      // An ENTRANCE bakes its `from` whatever it is: the frame has to beat the
+      // stylesheet, which is the whole point of "put the pre-play state in
+      // `from`, not in a class" — an `opacity-0` element with `from: 1` must
+      // still paint visible before the runtime boots.
+      //
+      // A trigger that fires LATER is the other way round: the stylesheet IS
+      // the resting state until the pointer arrives, so a `from` that is the
+      // property's own default states nothing the element is not already
+      // rendering, and writing it inline could only shadow a class — a baked
+      // `transform:rotate(0deg)` for a hover wiggle drops the
+      // `active:scale-95` beside it. It still DECIDES the property: skipping
+      // it outright handed the resting value to the next track along, so a
+      // 0 → -10 → 8 → 0 wiggle rested at -10.
+      if (!entry.entrance && isDefaultTrackValue(track.from, track.prop)) {
+        earliest[track.prop] = start
+        delete values[track.prop]
+        continue
+      }
       if (meta.kind === 'color') {
         values[track.prop] = { color: lerpColor(track.from, track.from, 0) }
         earliest[track.prop] = start
@@ -636,16 +612,23 @@ export function primeFirstFrame(entries) {
       }
     }
   }
-  return composeMotionStyle(values)
+  return values
 }
 
-/** a binding's `delay` as the runtime reads it: a positive number of ms, else 0 */
+/** true when a track value is the property's own CSS default (rotate 0, scale 1, …) */
+function isDefaultTrackValue(value, prop) {
+  const meta = MOTION_PROPS[prop]
+  if (!meta || meta.kind === 'color') return false
+  const parsed = parseTrackValue(value, prop)
+  if (!parsed) return false
+  return parsed.n === meta.def && (parsed.unit === meta.unit || parsed.n === 0)
+}
+
 export function bindingDelay(binding) {
   const d = binding && binding.delay
   return typeof d === 'number' && isFinite(d) && d > 0 ? d : 0
 }
 
-/** the CSS properties this engine can write — what a caller must clear */
 export const MOTION_CSS_PROPS = [
   'transform',
   'filter',
@@ -658,14 +641,9 @@ export const MOTION_CSS_PROPS = [
   'clipPath',
 ]
 
-// ---------- validation (shared by the editor and the MCP) ----------
-
 const TRIGGERS = ['load', 'appear', 'scrub', 'hover', 'click', 'scrolled', 'change']
-/** `once` is explicit; a binding that omits appearMode inherits the site
- * default (settings.motion.appearMode) — see effectiveAppearMode */
+
 export const APPEAR_MODES = ['once', 'replay', 'reverse']
-// conservative: enough for tag/class/id/descendant/attribute selectors, no
-// commas-with-parens tricks, and capped so a pathological selector can't ship
 const SELECTOR_RE = /^[\w\s.#>~*:+\-[\]="',()]{1,120}$/
 
 const fail = (error) => ({ ok: false, error })
@@ -715,9 +693,6 @@ export function validateAnimation(animation) {
       }
       const meta = MOTION_PROPS[track.prop]
       const hasTo = !(track.to === undefined || track.to === null || track.to === '')
-      // a `count` ends on the number the ELEMENT says (countToFor), so its
-      // `to` is only the fallback for text holding no number — optional.
-      // Every other property has nowhere else to take its destination from.
       if (!hasTo && meta.kind !== 'text') {
         return fail(`${at} property "${track.prop}" needs a "to" value`)
       }
@@ -729,14 +704,9 @@ export function validateAnimation(animation) {
         continue
       }
       if (meta.kind === 'text') {
-        // a staggered step moves the CHILDREN, and a child has no number of
-        // its own to count — the track would write the same text into every
-        // one of them
         if (step.stagger) {
           return fail(`${at} cannot stagger "${track.prop}" — a staggered step moves the children, which have no number to count`)
         }
-        // a number that counts up and then back down is not what anyone means
-        // by a counter, and the end state would be the START value
         if (step.yoyo) {
           return fail(`${at} cannot yoyo "${track.prop}" — it would count back down and end on the starting number`)
         }
@@ -764,14 +734,11 @@ export function validateAnimation(animation) {
         }
       }
       const units = meta.units.length ? ` (units: ${meta.units.join(', ')})` : ' (no unit)'
-      // a count with no `to` has no destination to check here; the element's
-      // own text is checked where the binding lands (countTargetError)
       const to = hasTo ? parseTrackValue(track.to, track.prop) : { n: meta.def, unit: meta.unit }
       if (!to) return fail(`${at} property "${track.prop}" has an invalid "to" value${units}`)
       if (track.from !== undefined && track.from !== null) {
         const from = parseTrackValue(track.from, track.prop)
         if (!from) return fail(`${at} property "${track.prop}" has an invalid "from" value${units}`)
-        // mixing units inside one tween can't be interpolated numerically
         if (typeof track.from === 'string' && typeof track.to === 'string' && from.unit !== to.unit) {
           return fail(
             `${at} property "${track.prop}" mixes units ("${from.unit}" → "${to.unit}") — use the same unit on both sides`,
@@ -783,7 +750,6 @@ export function validateAnimation(animation) {
   return { ok: true }
 }
 
-/** does this animation write TEXT — i.e. hold a `count` track? */
 export function animationWritesText(animation) {
   for (const step of (animation && animation.steps) || []) {
     for (const track of step.tracks || []) {
@@ -822,7 +788,7 @@ export function animationWritesText(animation) {
  */
 export function countTargetError(animation, target) {
   if (!animationWritesText(animation)) return null
-  if (!target) return null // a channel target: no one element to check
+  if (!target) return null
   if (!target.isLeaf) {
     return (
       `a 'count' track writes the element's TEXT, and '${target.type || 'this element'}' is a ` +
@@ -842,10 +808,6 @@ export function countTargetError(animation, target) {
       sampleValues(compiled, compiled.duration, { to: countToFor(compiled, text) }),
       target.locale || undefined,
     )
-    // Compared with the separators normalized, exactly as parseCountText reads
-    // them: Intl groups with U+202F/U+00A0 and writes U+2212 for a minus, and
-    // nobody types those. A space-for-space difference is not a bug worth
-    // refusing a bind over — a different NUMBER is.
     const norm = (s) => s.replace(/−/g, '-').replace(/[\s   ]/g, '')
     if (end !== undefined && norm(end) !== norm(text)) {
       return (
@@ -888,9 +850,6 @@ export function validateBinding(binding, ctx) {
     if (ANIMATION_ACTIONS.indexOf(binding.action) === -1) {
       return fail(`action must be one of: ${ANIMATION_ACTIONS.join(', ')}`)
     }
-    // only a discrete gesture can be aimed. hover rewinds on leave and
-    // load/appear/scrub have no second direction to force, so an action there
-    // would be a silent no-op that reads like a bug.
     if (binding.action !== 'toggle' && binding.trigger !== 'click') {
       return fail(
         `action is only meaningful on a click trigger ('${binding.trigger}' has no state to aim at)`,
@@ -906,8 +865,6 @@ export function validateBinding(binding, ctx) {
     if (typeof binding.delay !== 'number' || !isFinite(binding.delay) || binding.delay < 0 || Math.floor(binding.delay) !== binding.delay) {
       return fail('delay must be a whole number of milliseconds (0 or more)')
     }
-    // a scrub is driven by scroll position, not by a moment — there is nothing
-    // for it to wait after
     if (binding.trigger === 'scrub') return fail("delay does not apply to a 'scrub' binding — it follows the scroll, nothing fires it")
   }
   if (binding.scrub !== undefined) {
@@ -920,8 +877,6 @@ export function validateBinding(binding, ctx) {
         return fail(`scrub.${k} must be a number`)
       }
     }
-    // optional scroll smoothing: seconds the play lags its scroll target
-    // (exponential catch-up). Capped so a typo can't park the site mid-tween.
     const smooth = binding.scrub.smooth
     if (smooth !== undefined && (typeof smooth !== 'number' || !isFinite(smooth) || smooth < 0 || smooth > 3)) {
       return fail('scrub.smooth must be a number of seconds between 0 and 3')
@@ -930,10 +885,8 @@ export function validateBinding(binding, ctx) {
   return { ok: true }
 }
 
-/** scrub defaults, in one place so the editor and runtime agree */
 export const SCRUB_DEFAULTS = { start: 1, end: 0.25 }
 
-/** appear fires as soon as any pixel enters unless the binding asks for more */
 export const APPEAR_AT_DEFAULT = 0
 
 /**
@@ -948,35 +901,17 @@ export function appearRootMargin(appearAt) {
   return `0px 0px -${round((1 - at) * 100)}% 0px`
 }
 
-/**
- * Progress 0..1 for a scrub binding given the element's viewport position.
- * `top` is getBoundingClientRect().top, `vh` the viewport height. Progress is
- * 0 while the element's top sits at `start * vh` and 1 at `end * vh`.
- */
 export function scrubProgress(top, vh, scrub) {
   const p = scrubProgressRaw(top, vh, scrub)
   return p < 0 ? 0 : p > 1 ? 1 : p
 }
 
-/**
- * Same mapping WITHOUT the 0..1 clamp. When several scrub bindings tween the
- * same property on one element, the runtime uses the unclamped value to rank
- * them — the binding nearest its active range wins the frame — so chained
- * segments compose instead of the last binding overwriting every frame with
- * its clamped resting value.
- */
 export function scrubProgressRaw(top, vh, scrub) {
   const start = (scrub && typeof scrub.start === 'number' ? scrub.start : SCRUB_DEFAULTS.start) * vh
   const end = (scrub && typeof scrub.end === 'number' ? scrub.end : SCRUB_DEFAULTS.end) * vh
   if (start === end) return top <= end ? 1 : 0
   return (start - top) / (start - end)
 }
-
-// ---------- site-wide motion (settings.motion) ----------
-// Three project-level knobs, all optional and all off by default: the default
-// appear replay mode, page enter/exit transitions, and inertia smooth scroll.
-// Resolution lives here so the exporter, the editor preview and the MCP
-// validators can't disagree about what a given settings object means.
 
 /**
  * A binding's own appearMode wins; omitted means "inherit the site default".
@@ -991,32 +926,19 @@ export function effectiveAppearMode(bindingMode, siteDefault) {
   return APPEAR_MODES.indexOf(mode) === -1 ? 'once' : mode
 }
 
-/** shared constants — never re-spell these as literals in a consumer */
 export const TRANSITION_DEFAULTS = {
   preset: 'fade',
-  /** enter duration, ms */
   duration: 500,
   easing: 'ease-out',
-  /** leaving should feel quicker than arriving */
   exitRatio: 0.75,
-  /** hard cap on how long a click may wait for the exit timeline: a broken or
-   * infinite custom animation must never strand the visitor on the old page */
+
   exitTimeoutMs: 1500,
   maxDuration: 5000,
 }
 
-/** reserved ids the exporter registers preset timelines under, inside the
- * existing #anim-lib tag — so transitions need no second wire format */
 export const TRANSITION_EXIT_ID = '__t-exit'
 export const TRANSITION_ENTER_ID = '__t-enter'
 
-/**
- * The built-in exit/enter track pairs, played on the page `body`.
- * Offsets are deliberately small: any transform or filter on body makes it the
- * containing block for `position: fixed` descendants, so a fixed header rides
- * along for the duration of the transition. `fade` avoids that entirely and is
- * the default for exactly that reason.
- */
 export const TRANSITION_PRESETS = {
   fade: {
     label: 'Fade',
@@ -1093,7 +1015,6 @@ export const TRANSITION_PRESETS = {
 
 export const TRANSITION_PRESET_IDS = Object.keys(TRANSITION_PRESETS)
 
-/** smooth scroll: how far the viewport closes on its target each 60fps frame */
 export const SCROLL_LERP_DEFAULT = 0.1
 export const SCROLL_LERP_MIN = 0.02
 export const SCROLL_LERP_MAX = 0.4
@@ -1150,7 +1071,6 @@ export function resolveTransition(motion, animationsById) {
   }
 }
 
-/** the lerp factor to actually scroll with, clamped; null when disabled */
 export function resolveScrollLerp(motion) {
   const s = motion && motion.scroll
   if (!s || !s.enabled) return null

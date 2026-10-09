@@ -1,12 +1,5 @@
 <script setup lang="ts">
-/**
- * The components drawer's detail pane: rename a component, file it under a
- * category, see where it is used, duplicate or delete it.
- *
- * Mirrors PageSettingsEditor's shape — same header height, same footer, same
- * "hold an id, never the object" rule (undo, a draft switch and a merge all
- * replace the whole `project` ref, and a held object would silently detach).
- */
+
 import { computed, ref, watch } from 'vue'
 import { ChevronLeft, Copy, Trash2 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -18,7 +11,7 @@ import { useComponents } from '@/composables/useComponents'
 import { useBranches } from '@/composables/useBranches'
 import { useModal } from '@/composables/useModal'
 
-const props = defineProps<{ componentId: string }>()
+const props = defineProps<{ componentId: string; focus?: 'variants' }>()
 const emit = defineEmits<{ back: [] }>()
 
 const { components, renameComponent, duplicateComponent, setCategory, usageOf, deleteComponent } =
@@ -28,23 +21,18 @@ const { confirm } = useModal()
 
 const component = computed(() => components.value.find((c) => c.id === props.componentId) ?? null)
 
-// the component can vanish under us — deleted from another surface, or the
-// whole project replaced by undo/a branch switch. The root is `v-if`, so
-// without this the pane would render blank with no way back.
 watch(component, (c) => {
   if (!c) emit('back')
 })
 
 const usage = computed(() => (component.value ? usageOf(component.value.name) : null))
 
-/** other drafts exist, so a rename/delete on this branch won't reach them */
 const otherDrafts = computed(() => branches.value.filter((b) => b.id !== 'main').length)
 
 const categories = computed(() =>
   [...new Set(components.value.map((c) => c.category).filter((c): c is string => !!c))].sort(),
 )
 
-// --- name / category: committed on blur or Enter ---
 const nameField = ref('')
 const categoryField = ref('')
 watch(
@@ -75,7 +63,6 @@ async function commitName() {
       return
     }
   }
-  // the name is normalized and de-duplicated, so reflect what was actually used
   nameField.value = renameComponent(c.id, raw) ?? c.name
 }
 
@@ -86,7 +73,6 @@ function commitCategory() {
   categoryField.value = c.category ?? ''
 }
 
-// --- actions ---
 function onDuplicate() {
   const c = component.value
   if (c) duplicateComponent(c.id)
@@ -119,7 +105,6 @@ async function onDelete() {
 
 <template>
   <div v-if="component" class="flex min-h-full flex-col">
-    <!-- h-11 matches the list view's search row, so the swap moves nothing -->
     <div class="flex h-11 shrink-0 items-center gap-1 px-1.5">
       <ButtonUI
         variant="icon"
@@ -161,7 +146,7 @@ async function onDelete() {
       </DrawerSection>
 
       <DrawerSection title="Variants">
-        <VariantAxesEditor :component-id="component.id" />
+        <VariantAxesEditor :component-id="component.id" :autofocus="focus === 'variants'" />
       </DrawerSection>
 
       <DrawerSection v-if="usage" title="Usage">

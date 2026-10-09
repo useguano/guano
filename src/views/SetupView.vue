@@ -13,13 +13,6 @@ const projectName = ref('')
 const email = ref('')
 const password = ref('')
 const confirm = ref('')
-// The two agent switches a connected instance needs answered. Asked HERE, at
-// the one moment the owner is already proving ownership, so `guano connect`
-// does not end in a trip to Settings → MCP → Agent permissions (where they
-// stay editable). Both off by default: off, an agent works in a draft and
-// cannot ship. When `npm create @useguano` (or `guano connect --offline`)
-// already answered them, `presetAgentPolicy` is set and the form shows the
-// answers instead of asking a second time.
 const allowMainWrites = ref(false)
 const allowPublish = ref(false)
 const error = ref<string | null>(null)
@@ -38,7 +31,6 @@ async function submit() {
   }
   busy.value = true
   try {
-    // the server seeds the project blob with this name as part of setup
     await setup(
       email.value.trim(),
       password.value,
@@ -47,9 +39,6 @@ async function submit() {
         ? null
         : { allowMainWrites: allowMainWrites.value, allowPublish: allowPublish.value },
     )
-    // fallback only: if the server couldn't seed (editor-logic bundle missing),
-    // the browser still creates the project and the editor boot applies the
-    // name to it (a hard reload follows, so it can't be handed over in memory)
     localStorage.setItem('guano-setup-name', projectName.value.trim())
     window.location.assign('/admin')
   } catch (e) {

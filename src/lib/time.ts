@@ -1,4 +1,3 @@
-/** compact relative time, e.g. "just now", "5 minutes ago", "3 days ago" */
 export function timeAgo(timestamp: number, now: number = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000))
   if (seconds < 45) return 'just now'
@@ -22,8 +21,6 @@ export function timeAgo(timestamp: number, now: number = Date.now()): string {
   return 'just now'
 }
 
-/** ultra-compact relative time for dense UI, e.g. "5m ago", "3h ago",
- * "yesterday", "5 days ago" */
 export function timeAgoShort(timestamp: number, now: number = Date.now()): string {
   const mins = Math.floor((now - timestamp) / 60_000)
   if (mins < 1) return 'just now'

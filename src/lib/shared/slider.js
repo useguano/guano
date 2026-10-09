@@ -1,23 +1,3 @@
-// SPDX-License-Identifier: MIT — see LICENSE-EXCEPTIONS.md (embedded in exported sites; deliberately not AGPL)
-// The :slider (carousel) engine, shared VERBATIM by every surface: the Build
-// canvas and Preview renderers, the static exporter (server/export.mjs), the
-// published runtime (src/slider/runtime.ts) and the MCP validators. Plain-JS
-// ESM so the Node exporter can import it directly.
-//
-// Two halves:
-//   - pure: config defaults/validation/resolution + the class strings that make
-//     up the DOM shape. No DOM access, safe in Node.
-//   - behavior: initSlider(), which needs a browser. Preview and the published
-//     site call the SAME function, so a carousel cannot drift between them.
-//
-// The track is a real overflow-x scroller with CSS scroll snapping. That is
-// load-bearing: it gives native touch swipe for free, it keeps the canvas track
-// usable with no JS at all, and — crucially — the slider never writes
-// `transform`. Animations write inline styles (see shared/motion.js) and a
-// transformed ancestor becomes the containing block for `position: fixed`
-// descendants; a transform-based track would collide with both.
-
-/** slides visible at once is capped so a typo can't emit a 10000-column track */
 const PER_VIEW_MIN = 1
 const PER_VIEW_MAX = 8
 const GAP_MAX = 500
@@ -34,13 +14,9 @@ export const SLIDER_DEFAULTS = {
   drag: true,
 }
 
-/** the perView key for the widest breakpoint — the value that applies everywhere
- * until a narrower breakpoint overrides it (desktop-first, like the class cascade) */
 export const PER_VIEW_BASE = 'base'
 
 const SLIDER_KEYS = ['arrows', 'dots', 'perView', 'gap', 'autoplay', 'delay', 'loop', 'drag']
-
-// ---------- validation (shared by the editor and the MCP) ----------
 
 const fail = (error) => ({ ok: false, error })
 
@@ -99,8 +75,6 @@ export function validateSliderConfig(config, ctx = {}) {
   return { ok: true }
 }
 
-// ---------- resolution ----------
-
 /**
  * A fully-defaulted config. Deliberately TOLERANT where the validator is
  * strict: a perView key for a breakpoint the user has since deleted is dropped
@@ -132,15 +106,10 @@ export function resolveSliderConfig(config, breakpoints = []) {
   }
 }
 
-/** breakpoints widest → narrowest, the order the desktop-first cascade reads in */
 function descending(breakpoints) {
   return [...(breakpoints ?? [])].sort((a, b) => b.width - a.width)
 }
 
-/** the widest breakpoint IS the base — a `max-[width]:` variant for it would
- * stop applying above its own width, so a value keyed by its id has to fold
- * into the base instead (the panel only ever writes 'base', but an agent can
- * name the id, and the canvas and the site must not disagree about it) */
 function overridesOf(resolved, breakpoints) {
   const list = descending(breakpoints)
   const widest = list[0]
@@ -155,19 +124,10 @@ function overridesOf(resolved, breakpoints) {
   return { base, narrower }
 }
 
-/** slides-per-view at the widest breakpoint — the value with no media query */
 export function basePerView(resolved, breakpoints = []) {
   return overridesOf(resolved, breakpoints).base
 }
 
-/**
- * The slides-per-view that applies at a concrete viewport width, walking the
- * desktop-first cascade: the base, overridden by every breakpoint whose width
- * still covers this viewport, narrowest winning.
- *
- * The canvas needs this because its frames are fixed-width elements — real
- * `max-[…]:` media queries key off the window and can't fire there.
- */
 export function perViewForWidth(config, breakpoints, width) {
   const resolved = resolveSliderConfig(config, breakpoints)
   const { base, narrower } = overridesOf(resolved, breakpoints)
@@ -175,8 +135,6 @@ export function perViewForWidth(config, breakpoints, width) {
   for (const { bp, n } of narrower) if (width <= bp.width) value = n
   return value
 }
-
-// ---------- the DOM shape (class strings shared by all three renderers) ----------
 
 /**
  * The track's classes. Slides-per-view and gap ride CSS custom properties so
@@ -196,9 +154,6 @@ export function sliderTrackClasses(config, breakpoints = [], opts = {}) {
     'overflow-x-auto',
     'snap-x',
     'snap-mandatory',
-    // deliberately NO scroll-smooth: ScrollToOptions' 'auto' defers to the CSS
-    // scroll-behavior, so a smooth track would animate the jumps we ask to be
-    // instant for a reduced-motion visitor. initSlider passes it explicitly.
     '[scrollbar-width:none]',
     '[&::-webkit-scrollbar]:hidden',
     'gap-[var(--sl-gap)]',
@@ -210,20 +165,11 @@ export function sliderTrackClasses(config, breakpoints = [], opts = {}) {
   }
   const { base, narrower } = overridesOf(resolved, breakpoints)
   out.push(`[--sl-pv:${base}]`)
-  // INCLUSIVE at the breakpoint's own width, like every other breakpoint
-  // comparison in the project (perViewForWidth below, site-runtime's computeBp,
-  // breakpointIdForWidth). Tailwind compiles `max-[768px]` to
-  // `not all and (min-width: 768px)`, i.e. width < 768 — so a viewport at
-  // exactly 768 kept the base value while the canvas frame of that breakpoint,
-  // which resolves the number in JS, showed the override. The sub-pixel margin
-  // makes the media query cover its own width without reaching the next one.
   for (const { bp, n } of narrower)
     out.push(`max-[${bp.width + 0.02}px]:[--sl-pv:${n}]`)
   return out.join(' ')
 }
 
-/** one slide: never shrink, snap to the start, and divide the track by --sl-pv
- * accounting for the gaps between the visible slides */
 export const SLIDER_SLIDE_CLASSES =
   'min-w-0 shrink-0 grow-0 snap-start basis-[calc((100%-(var(--sl-pv)-1)*var(--sl-gap))/var(--sl-pv))]'
 
@@ -231,50 +177,18 @@ export const SLIDER_ARROW_CLASSES =
   'absolute top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white transition-opacity hover:bg-black/60 aria-disabled:pointer-events-none aria-disabled:opacity-30'
 export const SLIDER_PREV_CLASS = 'left-3'
 export const SLIDER_NEXT_CLASS = 'right-3'
-// Dots sit BELOW the track, in flow. Absolutely positioned over it they
-// covered the last rows of every slide, and the host had to be padded by hand
-// to get out from under them.
 export const SLIDER_DOTS_CLASSES = 'mt-3 flex justify-center gap-1.5'
-// The dots take the HOST's text colour (`bg-current`), so `text-primary` on the
-// :slider styles them. They were `bg-white`, which is invisible on any light UI
-// and assumed a dark image underneath — nothing in the editor said so, and a
-// project's own palette could not reach them.
-//
-// The two states REPLACE each other's opacity rather than stacking: they are the
-// same property at the same specificity, so which one won would come down to
-// their order in the compiled stylesheet, not the order in the attribute.
 const SLIDER_DOT_BASE = 'size-2 rounded-full bg-current transition-opacity'
 export const SLIDER_DOT_CLASSES = `${SLIDER_DOT_BASE} opacity-30`
 export const SLIDER_DOT_ACTIVE_CLASSES = `${SLIDER_DOT_BASE} opacity-100`
 
-/**
- * The chrome's own WORDS. Renderer-invented, like its Tailwind classes — which
- * means they live in no tree, nothing ever translated them, and a French route
- * shipped "Previous slide" on every carousel while the worklist reported
- * `missingTranslatable: 0`. They were also invisible to the
- * `untranslated-attributes` publish warning for the same reason.
- *
- * Overridden per slider AND per locale through the node's ordinary localizable
- * attributes (SLIDER_LABEL_ATTRS below), which is the mechanism
- * `node.locales[code].attributes` already provides for placeholder/alt/title —
- * resolved in all three renderers, enumerated by the worklist, written by
- * set_translations. No second translation mechanism, and no schema change.
- */
 export const SLIDER_LABELS = {
   prev: 'Previous slide',
   next: 'Next slide',
   dots: 'Slides',
-  /** `{n}` is the 1-based slide number */
   dot: 'Go to slide {n}',
 }
 
-/**
- * Which attribute sets which label. Plain `data-*` names, so they are ordinary
- * authored attributes an agent and the Data panel can already write — NOT under
- * the reserved `data-sl-` prefix, which exists to stop an authored name
- * shadowing a value the renderer owns. Here the renderer WANTS the authored
- * value, so the opposite rule applies. They are consumed, never emitted.
- */
 export const SLIDER_LABEL_ATTRS = {
   'data-prev-label': 'prev',
   'data-next-label': 'next',
@@ -318,7 +232,6 @@ export function sliderLabelAttributes(attributes, config) {
   return out
 }
 
-/** one dot's label: the pattern with `{n}` filled in (i is 0-based) */
 export function sliderDotLabel(pattern, i) {
   return String(pattern || SLIDER_LABELS.dot).replace('{n}', String(i + 1))
 }
@@ -330,13 +243,10 @@ export const SLIDER_NEXT_SVG =
 
 const POSITIONED = /(?:^|\s)(?:static|relative|absolute|fixed|sticky)(?:$|\s)/
 
-/** the arrows and dots are absolutely positioned, so the host needs a
- * positioning context — unless the author already gave it one */
 export function sliderHostExtraClass(nodeClasses) {
   return POSITIONED.test(nodeClasses ?? '') ? '' : 'relative'
 }
 
-/** every class string a slider can emit, for the exporter's Tailwind scan */
 export function sliderCandidateClasses(config, breakpoints = []) {
   return [
     sliderTrackClasses(config, breakpoints),
@@ -351,14 +261,6 @@ export function sliderCandidateClasses(config, breakpoints = []) {
   ].join(' ')
 }
 
-// ---------- the wire format ----------
-
-/**
- * What the published runtime needs, as compactly as possible. perView is
- * deliberately NOT on the wire: the runtime measures a slide's real width from
- * the DOM, so it tracks the CSS cascade for free and never needs the breakpoint
- * table shipped (nor invalidating when a breakpoint is renamed or resized).
- */
 export function sliderWireData(config, labels) {
   const r = resolveSliderConfig(config, [])
   const data = {}
@@ -368,15 +270,9 @@ export function sliderWireData(config, labels) {
   if (!r.drag) data.dr = 0
   if (!r.arrows) data.ar = 0
   if (!r.dots) data.dt = 0
-  // the DOT labels are built in the browser (only the runtime knows the
-  // reachable count), so the pattern has to travel — otherwise every locale's
-  // dots said "Go to slide 3" however the arrows were translated. Omitted when
-  // it is the default, so an untranslated slider's wire is byte-identical.
   if (labels && labels.dot && labels.dot !== SLIDER_LABELS.dot) data.dl = labels.dot
   return data
 }
-
-// ---------- behavior (browser only; Preview and the published site share it) ----------
 
 const rafThrottle = (fn) => {
   let queued = false
@@ -412,8 +308,6 @@ export function initSlider(host, data, opts = {}) {
   const prev = host.querySelector('[data-sl-prev]')
   const next = host.querySelector('[data-sl-next]')
   const dotsHost = host.querySelector('[data-sl-dots]')
-  // 'instant', not 'auto': 'auto' means "whatever CSS scroll-behavior says",
-  // which is exactly the wrong answer for a reduced-motion visitor
   const behavior = still ? 'instant' : 'smooth'
 
   const cleanups = []
@@ -425,7 +319,6 @@ export function initSlider(host, data, opts = {}) {
 
   const slides = () => Array.from(track.querySelectorAll('[data-sl-slide]'))
 
-  /** one slide plus the gap after it — how far a single advance travels */
   function step() {
     const first = slides()[0]
     if (!first) return track.clientWidth || 1
@@ -435,8 +328,7 @@ export function initSlider(host, data, opts = {}) {
 
   const maxScroll = () => Math.max(0, track.scrollWidth - track.clientWidth)
   const indexAt = () => Math.round(track.scrollLeft / step())
-  /** the last index that can sit at the start of the track — with N per view,
-   * the final page shows the last N slides, so scrolling stops short of the end */
+
   const lastIndex = () => Math.max(0, Math.round(maxScroll() / step()))
 
   function goTo(index, how = behavior) {
@@ -452,7 +344,6 @@ export function initSlider(host, data, opts = {}) {
     goTo(target)
   }
 
-  // ---- dots: one per reachable position, not one per slide ----
   let dotButtons = []
   function buildDots() {
     if (!dotsHost) return
@@ -468,9 +359,6 @@ export function initSlider(host, data, opts = {}) {
       dot.setAttribute('role', 'tab')
       dot.setAttribute('aria-label', sliderDotLabel(data.dl, i))
       dot.addEventListener('click', (e) => {
-        // the whole slider may sit inside a link — paging it must never
-        // navigate away (the editor hides the Link field for a slider, but
-        // the code's '@target' suffix and the MCP still reach it)
         e.preventDefault()
         e.stopPropagation()
         pauseAutoplay()
@@ -498,8 +386,6 @@ export function initSlider(host, data, opts = {}) {
   const onScroll = rafThrottle(syncChrome)
   on(track, 'scroll', onScroll, { passive: true })
 
-  // preventDefault/stopPropagation for the same reason as the dots: an arrow
-  // inside a linked slider must page it, not follow the link
   const arrowClick = (direction) => (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -509,7 +395,6 @@ export function initSlider(host, data, opts = {}) {
   on(prev, 'click', arrowClick(-1))
   on(next, 'click', arrowClick(1))
 
-  // ---- autoplay ----
   let timer = null
   function startAutoplay() {
     if (!autoplay || timer !== null) return
@@ -531,7 +416,6 @@ export function initSlider(host, data, opts = {}) {
     startAutoplay()
   }
 
-  // ---- mouse drag (touch already scrolls the track natively) ----
   if (drag) {
     let dragging = false
     let startX = 0
@@ -547,8 +431,6 @@ export function initSlider(host, data, opts = {}) {
       startX = e.clientX
       startLeft = track.scrollLeft
       pauseAutoplay()
-      // keep receiving moves once the pointer leaves the track, so a drag that
-      // wanders off the edge keeps working instead of stopping dead
       if (track.setPointerCapture) {
         try {
           track.setPointerCapture(e.pointerId)
@@ -557,7 +439,6 @@ export function initSlider(host, data, opts = {}) {
           captured = null
         }
       }
-      // snapping fights a free drag — restored on release
       track.style.scrollSnapType = 'none'
       track.style.cursor = 'grabbing'
     })
@@ -575,22 +456,14 @@ export function initSlider(host, data, opts = {}) {
         try {
           track.releasePointerCapture(captured)
         } catch {
-          // the pointer is already gone; nothing to release
         }
         captured = null
       }
-      // the click that completes a real drag must not also navigate. It fires
-      // right after this pointerup, so the flag is cleared on the next tick —
-      // leaving it set would swallow an unrelated later activation (a keyboard
-      // Enter on a link, which has no pointerdown to reset it).
       suppressClick = moved > 3
       moved = 0
       setTimeout(() => {
         suppressClick = false
       }, 0)
-      // read where the drag landed BEFORE restoring snapping: putting
-      // scroll-snap back re-snaps the track immediately, so measuring after it
-      // reads the browser's guess instead of the user's
       const target = indexAt()
       track.style.scrollSnapType = ''
       track.style.cursor = ''
@@ -611,7 +484,6 @@ export function initSlider(host, data, opts = {}) {
     )
   }
 
-  // ---- keep the chrome honest as the track resizes ----
   let observer = null
   if (typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(

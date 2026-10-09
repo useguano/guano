@@ -38,12 +38,9 @@ import { acceptsChildren } from '@/lib/treeOps'
 import { pushMasterStructure } from '@/lib/componentOps'
 import type { CollectionEntry, CollectionField, ElementNode } from '@/types/editor'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const FormSubmissionsModal = defineAsyncComponent(() => import('@/components/editor/forms/FormSubmissionsModal.vue'))
 
 const { selectedElement, getElement, setElementChannel } = useElement()
-// structural writes go through the backend so they land on the page or on a
-// component master, depending on what is being edited
 const { backend } = useStructure()
 const changeElementType = (id: string, type: string) => backend.value.retype(id, type)
 const setElementArg = (id: string, arg: string | null) => backend.value.setArg(id, arg)
@@ -68,14 +65,10 @@ const isBody = computed(() => selectedElement.value?.type === 'body')
 const isCollectionList = computed(() => selectedElement.value?.type === 'collection-list')
 const isCollectionItem = computed(() => selectedElement.value?.type === 'collection-item')
 const isSlider = computed(() => selectedElement.value?.type === 'slider')
-/** both elements that repeat a child template per entry — they share the whole
- * source / order / filter / hand-pick UI. A slider's source is optional. */
-const isList = computed(() => isCollectionList.value || isSlider.value)
-/** :collection-item[name] picks ONE entry to render through its template — its
- *  source was only ever settable by typing the arg in code */
-const hasSource = computed(() => isList.value || isCollectionItem.value)
 
-// --- tag ---
+const isList = computed(() => isCollectionList.value || isSlider.value)
+
+const hasSource = computed(() => isList.value || isCollectionItem.value)
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -83,17 +76,12 @@ const tagOptions = computed(() =>
   typeOptionsFor(selectedElement.value?.type ?? '').map((t) => ({ label: capitalize(t), value: t })),
 )
 
-/** an element with alternatives, that the current backend lets us retype.
- *  (This used to test `line !== undefined`, which is false for every component
- *  master node — so the whole panel was inert on the board.) */
 const canEditTag = computed(
   () =>
     tagOptions.value.length > 0 &&
     !!selectedElement.value &&
     backend.value.can(selectedElement.value, 'retype'),
 )
-
-// --- id ---
 
 const htmlId = computed({
   get: () => selectedElement.value?.htmlId ?? '',
@@ -102,11 +90,6 @@ const htmlId = computed({
   },
 })
 
-// --- channel: a site-wide effect target (lib/shared/channels.js) ---
-//
-// Shared state, like classes, so inside an instance it is the component's:
-// `editTarget` is the same redirect Style and Interactions write through.
-// An instance wrapper has none — it emits no element of its own.
 const channelTarget = computed(() => editTarget.value ?? selectedElement.value ?? null)
 const canChannel = computed(
   () => !!channelTarget.value && !isComponentType(selectedElement.value?.type ?? ''),
@@ -121,8 +104,6 @@ const channel = computed({
   },
 })
 
-// ⌘⇧D focuses the natural first field: the content input when the element
-// has editable content, otherwise the ID field
 const { pendingFocus } = usePanel()
 const idField = ref<InstanceType<typeof InputUI>>()
 const contentField = ref<InstanceType<typeof RichTextInput>>()
@@ -135,10 +116,6 @@ function consumeFocus() {
 onMounted(consumeFocus)
 watch(pendingFocus, consumeFocus)
 
-// --- links ---
-
-// any real element can carry a navigation target — the code-owned '@' link.
-// (structural containers and the body are excluded.)
 const canLink = computed(() => {
   const el = selectedElement.value
   return (
@@ -150,17 +127,10 @@ const canLink = computed(() => {
     !isSlider.value
   )
 })
-// a link is per-instance with a component default, so the field shows what
-// this element actually renders with — its own link, else the one it inherits
-// from the master. Clearing it falls back to the master's rather than to
-// nothing, which is what an empty field means here.
 const link = computed({
   get: () => {
     const el = selectedElement.value
     if (!el) return ''
-    // along the CHAIN (own → each host's mirror → the master), not `?? master.link`:
-    // a Nav that aims its Button mirror at #signup must not show Button's own
-    // /contact in the field it is editing
     return resolveInstanceValue(el, masterFor(el.id), 'link') ?? ''
   },
   set: (value: string) => {
@@ -168,15 +138,12 @@ const link = computed({
   },
 })
 
-// a link can point at "the current entry" when it renders inside an entry
-// scope: within a collection-list, or on a collection template page
 const canLinkEntry = computed(() => {
   const el = selectedElement.value
   if (!el || !canLink.value) return false
   if (activePage.value.collectionId) return true
   return (
     hasAncestorOfType(activePage.value.elements, el.id, 'collection-list') ||
-    // a bound slider is an entry scope too — its slides repeat per entry
     hasAncestorOfType(activePage.value.elements, el.id, 'slider')
   )
 })
@@ -187,8 +154,6 @@ const linkToEntry = computed({
     if (selectedElement.value) setElementLink(selectedElement.value.id, on ? '@item' : null)
   },
 })
-
-// --- field binding (possibly through a reference hop: 'author.name') ---
 
 const canBind = computed(
   () =>
@@ -211,7 +176,6 @@ const bindTail = computed(() => {
 const headField = computed(
   () => activeCollection.value?.fields.find((f) => f.name === bindHead.value) ?? null,
 )
-/** single references can hop to a field of the target collection */
 const refTarget = computed(() =>
   headField.value?.type === 'reference' && headField.value.refCollectionId
     ? collectionById(headField.value.refCollectionId)
@@ -223,7 +187,6 @@ const bindOptions = computed(() => [
   ...(activeCollection.value?.fields.map((f) => ({ label: f.name, value: f.name })) ?? []),
 ])
 
-// hopped-to fields hold values, so references are excluded (one hop max)
 const tailOptions = computed(() => [
   { label: 'Entry name', value: '' },
   ...(refTarget.value?.fields
@@ -240,18 +203,11 @@ function setTail(tail: string | null) {
   setElementArg(selectedElement.value.id, tail ? `${bindHead.value}.${tail}` : bindHead.value)
 }
 
-// --- collection-list source: a collection, or a multi-reference field of
-// the surrounding template's collection ---
-
 const listOptions = computed(() => {
   const options = collections.value.map((c) => ({ label: c.name, value: c.name }))
-  // a slider works with no source at all — then each child block is one slide
   if (isSlider.value) options.unshift({ label: 'None (manual slides)', value: '' })
-  // one picked entry comes from a collection, never from a repeating field
   if (isCollectionItem.value) return options
   for (const f of activeCollection.value?.fields ?? []) {
-    // a gallery field repeats over its images, exactly like a multi-reference
-    // field repeats over the entries it points to
     if (f.type === 'multi-reference' || f.type === 'multi-image') {
       options.push({ label: `${f.name} (field)`, value: f.name })
     }
@@ -268,13 +224,8 @@ const listSource = computed({
 
 const def = computed(() => (selectedElement.value ? ELEMENTS[selectedElement.value.type] : null))
 
-// --- custom attributes (allowlisted; node-only state like classes) ---
-
-// attributes are node state; a master's are what every instance renders
 const canAttrs = computed(() => !!selectedElement.value && !isBody.value)
 
-// editable buffer: rows may hold half-typed/invalid names; only the valid,
-// allowlisted subset is written back to the node (sanitizeAttributes)
 const attrRows = ref<{ name: string; value: string; field: string }[]>([])
 let syncingAttrs = false
 
@@ -284,8 +235,6 @@ watch(
     syncingAttrs = true
     const attrs = selectedElement.value?.attributes ?? {}
     const bound = selectedElement.value?.fieldAttrs ?? {}
-    // a row exists for every attribute AND for every bound one, so an attribute
-    // that only has a field binding is still editable
     const names = [...new Set([...Object.keys(attrs), ...Object.keys(bound)])]
     attrRows.value = names.map((name) => ({
       name,
@@ -304,8 +253,6 @@ watch(
     const clean = sanitizeAttributes(Object.fromEntries(rows.map((r) => [r.name, r.value])))
     if (Object.keys(clean).length) selectedElement.value.attributes = clean
     else delete selectedElement.value.attributes
-    // the field bindings, keyed the same way. Only allowlisted names, so the
-    // two sets can never disagree about which attributes exist.
     const bound: Record<string, string> = {}
     for (const row of rows) {
       const name = row.name.toLowerCase().trim()
@@ -317,8 +264,6 @@ watch(
   { deep: true },
 )
 
-/** fields an attribute's value can be bound to — the entry context's own.
- * Empty off a template page, where there is no entry to read. */
 const attrFieldOptions = computed(() => [
   { label: 'Fixed value', value: '' },
   ...(activeCollection.value?.fields ?? []).map((f) => ({ label: f.name, value: f.name })),
@@ -330,14 +275,10 @@ function addAttr() {
 function removeAttr(i: number) {
   attrRows.value.splice(i, 1)
 }
-/** a typed name that isn't blank but isn't allowed (blocked/malformed) */
 function attrInvalid(name: string): boolean {
   return name.trim() !== '' && !isAllowedAttribute(name)
 }
 
-// --- collection-list query: order / limit / filter / hand-picked entries ---
-
-/** the collection this list repeats (null when the source is a multi-ref field) */
 const sourceCollection = computed(() =>
   isList.value ? (collectionByName(listSource.value) ?? null) : null,
 )
@@ -345,7 +286,6 @@ const listFields = computed(() => sourceCollection.value?.fields ?? [])
 
 const lq = computed(() => selectedElement.value?.listQuery ?? {})
 
-/** merge a partial into listQuery, pruning empties (empty object → removed) */
 function patchListQuery(partial: Record<string, unknown>) {
   const el = selectedElement.value
   if (!el) return
@@ -359,18 +299,9 @@ function patchListQuery(partial: Record<string, unknown>) {
   else delete el.listQuery
 }
 
-// --- form config ---
-//
-// The form's node state says WHETHER it accepts submissions and what happens
-// after one. It never says WHERE a submission goes: recipients, the mailer and
-// the webhook are server-side and admin-only, because the project blob is
-// written by editors, drafts, merges, contributors and agent tokens.
-
 const isForm = computed(() => selectedElement.value?.type === 'form')
 const fm = computed(() => selectedElement.value?.form ?? {})
 
-/** merge a partial into node.form, pruning anything back to its default so an
- * untouched form stays byte-identical (same discipline as patchSlider) */
 function patchForm(partial: Record<string, unknown>) {
   const el = selectedElement.value
   if (!el) return
@@ -379,8 +310,6 @@ function patchForm(partial: Record<string, unknown>) {
     const value = next[key]
     if (value == null || value === '' || value === false) delete next[key]
   }
-  // a redirect, a notification and a forward only mean something for a form
-  // this instance actually answers
   if (!next.enabled) {
     delete next.notify
     delete next.forward
@@ -392,9 +321,6 @@ function patchForm(partial: Record<string, unknown>) {
 
 const formRedirectError = computed(() => formConfigError(fm.value))
 
-/** the published routes a success redirect can point at. A collection template
- *  is excluded: it renders only through its entries, so it owns no bare route
- *  (same rule as the exporter's). */
 const routeOptions = computed(() => [
   { label: 'Show the success message', value: '' },
   ...pages.value
@@ -405,8 +331,6 @@ const routeOptions = computed(() => [
     })),
 ])
 
-/** what the export will declare for this form, read the same way the server
- * will read it — so the panel and the manifest cannot disagree */
 const formFields = computed(() => {
   const el = selectedElement.value
   if (!el || !isForm.value) return { fields: [], unnamed: [], duplicates: [] }
@@ -416,9 +340,6 @@ const formFields = computed(() => {
   })
 })
 
-/** an element's effective TEXT, the instance chain included — what a
- * `<select>`'s option values are read from. An `<option>` inside a component
- * carries no text of its own; the master's is what renders. */
 function resolveContent(node: ElementNode): string {
   const mapping = masterFor(node.id)
   if (node.content) return node.content
@@ -426,20 +347,12 @@ function resolveContent(node: ElementNode): string {
   return [...mapping.mirrors, mapping.master].map((n) => n.content).find(Boolean) ?? ''
 }
 
-/** a control's effective attributes, instance layers included — the reason a
- * form built out of components reports its fields at all */
 function resolveAttributes(node: ElementNode): Record<string, string> {
-  // inside a component the `name`/`type`/`required` attributes are the
-  // MASTER's (they are shared, like classes); only this placement's overrides
-  // are the node's own. Reading the node alone reported no fields at all for a
-  // form built out of components.
   const mapping = masterFor(node.id)
   const shared = mapping ? mapping.master.attributes : node.attributes
   return mergeAttributeLayers(shared, node.instanceAttributes, undefined) as Record<string, string>
 }
 
-/** add a success / error block through the structure API, never a hand-rolled
- * children.push — the host (page or master) decides where it lands */
 function addFormState(type: 'form-success' | 'form-error') {
   const el = selectedElement.value
   if (!el) return
@@ -449,17 +362,12 @@ function addFormState(type: 'form-success' | 'form-error') {
 const hasFormState = (type: string) =>
   (selectedElement.value?.children ?? []).some((c) => c.type === type)
 
-/** the submissions for THIS form, from the panel that configured it — the
- *  shortest path from "is this working?" to the answer */
 const { openModal: openFormModal } = useModal()
 const viewSubmissions = () => {
   const el = selectedElement.value
   if (el) openFormModal(FormSubmissionsModal, { formId: el.id })
 }
 
-/** an enabled form on a zip/github publish with no studio URL posts nowhere —
- *  worth saying here rather than only in the publish warnings, which arrive
- *  one round trip after the author has moved on */
 const apiOriginMissing = computed(
   () =>
     fm.value.enabled === true &&
@@ -467,17 +375,11 @@ const apiOriginMissing = computed(
     !settings.value.publishing.apiOrigin,
 )
 
-// --- slider (carousel) config ---
-
-/** breakpoints widest → narrowest: the widest is the base that applies
- * everywhere, the rest are narrower overrides (same cascade as classes) */
 const sliderBreakpoints = computed(() => [...breakpoints.value].sort((a, b) => b.width - a.width))
 
 const sl = computed(() => selectedElement.value?.slider ?? {})
 const slResolved = computed(() => resolveSliderConfig(sl.value, breakpoints.value))
 
-/** merge a partial into node.slider, pruning anything back to its default so an
- * untouched slider stays byte-identical (same discipline as patchListQuery) */
 function patchSlider(partial: Record<string, unknown>) {
   const el = selectedElement.value
   if (!el) return
@@ -491,9 +393,6 @@ function patchSlider(partial: Record<string, unknown>) {
   }
   const perView = next.perView as Record<string, number> | undefined
   if (perView) {
-    // drop the base when it says what an absent config already says, and drop
-    // a key for a breakpoint that no longer exists — the MCP validates against
-    // the live breakpoint list and would refuse a config carrying a stale one
     const live = new Set(breakpoints.value.map((b) => b.id))
     for (const key of Object.keys(perView)) {
       if (key === 'base') {
@@ -502,19 +401,16 @@ function patchSlider(partial: Record<string, unknown>) {
     }
     if (!Object.keys(perView).length) delete next.perView
   }
-  // the delay only means anything with autoplay on
   if (!next.autoplay) delete next.delay
   if (Object.keys(next).length) el.slider = next as typeof el.slider
   else delete el.slider
 }
 
-/** the per-view value stored for a breakpoint, '' when it inherits */
 function perViewOf(id: string) {
   const stored = sl.value.perView?.[id]
   return stored === undefined ? '' : String(stored)
 }
 
-/** what a breakpoint shows when it stores nothing: the nearest wider value */
 function perViewPlaceholder(id: string) {
   const list = sliderBreakpoints.value
   const index = list.findIndex((b) => b.id === id)
@@ -528,7 +424,6 @@ function perViewPlaceholder(id: string) {
 function setPerView(id: string, raw: string) {
   const next = { ...(sl.value.perView ?? {}) }
   const n = parseInt(raw, 10)
-  // a blank narrower row means inherit; the base falls back to one slide
   if (Number.isFinite(n) && n > 0) next[id] = Math.min(8, n)
   else delete next[id]
   patchSlider({ perView: next })
@@ -569,14 +464,12 @@ function setOffset(raw: string) {
   patchListQuery({ offset: Number.isFinite(n) && n > 0 ? n : undefined })
 }
 
-// "related posts" — only meaningful on a collection template page (entry scope)
 const onTemplatePage = computed(() => !!activePage.value?.collectionId)
 const excludeCurrent = computed(() => !!lq.value.excludeCurrent)
 function setExcludeCurrent(on: boolean) {
   patchListQuery({ excludeCurrent: on ? true : undefined })
 }
 
-// filter: a field + mode ('is' a value / 'not empty')
 const filterFieldOptions = computed(() => [
   { label: 'None', value: '' },
   ...listFields.value.map((f) => ({ label: f.name, value: f.name })),
@@ -591,10 +484,8 @@ const filterMode = computed(() =>
 const filterModeOptions = [
   { label: 'is', value: 'equals' },
   { label: 'is not empty', value: 'notEmpty' },
-  // the child-collection pattern: this page's entry is what the field points at
   { label: 'is this entry', value: 'equalsCurrent' },
 ]
-/** the filter clause for a mode, so the three stay mutually exclusive */
 function filterFor(mode: string, field: string) {
   if (mode === 'notEmpty') return { field, notEmpty: true }
   if (mode === 'equalsCurrent') return { field, equalsCurrent: true }
@@ -615,8 +506,6 @@ function setFilterValue(value: string) {
   patchListQuery({ filter: { field, equals: value } })
 }
 
-// hand-picked entries: absent pick = all included; [] = none. Setting the
-// full set clears pick (back to "all") so the default stays byte-identical.
 function isPicked(id: string): boolean {
   return !lq.value.pick || lq.value.pick.includes(id)
 }
@@ -625,7 +514,6 @@ function setPick(ids: string[]) {
   if (!el) return
   const all = sourceCollection.value?.entries.map((e) => e.id) ?? []
   if (ids.length === all.length) {
-    // every entry included → drop pick entirely
     if (el.listQuery) {
       const { pick: _drop, ...rest } = el.listQuery
       el.listQuery = Object.keys(rest).length ? rest : undefined
@@ -640,8 +528,6 @@ function togglePick(id: string) {
   setPick(cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])
 }
 
-// --- collection-item entry pick ---
-
 const itemCollection = computed(() =>
   isCollectionItem.value && selectedElement.value?.arg
     ? collectionByName(selectedElement.value.arg)
@@ -653,38 +539,21 @@ const entryOptions = computed(() => [
   ...(itemCollection.value?.entries.map((e) => ({ label: e.name, value: e.id })) ?? []),
 ])
 
-// --- content (folded in from the former Content panel) ---
-
-/** text-bearing elements expose their content for editing */
-// raw HTML: a plain code textarea rather than the rich-text field, which would
-// take `<script>` for copy and strip it. Build roles only — the server refuses
-// anyone else's write out loud (protectedWriteDenial), so offering the field
-// would only ever produce that error.
 const isCustomCode = computed(() => selectedElement.value?.type === 'custom-code')
 const hasContent = computed(() => def.value?.defaultContent !== undefined && !isCustomCode.value)
 const isMedia = computed(() => ['image', 'video'].includes(selectedElement.value?.type ?? ''))
 
-// collection field schema, edited on the template's body (and in the Pages
-// drawer's collection settings — both go through lib/collectionFields)
-
 const collectionOptions = computed(() => collections.value.map((c) => ({ label: c.name, value: c.id })))
 
-// switching a field to a reference type needs a target; default to the
-// first collection so the picker is never dangling
 function onFieldTypeChange(field: CollectionField, type: CollectionField['type']) {
   setFieldType(field, type, collections.value)
 }
 
-/** a choice's options, deduped and trimmed. Entries holding a value that is no
- *  longer offered KEEP it — pages match on the value, so rewriting would
- *  silently restyle them; the picker simply reads as unset until someone picks. */
 function setFieldOptions(field: CollectionField, text: string) {
   const next = [...new Set(text.split('\n').map((o) => o.trim()).filter(Boolean))]
   if (next.length) field.options = next
   else delete field.options
 }
-
-// --- binding resolution (possibly through a reference hop) ---
 
 interface ResolvedBinding {
   collection: { id: string }
@@ -698,33 +567,18 @@ const binding = computed<ResolvedBinding | null>(() =>
 const boundField = computed(() => binding.value?.field ?? null)
 const boundIsRef = computed(() => !!boundField.value && isRefType(boundField.value.type))
 
-// the collection this element's arg-head points at, when the head field is a
-// reference — drives the per-entry value pickers below (distinct from the
-// Binding tab's refTarget, which only hops single references)
 const pickRefTarget = computed(() =>
   headField.value?.refCollectionId ? collectionById(headField.value.refCollectionId) : null,
 )
 
-// The reference and gallery writers are `useEntryField`'s — the same ones the
-// Pages drawer's entry editor uses. They used to be a second copy here, wired
-// to the element-arg binding (`headField` + `activeEntry`) instead of an
-// explicit field, with a comment asking the next person to keep two sets of
-// rules in step. The rules are the invariants that keep a touched-then-cleared
-// entry byte-identical (an emptied list deletes its key; clearing a gallery
-// slot splices it out), so a copy that drifted would show up as a phantom
-// draft change. One implementation, called with the bound field.
 const entryField = useEntryField()
 
-/** the bound field and the loaded entry, or null — every writer below needs
- *  both, and the panel renders its pickers only when they are there */
 const bound = computed(() =>
   headField.value && activeEntry.value
     ? { entry: activeEntry.value, field: headField.value }
     : null,
 )
 
-// single reference: which entry this entry points to (base values only —
-// references are never locale-overridden)
 const refValue = computed({
   get: () => (bound.value ? entryField.readRef(bound.value.entry, bound.value.field) : ''),
   set: (id: string) => {
@@ -736,12 +590,9 @@ const refOptions = computed(() => [
   ...(pickRefTarget.value?.entries.map((e) => ({ label: e.name, value: e.id })) ?? []),
 ])
 
-// multi-reference: toggled id list, order = toggle order
 const multiIds = computed(() =>
   bound.value ? refIds(bound.value.entry, bound.value.field.name) : [],
 )
-// multi-image ("gallery"): an ordered list of media urls on the entry. Order
-// is what the collection-list renders, so it is editable here.
 const galleryUrls = computed(() =>
   bound.value ? mediaUrls(bound.value.entry, bound.value.field.name) : [],
 )
@@ -764,15 +615,10 @@ function toggleRef(id: string) {
   if (bound.value) entryField.toggleRef(bound.value.entry, bound.value.field, id)
 }
 
-/** the ref pickers need an entry loaded in the template canvas */
 const showRefPicker = computed(
   () => !!headField.value && isRefType(headField.value.type) && !!activeEntry.value,
 )
 
-// bound elements with an entry loaded edit the ENTRY's value (following a
-// reference hop when the binding is dotted) — that's how post content gets
-// written. Under a non-default locale both paths edit that locale's
-// override (empty clears it). Reference-typed binds are picked, not typed.
 const content = computed({
   get: () => {
     if (boundField.value && !boundIsRef.value && binding.value?.entry) {
@@ -789,8 +635,6 @@ const content = computed({
   },
 })
 
-// translating: surface the default-locale value as the placeholder so
-// the fallback stays visible while the override field is empty
 const contentPlaceholder = computed(() => {
   if (!isDefault.value) {
     const entry = binding.value?.entry
@@ -803,16 +647,8 @@ const contentPlaceholder = computed(() => {
   return def.value?.defaultContent
 })
 
-// --- icon ---
-
 const { canBuild } = useAuth()
 const { isHidden, setHidden } = useComponents()
-
-// --- the component instance the selection sits in ---
-//
-// Shown for the instance wrapper AND for anything inside it: a click on the
-// canvas selects the innermost element, so a section that only appeared on the
-// wrapper would be one nobody finds. It always acts on the nearest instance.
 
 const instance = computed(() => {
   const node = selectedElement.value
@@ -836,8 +672,6 @@ function pickVariant(axis: string, option: string | undefined) {
   if (at && option) setInstancePick(at.def, at.wrapper, axis, option, at.mirrors)
 }
 
-/** the instance's optional parts: every element whose visibility is decided
- *  somewhere — hidden by the component, or hidden/shown by this instance */
 const instanceParts = computed(() => {
   const at = instance.value
   if (!at) return []
@@ -851,7 +685,6 @@ const instanceParts = computed(() => {
       .trim()
     parts.push({ node, label: text || node.type, shown: !isHidden(node) })
   })
-  // two parts of one type and no text to tell them apart: number them in order
   const seen = new Map<string, number>()
   const total = new Map<string, number>()
   for (const p of parts) total.set(p.label, (total.get(p.label) ?? 0) + 1)
@@ -863,11 +696,6 @@ const instanceParts = computed(() => {
   })
 })
 
-// --- slot: a master container whose children are each instance's own ---
-//
-// Board only: a slot is declared on the component, never from a page. The
-// push carries the flag onto every instance (what one already held under it
-// becomes its content) and gives a fresh instance the master's children.
 const { boardActive, activeCard } = useComponentBoard()
 const { project } = useProject()
 const canSlot = computed(() => {
@@ -890,12 +718,8 @@ const isSlot = computed({
   },
 })
 
-/** an icon's markup is not content a contributor may change: the server keeps
- *  it out of the contributor allowlist, so offering the picker would only
- *  produce an edit that silently does not save */
 const isIcon = computed(() => selectedElement.value?.type === 'icon' && canBuild.value)
 
-/** own markup first, then the component master's — what actually renders */
 const svg = computed({
   get: () => {
     const node = selectedElement.value
@@ -955,7 +779,6 @@ const src = computed({
         <RowUI v-if="isRefType(field.type)" label="To">
           <SelectUI v-model="field.refCollectionId" :options="collectionOptions" />
         </RowUI>
-        <!-- kept in step with CollectionSettingsEditor's copy of this editor -->
         <RowUI v-if="field.type === 'select'" label="Options">
           <textarea
             :value="(field.options ?? []).join('\n')"
@@ -977,7 +800,6 @@ const src = computed({
       </ButtonUI>
     </GroupPopover>
 
-    <!-- reference values are picked per entry, in entry context -->
     <GroupPopover v-if="showRefPicker" :label="headField!.name">
       <SelectUI v-if="headField!.type === 'reference'" v-model="refValue" :options="refOptions" />
       <template v-else>
@@ -1000,7 +822,6 @@ const src = computed({
       </template>
     </GroupPopover>
 
-    <!-- gallery values: one picker per image, reorderable; clearing removes -->
     <GroupPopover v-if="showGalleryPicker" :label="headField!.name">
       <div v-for="(url, i) in galleryUrls" :key="`${url}-${i}`" class="flex items-start gap-1">
         <MediaPickerControl
@@ -1062,8 +883,7 @@ const src = computed({
       :label="instance.def.name"
       data-instance-section
     >
-      <!-- every option in sight, one click each: a dropdown would hide what
-           the component comes in behind a click -->
+
       <div
         v-for="axis in instanceAxes"
         :key="axis.name"
@@ -1325,7 +1145,6 @@ const src = computed({
             : 'A collection repeats all entries; a multi-reference field repeats the entries it points to.'
         }}
       </p>
-      <!-- the order/filter/limit controls only mean something with a source -->
       <template v-if="!isSlider || listSource">
         <RowUI label="Order by">
           <SelectUI

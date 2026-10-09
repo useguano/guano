@@ -5,7 +5,6 @@ import type { Collection, CollectionEntry } from '@/types/editor'
 export interface EntryContext {
   collection: Collection
   entry: CollectionEntry | null
-  /** position within the repeating list */
   index?: number
   count?: number
 }

@@ -5,51 +5,20 @@ import { ALIAS_OF } from './html/tags'
 import { parseLegacyCode } from './legacy/dsl'
 import { walkNodes } from './tree'
 
-/**
- * The v2 schema: the tree is the only source of truth.
- *
- * v1 carried the indentation DSL beside it — `page.code`, plus a `line` and
- * `endLine` on every node — because the text was authoritative for structure.
- * Nothing reads any of it now, so v2
- * drops it, and with it the pure alias types the DSL's registry carried.
- *
- * This runs ONCE per blob, on the server at boot, over every project blob in
- * the store: the drafts, Main, the `guano-base:*` merge snapshots (which are
- * whole project copies, so a 3-way merge against an unmigrated base would see
- * every page as changed) and the published baseline. It is also applied
- * client-side as a defensive no-op and to anything `/api/project-import`
- * brings in.
- *
- * It is IDEMPOTENT: a project already at v2 is returned untouched, which is
- * what makes "run it on everything, every boot" safe.
- */
-
 export const SCHEMA_VERSION = 2
 
-/**
- * The v1 fields, which the current types no longer carry.
- *
- * The migration's INPUT is a v1 blob, so it is the one place that has to see
- * them. Spelled out here rather than kept in `Page`/`ElementNode`, where every
- * other file would see them too and the deletion would not be real.
- */
 type V1Node = ElementNode & { line?: number; endLine?: number }
 type V1Page = Page & { code?: string }
 
 export interface MigrationReport {
-  /** did anything change? (false for a project already at v2) */
   changed: boolean
   from: number
   pages: number
-  /** nodes whose alias type was collapsed, by the type they were */
   collapsed: Record<string, number>
-  /** instances that were still an unexpanded leaf and had to be materialized */
   materialized: number
-  /** pages whose stored tree had to be SALVAGED from the DSL text — this
-   *  should always be empty, and the legacy parser exists only for it */
+
   salvaged: string[]
-  /** pages whose stored text disagreed with the stored tree. The tree wins
-   *  (it is what every renderer read), so this is a record, not a problem. */
+
   textDisagreed: string[]
 }
 
@@ -63,14 +32,6 @@ const emptyReport = (): MigrationReport => ({
   textDisagreed: [],
 })
 
-/**
- * Migrate a project in place. Returns the same object, plus a report.
- *
- * Pass `pageToCode` to have the migration compare each page's stored text
- * against the text its tree implies and record the pages that disagree. That
- * is the only reason it would ever want the old serializer, so the caller
- * supplies it rather than this module importing a thing it is deleting.
- */
 export function migrateProject(
   project: Project,
   opts: { pageToCode?: (page: Page, locale: string) => string } = {},
@@ -87,9 +48,6 @@ export function migrateProject(
   const collapse = (node: ElementNode) => {
     const target = ALIAS_OF[node.type]
     if (!target) return
-    // the alias and its target render the same tag and the same shape, which
-    // is why the corpus can prove this changes nothing; the alias existed
-    // only to give the insert dock two names for a div
     report.collapsed[node.type] = (report.collapsed[node.type] ?? 0) + 1
     node.type = target
   }
@@ -100,8 +58,6 @@ export function migrateProject(
     delete (node as V1Node).endLine
   }
 
-  /** an instance that was never materialized (a stored `:Card:` leaf) has no
-   *  nodes at all — nothing ever expanded it, so it rendered as nothing */
   const materialize = (node: ElementNode) => {
     if (!isComponentType(node.type) || node.children.length) return
     const def = byName.get(node.type)
@@ -114,8 +70,6 @@ export function migrateProject(
     report.pages++
     let body: ElementNode | undefined = (page.elements ?? []).find((n) => n.type === 'body')
     if (!body) {
-      // SALVAGE: a page with text but no usable tree. See legacy/dsl.ts — this
-      // should never fire, and the parser lives only for the case where it does.
       const salvaged = page.code ? parseLegacyCode(page.code) : []
       body = salvaged.find((n) => n.type === 'body')
       if (body) {
@@ -127,7 +81,6 @@ export function migrateProject(
         report.salvaged.push(`${page.name || page.id} (empty)`)
       }
     } else if (page.elements.length > 1) {
-      // only the body is a root; anything else was never rendered
       page.elements = [body]
     }
 
@@ -148,7 +101,6 @@ export function migrateProject(
   return { project, report }
 }
 
-/** a one-line summary for a boot log */
 export function describeMigration(key: string, report: MigrationReport): string | null {
   if (!report.changed) return null
   const bits = [`${report.pages} page${report.pages === 1 ? '' : 's'}`]

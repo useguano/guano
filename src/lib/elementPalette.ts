@@ -36,27 +36,14 @@ export interface PaletteItem {
   type: string
   label: string
   icon: Component
-  /**
-   * Classes the insert lands with — what makes this a PRESET rather than a
-   * type. `container` and `grid` used to be their own element types whose only
-   * difference from a `div` was the name in this list; the v2 migration
-   * collapsed them, and what the names were really offering was a styled div.
-   */
+
   classes?: string
-  /**
-   * Stable address for this entry, defaulted to the type by `paletteKey`. A
-   * preset needs its own, because several entries now share one type — and it
-   * has to be stable rather than label-derived: it is the row key, and what
-   * `[data-dock-item]` is queried by.
-   */
+
   key?: string
 }
 
-/** how a palette entry is addressed: its own key, else its type */
 export const paletteKey = (item: PaletteItem): string => item.key ?? item.type
 
-/** the insertable built-in elements, grouped for browsing — shared by the
- * Elements popover (ElementsPalette) and the ⌘E command palette */
 export const ELEMENT_GROUPS: { title: string; items: PaletteItem[] }[] = [
   {
     title: 'Layout',
@@ -101,8 +88,6 @@ export const ELEMENT_GROUPS: { title: string; items: PaletteItem[] }[] = [
     ],
   },
   {
-    // button and link are containers now (an icon sits beside the words), so
-    // they read as actions rather than as a form control and a list row
     title: 'Actions',
     items: [
       { type: 'button', label: 'Button', icon: MousePointerClick },
@@ -142,7 +127,6 @@ export const ELEMENT_GROUPS: { title: string; items: PaletteItem[] }[] = [
   {
     title: 'Embed',
     items: [
-      // raw HTML, emitted verbatim on the published page — see the registry
       { type: 'custom-code', label: 'Custom code', icon: Code2 },
     ],
   },

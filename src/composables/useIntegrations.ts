@@ -2,19 +2,6 @@ import { ref } from 'vue'
 import { apiJson } from '@/lib/api'
 import type { Integration } from '@/lib/integrations'
 
-/**
- * The integrations list, hydrated from the server.
- *
- * Server-hydrated like `useUsers`/`useBranches`: integrations are NOT part of
- * the project document. They hold credentials, and the project blob is written
- * by editors, drafts, merges, contributors and agent tokens — so the whole
- * store lives in server/data/integrations.json and is reached only over
- * /api/integrations.
- *
- * A SECRET key's value never arrives here. The server's read shape omits it by
- * construction, so there is nothing to forget to strip: a secret row simply has
- * no `value`, and the panel shows it masked.
- */
 const integrations = ref<Integration[]>([])
 const loaded = ref(false)
 const loadError = ref<string | null>(null)
@@ -31,7 +18,6 @@ export function useIntegrations() {
     }
   }
 
-  /** every mutation answers with the whole list, so one assignment is enough */
   const absorb = (data: { integrations?: Integration[] }) => {
     if (data?.integrations) integrations.value = data.integrations
   }
@@ -78,7 +64,6 @@ export function useIntegrations() {
     )
   }
 
-  /** run a capability's live test against one integration */
   async function test(id: string, capability: 'smtp' | 'webhook') {
     return (await apiJson(`/api/integrations/${encodeURIComponent(id)}/test`, {
       method: 'POST',

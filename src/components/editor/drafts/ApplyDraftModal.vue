@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// Review-and-apply flow for a draft: change summary, side-by-side conflict
-// choices, then a success state offering to keep or delete the draft.
 import { computed, onMounted, ref } from 'vue'
 import { Check, CircleCheck } from 'lucide-vue-next'
 import LoadingUI from '@/components/ui/LoadingUI.vue'
@@ -37,13 +35,11 @@ onMounted(async () => {
     return
   }
   conflicts.value = result.conflicts
-  // every conflict starts on Main's side — the merge default
   choices.value = Object.fromEntries(result.conflicts.map((c) => [c.key, 'mine' as Resolution]))
   summary.value = status?.summary ?? null
   stage.value = 'review'
 })
 
-/** what picking each side of a conflict means, in draft language */
 function sideHints(conflict: MergeConflict): { mine: string; theirs: string } {
   switch (conflict.kind) {
     case 'changed':
@@ -68,7 +64,6 @@ function conflictHint(conflict: MergeConflict): string {
 
 async function apply() {
   stage.value = 'applying'
-  // apply with keep — the success step decides whether the draft survives
   const ok = await mergeIntoMain(props.branch.id, choices.value, { keep: true })
   if (!ok) {
     emit('close')
@@ -90,14 +85,12 @@ async function deleteDraft() {
     size="lg"
     @close="emit('close')"
   >
-    <!-- loading -->
     <LoadingUI
       v-if="stage === 'loading' || stage === 'applying'"
       class="justify-start py-6"
       :label="stage === 'applying' ? 'Merging the draft…' : 'Comparing with Main…'"
     />
 
-    <!-- review -->
     <template v-else-if="stage === 'review'">
       <div class="flex flex-col gap-1">
         <p class="text-xs text-muted-foreground">
@@ -148,7 +141,6 @@ async function deleteDraft() {
       </template>
     </template>
 
-    <!-- success -->
     <template v-else-if="stage === 'done'">
       <div class="flex flex-col gap-2 py-2">
         <p class="flex items-center gap-1.5 text-xs font-medium text-success">

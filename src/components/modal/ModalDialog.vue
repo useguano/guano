@@ -10,7 +10,6 @@ withDefaults(
   defineProps<{
     title?: string
     size?: Size
-    /** alertdialog for a destructive confirm — it interrupts, it does not inform */
     role?: 'dialog' | 'alertdialog'
   }>(),
   { size: 'default', role: 'dialog' },

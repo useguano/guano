@@ -3,19 +3,8 @@ import { useProject } from './useProject'
 import { useAuth } from './useAuth'
 import type { Project } from '@/types/editor'
 
-// Stamps updatedAt/updatedBy on the page / collection entry whose content
-// actually changed. Rather than instrument every mutation site, we diff a
-// content signature per item on a debounced deep-watch of the project.
-//
-// The signature deliberately EXCLUDES the stamp fields, so writing a stamp
-// can't re-trigger a stamp (it converges after one settle). We also skip the
-// scan whenever the whole project object was REPLACED (undo/redo, branch
-// switch, reset, initial load) — those aren't edits, so they must not stamp.
-
 let started = false
 
-// `code` is deliberately absent: it is a derived mirror of `elements` now, so
-// including it would only ever double-count a structural edit
 function pageSig(p: Project['pages'][number]): string {
   return JSON.stringify({ n: p.name, p: p.path, t: p.status, s: p.seo, x: p.customCode, e: p.elements })
 }
@@ -37,8 +26,6 @@ export function startEditTracking() {
   let seeded = false
 
   function scan() {
-    // a wholesale replacement (undo/redo/branch/reset/load) is not an edit —
-    // refresh baselines to the new state without stamping anything
     const rootReplaced = project.value !== lastRoot
     lastRoot = project.value
     const stamping = seeded && !rootReplaced
@@ -71,7 +58,6 @@ export function startEditTracking() {
       }
     }
 
-    // drop signatures for deleted items so a recycled id can't false-stamp
     for (const id of [...pageSigs.keys()]) if (!livePages.has(id)) pageSigs.delete(id)
     for (const id of [...entrySigs.keys()]) if (!liveEntries.has(id)) entrySigs.delete(id)
 
@@ -79,13 +65,10 @@ export function startEditTracking() {
   }
 
   let timer: ReturnType<typeof setTimeout> | null = null
-  // projectVersion is useProject's single shared deep watcher — watching it
-  // avoids a second whole-document traversal on every keystroke
   watch(projectVersion, () => {
     if (timer) clearTimeout(timer)
     timer = setTimeout(scan, 600)
   })
 
-  // seed baselines from the hydrated project so the first real edit is caught
   scan()
 }

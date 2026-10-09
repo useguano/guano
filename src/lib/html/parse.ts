@@ -1,32 +1,11 @@
 import { FORBIDDEN_TAGS, isLenientVoidTag, isLeafType, isRenderableType, typeForTag } from './tags'
 
-/**
- * The strict reader for the agent-facing HTML subset.
- *
- * Hand-rolled, and deliberately not parse5 or any other HTML5 parser: they all
- * lowercase tag names, and a lowercased tag name cannot tell `<Card>` from
- * `<card>`, which is how a component instance is spelled.
- *
- * Lenient in, canonical out. It accepts what a model naturally writes — a void
- * tag without the self-closing slash, a lowercase component name, comments,
- * numeric entities, a `<div>` of plain text — and refuses, with `line:col`,
- * everything that would make a write silently mean something else: an unknown
- * tag, a mismatched or unclosed tag, a duplicate attribute, an unquoted value,
- * an `on*` handler, a `<script>`, text loose inside a container. The
- * discipline is JSX's, which models already follow.
- */
-
 export interface ParsedNode {
-  /** registry type, or a component name */
   type: string
-  /** the tag as written, for a diagnostic that quotes the author back */
   tag: string
-  /** every attribute as written, names lowercased, values entity-decoded */
   attrs: Record<string, string>
   children: ParsedNode[]
-  /** a LEAF's inner markup, raw — the caller runs it through `sanitizeRich` */
   text?: string
-  /** where it was written, for a diagnostic the agent can act on */
   line: number
   col: number
 }
@@ -40,7 +19,6 @@ export interface ParseError {
 export interface ParseResult {
   roots: ParsedNode[]
   errors: ParseError[]
-  /** things that read differently from how they were written, worth saying */
   notes: string[]
 }
 
@@ -72,8 +50,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
     }
   }
 
-  // line starts, once: an offset→line lookup per element would otherwise make
-  // reading a large page quadratic
   const lineStarts = [0]
   for (let k = 0; k < input.length; k++) if (input[k] === '\n') lineStarts.push(k + 1)
   const at = (offset: number) => {
@@ -92,8 +68,7 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
   }
 
   const stack: ParsedNode[] = []
-  /** refused open tags, by name, whose matching close must be swallowed so one
-   * bad tag reports once instead of cascading */
+
   const unknownOpen = new Map<string, number>()
   const push = (node: ParsedNode) => {
     const parent = stack[stack.length - 1]
@@ -111,7 +86,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
     if (lt > i) reportStrayText(input.slice(i, lt), i)
     i = lt
 
-    // --- comments and declarations: read and dropped ---
     if (input.startsWith('<!--', i)) {
       const end = input.indexOf('-->', i + 4)
       if (end === -1) return bail(i, 'unterminated comment')
@@ -125,17 +99,11 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
       continue
     }
 
-    // --- a close tag ---
     if (input[i + 1] === '/') {
       const match = TAG_NAME.exec(input.slice(i + 2))
       const end = input.indexOf('>', i)
       if (!match || end === -1) return bail(i, 'malformed closing tag')
       const tag = match[0]
-      // the close of a tag we already refused on the way in. Its open was
-      // reported and nothing was pushed, so without this the `</figure>` of an
-      // `<figure>` we just named produced a SECOND error about not closing
-      // whatever block it landed in — noise on top of the one real diagnostic,
-      // and in a cascade it buries it.
       const skipping = unknownOpen.get(tag)
       if (skipping) {
         if (skipping === 1) unknownOpen.delete(tag)
@@ -157,7 +125,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
       continue
     }
 
-    // --- an open tag ---
     const start = i
     const nameMatch = TAG_NAME.exec(input.slice(i + 1))
     if (!nameMatch) return bail(i, "'<' does not start a tag — write a literal one as &lt;")
@@ -169,7 +136,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
     const { attrs, selfClosed } = head
     i = head.after
 
-    /** a refused open tag whose close must be swallowed rather than reported */
     const refuseTag = (message: string) => {
       fail(start, message)
       if (!selfClosed && !isLenientVoidTag(tag)) {
@@ -202,21 +168,12 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
 
     if (selfClosed || isLenientVoidTag(tag)) continue
 
-    // A `<div>` of plain text is the text block, written the short way. Only
-    // PLAIN text promotes: the moment there is markup inside, the element
-    // could just as well be a container holding a `<span>`, and guessing would
-    // be the kind of silent reinterpretation this format exists to avoid. The
-    // explicit spelling (`<div data-type="text">`) always works, and is what
-    // the canonical output emits.
     if (node.type === 'div') {
       const nextTag = input.indexOf('<', i)
       const inner = nextTag === -1 ? input.slice(i) : input.slice(i, nextTag)
       if (inner.trim() && input.startsWith(`</${tag}`, nextTag)) node.type = 'text'
     }
 
-    // --- a leaf's inner markup is its CONTENT: taken raw, never parsed ---
-    // rich copy carries <strong>/<a>/<br>, which are not elements of this
-    // format; handing them to the tokenizer would refuse the write.
     if (isLeafType(node.type)) {
       const end = input.indexOf(`</${tag}`, i)
       if (end === -1) return bail(start, `<${tag}> is never closed`)
@@ -240,22 +197,15 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
 
   return { roots, errors, notes }
 
-  // ---- helpers ----
-
-  /** a structural error leaves the rest of the input meaningless: stop, so the
-   *  report is the one real problem rather than its echoes */
   function bail(offset: number, message: string): ParseResult {
     fail(offset, message)
     return { roots, errors, notes }
   }
 
-  /** text outside an element: whitespace is layout, anything else would render
-   *  nowhere */
   function reportStrayText(text: string, offset: number) {
     if (!text.trim()) return
     const parent = stack[stack.length - 1]
     const quoted = text.trim().slice(0, 40)
-    // point at the TEXT, not at the newline and indentation in front of it
     fail(
       offset + (text.length - text.trimStart().length),
       parent
@@ -299,7 +249,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
       }
       while (k < input.length && /\s/.test(input[k]!)) k++
       if (input[k] !== '=') {
-        // a bare attribute: its presence is the value (`<a download>`)
         attrs[name] = ''
         continue
       }
@@ -321,8 +270,6 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
   }
 }
 
-/** the five XML entities plus numeric ones — what a model writes, and all this
- *  format promises to understand */
 export function decodeEntities(text: string): string {
   return text
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))

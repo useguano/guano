@@ -7,14 +7,9 @@ import ValueFieldUI from '@/components/ui/ValueFieldUI.vue'
 import { sizeTextToClass, sizeClassToText, isSizeValue, nearestStepIndex } from '@/lib/valueClass'
 import { Plus, Minus, X } from 'lucide-vue-next'
 
-// Width / Height as slider + editable value. Each row has a (+) that reveals its
-// Min & Max constraint rows (same control), which can be removed individually.
-// The value field also accepts keywords/fractions (full, screen, 1/2…).
-
 const props = defineProps<{ modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
-// slider scale for size (nearest-stop for off-scale/keyword values)
 const STEPS = ['0', '4', '8', '12', '16', '20', '24', '32', '40', '48', '56', '64', '80', '96']
 const MAX = STEPS.length - 1
 
@@ -47,7 +42,6 @@ function setText(prefix: string, text: string) {
   if (cls !== false) setClass(prefix, cls)
 }
 
-// a dimension's constraints show when already set, or after the user expands it
 const expanded = reactive<Record<string, boolean>>(
   Object.fromEntries(
     DIMENSIONS.map((d) => [d.key, !!(tokenFor(d.min) || tokenFor(d.max))]),
@@ -87,7 +81,6 @@ function removeConstraint(prefix: string) {
         />
       </RowUI>
 
-      <!-- indented + left rule so min/max read as children of their dimension -->
       <div v-if="expanded[d.key]" class="ml-4 border-l border-input">
         <RowUI
           v-for="c in [

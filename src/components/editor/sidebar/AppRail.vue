@@ -10,7 +10,6 @@ import { useModal } from '@/composables/useModal'
 import { useAuth } from '@/composables/useAuth'
 import { useViewMode } from '@/composables/useViewMode'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const SettingsPanel = defineAsyncComponent(() => import('@/components/shared/SettingsPanel.vue'))
 
 const { openLibrary } = useMediaLibrary()
@@ -24,8 +23,7 @@ const {
 
 <template>
   <aside class="relative z-[60] flex h-full w-12 flex-col items-center gap-1 py-2 bg-background">
-    <!-- App: the default surface — the page canvas, no column. Contributors
-         are pinned to Play, so for them it stays a plain mark. -->
+
     <ButtonUI
       v-if="canBuild"
       variant="ghost"
@@ -50,9 +48,6 @@ const {
       @click="togglePages"
     />
 
-    <!-- A Build-surface tool, so contributors — content-only, pinned to
-         Play — don't get it. The Edit / Play switch itself is not a rail
-         button: it lives on the canvas (`ModeToggle`), beside Insert. -->
     <ButtonUI
       v-if="canBuild"
       variant="ghost"

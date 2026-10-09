@@ -1,37 +1,14 @@
 import type { ElementNode, Page, Project } from '@/types/editor'
 import { isComponentType } from './components'
 import { BUILTIN_LIST_SOURCES } from './nodeState'
-// the SAME scope/binding resolution the three renderers run, so a field this
-// reports as unknown is a field none of them could have resolved
 import { pagesListScope, resolveBinding, resolveListScope } from './shared/fields.js'
 import { CHANNEL_NAME_RE, isChannelName } from './shared/interactionKeys.js'
-
-/**
- * What is wrong with a page's structure — the only place a human sees that a
- * document is broken, now that the code column is gone.
- *
- * This replaces the half of `validateDocument` that still means something. The
- * other half was grammar (indentation, unclosed blocks, leaf-vs-container form,
- * invalid tokens) and cannot be expressed in a tree at all: a node is a node,
- * its children are its children. What remains are the rules about MEANING, and
- * they still arrive broken — from agents, from a 3-way merge, and from projects
- * written before a rule existed.
- *
- * Diagnostics address a NODE, not a line, so the issues footer selects the
- * element it is talking about.
- */
 
 export interface TreeDiagnostic {
   nodeId: string
   message: string
 }
 
-/**
- * A collection as the field checks read one — name plus fields. Deliberately
- * NOT `Collection`: the scope a `multi-image` field or `@pages` presents is
- * SYNTHETIC (shared/fields.js), with no template page and no id of its own,
- * and it is exactly the scope `data-field` resolves against inside such a list.
- */
 export interface FieldSource {
   name: string
   fields: { name: string; type: string; refCollectionId?: string }[]
@@ -40,24 +17,14 @@ export interface FieldSource {
 export interface ValidateContext {
   componentNames: string[]
   collectionNames: string[]
-  /** multi-reference / multi-image field names — also valid list sources */
   listFieldNames: string[]
-  /** collections with `detailRoutes: false`: they render inside other pages and
-   *  own no route, so an `@item` link inside one points nowhere */
+
   dataOnlyCollections: string[]
-  /** every collection, fields included — what a `data-field` or a `fieldAttrs`
-   *  entry is checked against. Omitted = that check is skipped. */
+
   collections?: FieldSource[]
-  /** the site's own pages, for the `@pages` built-in list source */
   pages?: Page[]
 }
 
-/**
- * The context, from a project. ONE builder: the editor's issues footer and the
- * HTML writer's diagnostics have to agree about what is broken, and they were
- * two copies of the same four lines — so a check added to one reported nothing
- * in the other.
- */
 export function validateContext(
   project: Pick<Project, 'components' | 'collections' | 'pages'>,
 ): ValidateContext {
@@ -76,38 +43,26 @@ export function validateContext(
   }
 }
 
-/** an open entry scope: what a `:collection-list` / `:collection-item` / bound
- *  `:slider` (or a collection template's `:body[name]`) is iterating */
 interface Scope {
   type: string
   arg?: string
-  /** the collection this scope PRESENTS — the one a `data-field` inside it
-   *  reads from. Not always the collection the arg names: a `multi-image`
-   *  field presents a synthetic one-image collection, which is why
-   *  `data-bind-alt="name"` inside such a list resolved to nothing. */
+
   collection?: FieldSource | null
 }
 
-/** the types whose `arg` names a SOURCE (and opens an entry scope) rather
- *  than a field of the scope around them */
 const SCOPE_TYPES = new Set(['collection-list', 'collection-item', 'slider', 'body'])
 
 export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagnostic[] {
   const diags: TreeDiagnostic[] = []
-  /** every ref seen so far → the node that claimed it */
   const refAt = new Map<string, ElementNode>()
-  /** every channel declared so far → the node that declared it */
   const channelAt = new Map<string, ElementNode>()
   const collections = ctx.collections
 
-  /** the collection an arg presents, resolved the way the renderers resolve it */
   const scopeCollectionFor = (
     outer: FieldSource | null | undefined,
     arg: string | undefined,
   ): FieldSource | null => {
     if (!collections || !arg) return null
-    // a synthetic scope (`@pages`, a multi-image field) is a collection only
-    // in the shape that matters here: a name and a field list
     if (arg === '@pages') return pagesListScope(ctx.pages ?? []).collection as FieldSource
     return (resolveListScope(collections, outer ?? null, null, arg, ctx.pages ?? [])?.collection ??
       null) as FieldSource | null
@@ -116,16 +71,11 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
   const visit = (
     node: ElementNode,
     parent: ElementNode | null,
-    /** the entry scopes around this node, outermost first */
     scopes: Scope[],
-    /** the KNOWN component instances it is inside, outermost first */
     instances: string[],
-    /** the `form` ancestors, so a nested form can be named */
     forms: ElementNode[],
   ) => {
     if (node.ref) {
-      // refs are page-scope addresses, so a second use makes both ambiguous —
-      // an agent addressing by one can't be told which element it meant
       if (refAt.has(node.ref)) {
         diags.push({
           nodeId: node.id,
@@ -134,9 +84,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       } else {
         refAt.set(node.ref, node)
       }
-      // inside an instance the structure is the master's, copied into every
-      // instance on every page — a ref there would be duplicated across all of
-      // them. The instance's own wrapper is fine: that is a real page node.
       const host = instances[instances.length - 1]
       if (host) {
         diags.push({
@@ -150,8 +97,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
     }
 
     if (node.channel !== undefined && node.channel !== '') {
-      // a channel is an address, so a bad name is an address nothing can
-      // reach — and the charset is what keeps it readable in `@name` form
       if (!isChannelName(node.channel)) {
         diags.push({
           nodeId: node.id,
@@ -160,7 +105,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
             `starting with a letter, at most 40 characters (${CHANNEL_NAME_RE.source})`,
         })
       } else if (channelAt.has(node.channel)) {
-        // both listeners open, so the overlay appears twice
         diags.push({
           nodeId: node.id,
           message:
@@ -170,8 +114,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       } else {
         channelAt.set(node.channel, node)
       }
-      // a REPEAT is the one place it can never work: the listener would be
-      // rendered once per row, and every row would open together
       const repeat = [...scopes]
         .reverse()
         .find((s) => s.type === 'collection-list' || (s.type === 'slider' && !!s.arg))
@@ -185,8 +127,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
         })
       }
       if (isComponentType(node.type)) {
-        // an instance wrapper renders no element of its own, so the classes a
-        // channel effect applies would land nowhere
         diags.push({
           nodeId: node.id,
           message:
@@ -197,9 +137,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
     }
 
     if (node.type === 'list-empty') {
-      // it renders only when a list has nothing to repeat, so it is meaningful
-      // ONLY as a direct child of a list or a bound slider. Anywhere else it
-      // renders never — a silent no-op worth saying out loud.
       const inList =
         !!parent &&
         (parent.type === 'collection-list' || (parent.type === 'slider' && !!parent.arg))
@@ -214,8 +151,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
     }
 
     if (node.type === 'form-success' || node.type === 'form-error') {
-      // like `list-empty`: it renders only in one position, so anywhere else is
-      // a silent no-op worth saying out loud.
       if (parent?.type !== 'form') {
         diags.push({
           nodeId: node.id,
@@ -236,8 +171,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
     }
 
     if (node.type === 'form' && forms.length) {
-      // the browser does not nest forms: it closes the outer one, so the inner
-      // controls silently submit to the wrong place (or nowhere)
       diags.push({
         nodeId: node.id,
         message:
@@ -247,8 +180,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
     }
 
     if (node.link === '@item') {
-      // '@item' links to the entry's own page — which a data-only collection
-      // does not have. Caught here rather than silently rendering unlinked.
       const scope = [...scopes].reverse().find((s) => s.arg && ctx.collectionNames.includes(s.arg))
       if (scope && ctx.dataOnlyCollections.includes(scope.arg!)) {
         diags.push({
@@ -261,18 +192,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       }
     }
 
-    // --- a FIELD binding that names no field of the scope it is in ---
-    //
-    // `data-field` and every `fieldAttrs` entry resolve through
-    // `resolveBinding` against the innermost entry scope. A name that is not
-    // there renders EMPTY — on the canvas, in Play and on the published page —
-    // and nothing said so: an agent binding `data-field="title"` to a
-    // collection whose field is called `name` got a blank element and a
-    // response that reported success.
-    //
-    // Only reported when the scope is actually RESOLVED, so a component master
-    // (no scope of its own) and an unknown collection (already reported above)
-    // are never second-guessed.
     const scope = scopes[scopes.length - 1]
     const scopeCollection = scope?.collection ?? null
     if (collections && scopeCollection) {
@@ -311,8 +230,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       } else if (parent === null) {
         diags.push({ nodeId: node.id, message: "The component's own element can't be a slot" })
       }
-      // what is under a slot belongs to the holder: a page's own structure
-      // again, where a ref is fine and an instance is an instance
       childInstances = []
     }
 
@@ -330,7 +247,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       const known =
         !!arg &&
         (ctx.collectionNames.includes(arg) ||
-          // built-in list sources ('@pages' — the site's own pages)
           (node.type === 'collection-list' && BUILTIN_LIST_SOURCES.includes(arg)) ||
           (node.type === 'collection-list' && ctx.listFieldNames.includes(arg)))
       if (!known) {
@@ -341,8 +257,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
       }
       childScopes = [...scopes, { type: node.type, arg, collection: scopeCollectionFor(scopeCollection, arg) }]
     } else if (node.type === 'slider') {
-      // a slider's arg is OPTIONAL: with one it repeats per entry like a
-      // :collection-list, without one each direct child is a slide
       const arg = node.arg
       if (
         arg &&
@@ -359,7 +273,6 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
         ]
       }
     } else if (node.type === 'body' && node.arg) {
-      // a collection template page: its whole body renders per entry
       childScopes = [
         ...scopes,
         {

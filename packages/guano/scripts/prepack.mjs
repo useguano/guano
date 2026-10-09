@@ -18,6 +18,12 @@ import { fileURLToPath } from 'node:url'
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const REPO = join(PKG, '..', '..')
 
+// the shipped CLI, before anything else: 0.1.4 published a bin/guano.js that
+// did not parse, so every subcommand died on load. A tarball whose entry point
+// cannot run is not worth building.
+console.log('prepack: checking the CLI…')
+execSync('npm run check:cli', { cwd: REPO, stdio: 'inherit' })
+
 console.log('prepack: building the admin SPA…')
 execSync('npm run build', { cwd: REPO, stdio: 'inherit' })
 

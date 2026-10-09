@@ -6,8 +6,7 @@ const { payload, pointer } = useInsertDrag()
 </script>
 
 <template>
-  <!-- offset from the cursor so it never hides the drop indicator;
-       pointer-events-none keeps elementFromPoint seeing through it -->
+
   <Teleport to="body">
     <div
       v-if="payload"

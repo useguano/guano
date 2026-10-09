@@ -1,12 +1,4 @@
 <script setup lang="ts">
-// The infinite canvas: a viewport onto a "world" that pans and zooms. Shared by
-// the page canvas and the components board, so both answer to the same
-// gestures — scroll to pan, ⌘/ctrl+scroll or pinch to zoom, space+drag to pan,
-// ⌘+ / ⌘- / ⌘0 from the keyboard.
-//
-// The default slot is the world (it receives `zoom`, for chrome that should
-// stay a constant size on screen); the `overlay` slot is screen-space, for
-// anything that must not move with the camera.
 import { onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useKeymap, useShortcut } from '@/composables/useShortcut'
 
@@ -18,9 +10,7 @@ interface Camera {
 
 const props = withDefaults(
   defineProps<{
-    /** where the camera starts, and where ⌘0 returns it */
     initial?: Camera
-    /** cursor class while idle (e.g. a crosshair while picking a target) */
     cursor?: string
   }>(),
   { initial: () => ({ x: 80, y: 60, zoom: 0.3 }), cursor: '' },
@@ -28,7 +18,6 @@ const props = withDefaults(
 
 const MIN_ZOOM = 0.15
 const MAX_ZOOM = 4
-// how much of the world must stay on screen, so it can't be panned out of reach
 const PAN_MARGIN = 120
 
 const camera = ref<Camera>({ ...props.initial })
@@ -75,7 +64,6 @@ function onPointerUp() {
 
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 
-/** zoom keeping the point under (cx, cy) — viewport coordinates — fixed */
 function zoomAt(next: number, cx: number, cy: number) {
   const { x, y, zoom } = camera.value
   const z = clampZoom(next)
@@ -97,7 +85,6 @@ function onWheel(e: WheelEvent) {
   }
 }
 
-// Safari's pinch arrives as gesture events rather than ctrl+wheel
 function onGestureStart(e: Event) {
   e.preventDefault()
   gesturing = true
@@ -138,9 +125,6 @@ useKeymap([
   { key: '0', mod: true, allowInInput: true, handler: () => (camera.value = { ...props.initial }) },
 ])
 
-// --- moving the camera to something ---
-
-// a programmatic move glides; a gesture must not (it would lag the pointer)
 const gliding = ref(false)
 let glideTimer: ReturnType<typeof setTimeout> | undefined
 function glide() {
@@ -150,7 +134,6 @@ function glide() {
 }
 onBeforeUnmount(() => clearTimeout(glideTimer))
 
-/** centre the viewport on a WORLD point, optionally at a new zoom */
 function centerOn(wx: number, wy: number, opts: { zoom?: number; animate?: boolean } = {}) {
   const rect = viewportEl.value?.getBoundingClientRect()
   if (!rect) return
@@ -159,7 +142,6 @@ function centerOn(wx: number, wy: number, opts: { zoom?: number; animate?: boole
   camera.value = clampCamera({ zoom, x: rect.width / 2 - wx * zoom, y: rect.height / 2 - wy * zoom })
 }
 
-/** an element's centre in world coordinates (null when it isn't in the world) */
 function worldCenterOf(el: Element): { x: number; y: number; width: number; height: number } | null {
   const world = worldEl.value
   if (!world || !world.contains(el)) return null
@@ -174,11 +156,6 @@ function worldCenterOf(el: Element): { x: number; y: number; width: number; heig
   }
 }
 
-/**
- * Bring an element to the centre of the viewport, zooming so it fits with
- * room to spare — but never zooming IN past `maxZoom`, so a small element
- * isn't blown up to fill the screen.
- */
 function focusElement(el: Element, opts: { maxZoom?: number; padding?: number } = {}) {
   const rect = viewportEl.value?.getBoundingClientRect()
   const at = worldCenterOf(el)
@@ -191,21 +168,6 @@ function focusElement(el: Element, opts: { maxZoom?: number; padding?: number } 
   centerOn(at.x, at.y, { zoom: Math.min(fit, opts.maxZoom ?? 1), animate: true })
 }
 
-/**
- * The camera reaches the DOM imperatively, NOT through a `:style` binding.
- *
- * A pan replaces `camera.value` on every pointer/wheel event, so a binding
- * would make this component's render effect depend on it — and re-rendering
- * re-invokes the default slot, which is the whole world. On the components
- * board that is 40-odd live component trees: measured at 11ms a frame against
- * 0.2ms for the page canvas, i.e. most of a frame's budget spent diffing a
- * tree whose only change is a transform on its root. One style write costs
- * nothing, and nothing above it re-renders.
- *
- * `--cam-inv` (1 / zoom) rides along so chrome inside the world can
- * counter-scale in pure CSS — `scale(var(--cam-inv))` — rather than being
- * re-rendered once per zoom step.
- */
 watchEffect(
   () => {
     const el = worldEl.value
@@ -215,16 +177,9 @@ watchEffect(
     el.style.transition = gliding.value ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' : ''
     el.style.setProperty('--cam-inv', String(1 / zoom))
   },
-  // post, so the world element exists on the first run and the write lands in
-  // the same task as the mount — there is no frame at an untransformed camera
   { flush: 'post' },
 )
 
-/**
- * The slot's `zoom` is for chrome that needs the NUMBER in JS (a comment pin).
- * It tracks the zoom alone, so a pan leaves it untouched and the slot — and
- * everything in it — does not re-render.
- */
 const slotZoom = ref(camera.value.zoom)
 watch(() => camera.value.zoom, (z) => (slotZoom.value = z))
 
@@ -242,8 +197,7 @@ defineExpose({ camera, viewportEl, worldEl, centerOn, focusElement })
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
   >
-    <!-- no :style here on purpose — the camera is written imperatively above,
-         so panning never re-renders this component or its slot -->
+
     <div ref="worldEl" class="absolute top-0 left-0 origin-top-left">
       <slot :zoom="slotZoom" />
     </div>

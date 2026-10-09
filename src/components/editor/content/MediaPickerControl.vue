@@ -7,19 +7,10 @@ import { useMediaLibrary } from '@/composables/useMediaLibrary'
 import { acceptFor } from '@/lib/media'
 import type { MediaKind } from '@/types/media'
 
-/**
- * The file control for anything that points at a library asset — element
- * image/video src, background media, and webfont files in project settings.
- * Every file flows through the media library (no more inline data-URLs).
- * "Choose" opens the library in select mode; "Upload" adds to the library
- * first, then applies the asset. The model is the `/media/<id>` URL.
- * `kinds` widens the picker (e.g. background media accepts image + video).
- */
 const props = defineProps<{
   kind: MediaKind
   kinds?: MediaKind[]
-  /** the file block alone, no Choose/Upload row — the block opens the
-   * library, which can upload, so the buttons only add height */
+
   compact?: boolean
 }>()
 const model = defineModel<string>({ default: '' })
@@ -31,8 +22,6 @@ const pickKinds = computed(() => props.kinds ?? [props.kind])
 const asset = computed(() => assetForSrc(model.value))
 const assetKind = computed(() => (asset.value ? kindOfMime(asset.value.mime) : null))
 
-// non-visual kinds have no thumbnail — show what they ARE instead of an
-// empty media box
 const KIND_ICONS = { font: Type, audio: Music, document: FileText } as const
 const placeholderIcon = computed(
   () => KIND_ICONS[(assetKind.value ?? props.kind) as keyof typeof KIND_ICONS] ?? ImageIcon,
@@ -65,7 +54,6 @@ async function onFile(e: Event) {
 
 <template>
   <div class="flex flex-col gap-1.5">
-    <!-- current file -->
     <button
       type="button"
       class="flex items-center gap-2 rounded-lg bg-input p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"

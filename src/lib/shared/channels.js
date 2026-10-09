@@ -1,27 +1,5 @@
-// The project-wide channel index, shared VERBATIM by the editor
-// (useInteraction / useAnimation), the static exporter (server/export.mjs),
-// `validateTree` and the MCP tools.
-//
-// A channel is the one target that is NOT a node id (see `isChannelTarget` in
-// interactionKeys.js). Everything else about a binding stays the same; what
-// changes is WHERE the two halves can live:
-//
-//   plain target   — trigger and target are in one tree, and the key carries
-//                    the component instance and the entry scope that isolate
-//                    one rendering of the pair from its siblings.
-//   channel target — trigger and listener are in different trees, possibly on
-//                    different routes, possibly one in a master and one on a
-//                    page. The key carries NO scope at all.
-//
-// `buildPlainTargets` in the exporter walks a route's page trees only, which is
-// precisely why a master's binding could never reach a page element before. The
-// index here walks every page AND every component master, so a listener can be
-// found from either side.
-
 import { channelName, isChannelName } from './interactionKeys.js'
 
-/** depth-first over a node list — a local walk so this module stays importable
- *  from the exporter, the browser bundle and the MCP runtime alike */
 function walk(nodes, visit) {
   for (const node of nodes ?? []) {
     visit(node)

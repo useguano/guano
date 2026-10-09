@@ -4,33 +4,13 @@ import { VARIANT_NAME_RE, variantKey } from './variants'
 import { walkNodes } from './tree'
 import { resolvePicks } from './shared/instances.js'
 
-/**
- * Editing a component's variant axes.
- *
- * Axes and options are addressed by NAME — in `def.variants`, in the keys of a
- * master node's `variantClasses`, and in every instance's picks — so changing
- * one is a change to all three, across every page. Every operation here is
- * therefore the same two steps: work out the new axes and what each old name
- * became, then `rewrite` the whole project against that.
- *
- * `rewrite` also re-seats everything in canonical order (axis order, then
- * option order), because `computeMerge` compares whole-object JSON: two
- * documents that agree on every value and differ in key order would otherwise
- * read as a conflict.
- *
- * Pure: a `Project` in, mutations out, no Vue.
- */
-
 export type VariantResult = { ok: true } | { ok: false; error: string }
 
 const fail = (error: string): VariantResult => ({ ok: false, error })
 const OK: VariantResult = { ok: true }
 
-/** what each NEW name was called before the change (absent = unchanged or new) */
 interface Renames {
-  /** new axis name → old axis name */
   axes?: Record<string, string>
-  /** new axis name → (new option name → old option name) */
   options?: Record<string, Record<string, string>>
 }
 
@@ -39,7 +19,6 @@ function nameError(kind: 'axis' | 'option', name: string): string | null {
   return `An ${kind} name is lowercase letters, digits and dashes, starting with a letter`
 }
 
-/** every instance wrapper of `def`, on every page and inside every other master */
 function instancesOf(project: Project, def: ComponentDef): ElementNode[] {
   const out: ElementNode[] = []
   const collect = (nodes: ElementNode[]) =>
@@ -51,15 +30,6 @@ function instancesOf(project: Project, def: ComponentDef): ElementNode[] {
   return out
 }
 
-/**
- * Apply new axes to the project: the def, the master's overrides, and every
- * instance's picks.
- *
- * An instance keeps the look it HAD. Its old pick is read against the old
- * axes (an axis it never picked on meant the old default), carried through
- * the renames, and stored only where it differs from the new default — so
- * changing which option is the default never restyles an existing instance.
- */
 function rewrite(project: Project, def: ComponentDef, next: VariantAxis[], renames: Renames = {}) {
   const before = def.variants ?? []
   const oldAxisName = (axis: string) => renames.axes?.[axis] ?? axis
@@ -86,7 +56,6 @@ function rewrite(project: Project, def: ComponentDef, next: VariantAxis[], renam
     const kept: Record<string, string> = {}
     for (const axis of next) {
       const was = before.find((a) => a.name === oldAxisName(axis.name))
-      // what the instance wore on this axis before, by its OLD name
       const wore = was ? (old[was.name] ?? was.default) : undefined
       const now = axis.options.find((option) => oldOptionName(axis.name, option) === wore)
       if (now !== undefined && now !== axis.default) kept[axis.name] = now
@@ -181,7 +150,6 @@ export function renameVariantOption(
   return OK
 }
 
-/** Removing an option moves the instances wearing it to the axis default. */
 export function removeVariantOption(
   project: Project,
   def: ComponentDef,
@@ -212,8 +180,6 @@ export function setVariantDefault(
   return OK
 }
 
-/** Replace a component's axes wholesale (the agent path, and the catalog). Names
- *  that survive keep their overrides and picks; the rest are dropped. */
 export function setVariantAxes(project: Project, def: ComponentDef, axes: VariantAxis[]): VariantResult {
   const seen = new Set<string>()
   for (const axis of axes) {
@@ -234,17 +200,12 @@ export function setVariantAxes(project: Project, def: ComponentDef, axes: Varian
   return OK
 }
 
-/**
- * An instance's pick on one axis. Stored only where it differs from the
- * default, and re-seated in axis order — see the header.
- */
 export function setInstancePick(
   def: ComponentDef,
   wrapper: ElementNode,
   axisName: string,
   option: string | null,
-  /** the nodes standing for this wrapper in the components it is nested in
-   *  (`Mapping.mirrors`): what it would wear if it said nothing itself */
+
   mirrors: ElementNode[] = [],
 ): VariantResult {
   const axis = def.variants?.find((a) => a.name === axisName)
@@ -253,9 +214,6 @@ export function setInstancePick(
     return fail(`"${axisName}" has no "${option}" option — it has ${axis.options.join(', ')}`)
   }
   const picks = { ...(wrapper.variants ?? {}) }
-  // stored only where it differs from what the wrapper INHERITS — a host's
-  // pick for it, else the axis default. Comparing with the default alone left
-  // an instance unable to wear the default once its host picked otherwise.
   const inherited = (resolvePicks(def, { variants: {} }, mirrors) as Record<string, string>)[axisName]
   if (option === null || option === inherited) delete picks[axisName]
   else picks[axisName] = option
@@ -266,10 +224,6 @@ export function setInstancePick(
   return OK
 }
 
-/**
- * The override classes of one option on a master node. Empty removes the key,
- * and the record itself when it was the last one.
- */
 export function setVariantClasses(
   def: ComponentDef,
   node: ElementNode,

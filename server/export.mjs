@@ -864,20 +864,30 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       ctx.animUsed[b.animationId] = animation
       if (b.breakpoints) ctx.animBp[key] = b.breakpoints
       keys.push(key)
-      // the pre-play state, baked in so an entrance never paints its final
-      // frame before the deferred runtime boots (hover/click/scrub start from
-      // the natural state, so they are not primed). Breakpoint-SCOPED
-      // entrances are never baked: the inline style has no breakpoint gate, so
+      // the pre-play state, baked in so a timeline never paints its final frame
+      // before the deferred runtime boots. EVERY trigger, not just the
+      // entrances: a track's `from` is what the element holds until that
+      // timeline runs, so a hover tweening opacity 0 → 1 ships at 0. Priming
+      // load/appear alone left the others reading their `from` at play time,
+      // which painted the natural value and then snapped to the `from` on the
+      // first frame — a hovered 0 → 1 flashed out before it faded in. A track
+      // with no `from` primes nothing, which is what keeps the ordinary
+      // "tween from wherever it is" hover untouched. Breakpoint-SCOPED
+      // bindings are never baked: the inline style has no breakpoint gate, so
       // it applied at every width while the runtime only ever animated (or
       // end-stated) it inside the scope — outside it the element sat invisible
-      // forever. Scoped entrances are primed by the runtime instead (a brief
+      // forever. Scoped ones are primed by the runtime instead (a brief
       // natural-state paint inside the scope is the accepted tradeoff, same as
       // staggered children).
-      if (bake && (b.trigger === 'load' || b.trigger === 'appear') && !b.breakpoints) {
-        toPrime.push({ compiled: splitByStagger(compileAnimation(animation)).element, delay: bindingDelay(b) })
+      if (bake && !b.breakpoints) {
+        toPrime.push({
+          compiled: splitByStagger(compileAnimation(animation)).element,
+          delay: bindingDelay(b),
+          entrance: b.trigger === 'load' || b.trigger === 'appear',
+        })
       }
     }
-    // ONE rule for several entrances on one node — per property, the `from` of
+    // ONE rule for several timelines on one node — per property, the `from` of
     // the timeline that starts earliest (binding delay + track offset). Merged
     // in binding order with the last one winning, an "open" (0 → 1 at t=0)
     // followed by a "close" (1 → 0, seconds later) primed the element VISIBLE,
@@ -888,7 +898,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
   }
 
   // one style attribute: the background's inline style plus the pre-play
-  // first frame of any load/appear animation on this node
+  // first frame of every animation aimed at this node
   const styleText = [bg?.style, cssDecls(firstFrame)].filter(Boolean).join(';')
   if (styleText) attrs.push(`style="${escapeHtml(styleText)}"`)
 

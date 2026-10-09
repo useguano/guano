@@ -2,32 +2,12 @@ import type { ElementNode } from '@/types/editor'
 import { createNode, isKnownElement } from '../elements'
 import { isComponentType } from '../components'
 
-/**
- * LEGACY: the indentation DSL's parser, kept for ONE purpose.
- *
- * Until the v2 schema migration, a page carried both a tree (`elements`) and
- * the DSL text it was derived from (`code`). The tree is what every renderer
- * read, so the tree is what the migration keeps — re-deriving from the text
- * would be a chance to change the published site, and over the corpus it
- * demonstrably did (one fixture page carries a `link` its line never had).
- *
- * What is left is the SALVAGE case: a stored page with code but no usable
- * tree. That should not exist — the editor kept the two in sync for as long as
- * both existed — but "should not exist" is not a thing to bet a one-way
- * migration on, so the parser stays until a release has passed with no
- * salvage logged. Nothing else may import this.
- *
- * Reduced to what salvage needs: no `adopt` callback (there is no previous
- * tree to carry identity from), no reconcile, no validation, no markers.
- */
-
 const REF = '(?:#(?<ref>[a-zA-Z][a-zA-Z0-9-]?[a-zA-Z0-9-]*)?)?'
 const NAME = '[a-zA-Z][a-zA-Z0-9-]*'
 const ARG = '(?:\\[(?<arg>[a-z0-9.@+-]*)\\]?)?'
 const MARKERS = '(?:\\(\\+?\\)?)?(?:\\{\\+?\\}?)?'
 const LINK = '(?:@(?<link>\\S+))?'
 
-// slot order: ':' name '#ref' '[arg]' '(+)' '{+}' ':'(leaf) '@link'
 const LEAF = new RegExp(`^:(?<name>${NAME})${REF}${ARG}${MARKERS}:${LINK}$`)
 const OPEN = new RegExp(`^:(?<name>${NAME})${REF}${ARG}${MARKERS}${LINK}$`)
 const CLOSE = /^([a-zA-Z][a-zA-Z0-9-]*):$/
@@ -37,7 +17,6 @@ const slots = (m: RegExpMatchArray) => {
   return { name: g.name!, ref: g.ref, arg: g.arg, link: g.link }
 }
 
-/** splits a line into its tokens, including glued ones (`:div:h1:`) */
 function lexLine(text: string): string[] {
   const tokens: string[] = []
   let i = 0
@@ -57,11 +36,9 @@ function lexLine(text: string): string[] {
       }
       while (text[j] === '(' || text[j] === '{' || text[j] === '+' || text[j] === ')' || text[j] === '}') j++
       if (text[j] === ':') {
-        // a leaf close, unless it starts the next token
         const next = text[j + 1]
         if (!next || !/[a-zA-Z]/.test(next)) j++
         else if (text.slice(j).match(/^:[a-zA-Z][a-zA-Z0-9-]*[:[(@{]/)) {
-          // the ':' opens the next token
         } else j++
       }
       if (text[j] === '@') {
@@ -79,7 +56,6 @@ function lexLine(text: string): string[] {
   return tokens
 }
 
-/** Parse a stored page document into a tree. Salvage only. */
 export function parseLegacyCode(code: string): ElementNode[] {
   const root: ElementNode[] = []
   const stack: ElementNode[] = []

@@ -10,7 +10,6 @@ import { deepClone, walkNodes } from '@/lib/tree'
 import type { Collection, CollectionEntry, CollectionField, Page } from '@/types/editor'
 import { uid } from '@/lib/shared/ids.js'
 
-/** entry loaded into the template canvas for editing */
 const activeEntryId = ref<string | null>(null)
 
 export function useCollections() {
@@ -29,7 +28,6 @@ export function useCollections() {
     return collections.value.find((c) => c.id === id) ?? null
   }
 
-  /** the collection whose template is the active page, if any */
   const activeCollection = computed(() =>
     activePage.value.collectionId ? collectionById(activePage.value.collectionId) : null,
   )
@@ -46,8 +44,6 @@ export function useCollections() {
     if (!name || collectionByName(name)) return null
 
     const label = name.charAt(0).toUpperCase() + name.slice(1)
-    // the template scaffold: a section holding the entry's title, so the page
-    // renders something the moment the collection exists
     const title = createNode('h1')
     title.arg = 'title'
     const section = createNode('section')
@@ -114,9 +110,6 @@ export function useCollections() {
     return entry
   }
 
-  /** full route path of an entry: /<collection>/<slug> */
-  /** the entry's site path, or null for a data-only collection (no detail
-   * routes) — callers render the element unlinked rather than linking nowhere */
   function entryPath(collection: Collection, entry: CollectionEntry): string | null {
     return entryRoutePath(collection, entry)
   }
@@ -150,7 +143,6 @@ export function useCollections() {
     if (activeEntryId.value === entryId) activeEntryId.value = null
   }
 
-  /** duplicates a collection: fields, template page (fresh node ids), and entries */
   function duplicateCollection(collection: Collection): Collection | null {
     const template = project.value.pages.find((p) => p.id === collection.templatePageId)
     if (!template) return null
@@ -164,15 +156,13 @@ export function useCollections() {
     page.id = uid()
     walkNodes(page.elements, (node) => {
       node.id = uid()
-      if (node.type === 'body') node.arg = name // rebind :body[name] to the copy
+      if (node.type === 'body') node.arg = name
     })
     page.name = `${label} template`
     page.path = `/${name}`
     page.createdAt = page.updatedAt = Date.now()
     page.createdBy = page.updatedBy = actor()
 
-    // entries get fresh ids, so self-references must follow them (fields
-    // pointing at OTHER collections keep targeting the originals)
     const entryIdMap = new Map(collection.entries.map((e) => [e.id, uid()]))
     const copyId = uid()
     const selfRefFields = collection.fields.filter(
@@ -210,7 +200,6 @@ export function useCollections() {
     return copy
   }
 
-  /** deletes a collection with its template page and entries */
   function removeCollection(collection: Collection) {
     const onTemplate = activePage.value.id === collection.templatePageId
     project.value.pages = project.value.pages.filter((p) => p.id !== collection.templatePageId)
@@ -219,8 +208,6 @@ export function useCollections() {
     if (onTemplate) setActivePage(homePage.value.id)
   }
 
-  /** edit an entry's identity fields (name/slug/status). Slug is slugified to
-   * match the code-editor write-back path. Stamps updatedAt/updatedBy. */
   function updateEntryMeta(
     collection: Collection,
     entryId: string,
@@ -235,18 +222,6 @@ export function useCollections() {
     entry.updatedBy = actor()
   }
 
-  /**
-   * Open the collection's template with this entry loaded for editing.
-   *
-   * A DATA-ONLY collection (`detailRoutes: false`) stores `templatePageId: ''`
-   * — there is no page to navigate to, and `setActivePage('')` would silently
-   * land on `pages[0]` (usePage's activePage falls back to the first page), so
-   * clicking such an entry used to jump the canvas to an unrelated page with
-   * `activeEntryId` set while `activeEntry` stayed null. Bail instead, and
-   * leave `activeEntryId` alone: `activeEntry` resolves null either way, and
-   * setting it would make useHeaderNav claim entry context and blank out every
-   * page row. Returns whether the canvas actually moved.
-   */
   function openEntry(collection: Collection, entryId: string): boolean {
     const template = project.value.pages.find((p) => p.id === collection.templatePageId)
     if (!template) return false
@@ -255,7 +230,6 @@ export function useCollections() {
     return true
   }
 
-  /** field of a collection matched by an element's arg */
   function fieldFor(collection: Collection | null, arg?: string): CollectionField | null {
     if (!collection || !arg) return null
     return collection.fields.find((f) => f.name === arg) ?? null

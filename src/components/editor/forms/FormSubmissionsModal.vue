@@ -11,14 +11,6 @@ import { timeAgo } from '@/lib/time'
 import { formatBytes } from '@/lib/media'
 import { downloadBlob, filenameFrom } from '@/lib/download'
 
-/**
- * Who submitted what. The form list on the left, one form's rows on the right.
- *
- * Every value here was typed by a stranger on the internet, so it renders as
- * TEXT only — `{{ }}`, never `v-html`, anywhere in this file. The CSV download
- * guards the other half of that problem (a cell starting with `=` is a formula
- * a spreadsheet executes; see server/public/csv.mjs).
- */
 const props = defineProps<{ formId?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -45,14 +37,6 @@ onMounted(async () => {
   }
 })
 
-/**
- * `immediate`, which is the whole point when a form is PRESELECTED.
- *
- * Opened from the Data panel the modal is given a `formId`, so `selected`
- * already holds it when the watcher is installed — and a plain watcher does not
- * fire for its initial value. The list of forms loaded, the right one was
- * highlighted, and its rows never arrived.
- */
 watch(selected, async (id) => {
   if (!id) return
   loading.value = true
@@ -62,9 +46,7 @@ watch(selected, async (id) => {
     rows.value = data.submissions
     columns.value = data.fields.length
       ? data.fields
-      : // a form removed from the site has no declared fields any more; fall
-        // back to whatever the stored rows actually carry, so its leads stay
-        // readable rather than showing as empty rows
+      :
         [...new Set(rows.value.flatMap((r) => Object.keys(r.values)))].map((name) => ({
           name,
           kind: 'text',
@@ -77,8 +59,6 @@ watch(selected, async (id) => {
   }
 }, { immediate: true })
 
-/** fetch + save, rather than a bare <a href>: the request needs the session
- *  cookie and the filename comes from the server's content-disposition */
 async function downloadCsv() {
   const form = current.value
   if (!form || downloading.value) return
@@ -129,7 +109,6 @@ async function removeAll() {
   total.value = 0
 }
 
-/** the one failing-delivery line worth putting in front of an admin */
 const deliveryWarning = computed(() => {
   const d = current.value?.delivery ?? {}
   if (d.notify && !d.notify.ok) return `Email is failing: ${d.notify.error}`
@@ -142,7 +121,6 @@ const deliveryWarning = computed(() => {
   <ModalHost size="xl" @close="emit('close')">
     <ModalHeader title="Form submissions" @close="emit('close')" />
     <div class="flex min-h-0 flex-1">
-      <!-- the forms -->
       <div class="w-56 shrink-0 overflow-y-auto border-r border-input">
         <button
           v-for="form in forms"
@@ -168,7 +146,6 @@ const deliveryWarning = computed(() => {
         <EmptyListUI v-if="!forms.length">No forms yet.</EmptyListUI>
       </div>
 
-      <!-- one form's rows -->
       <div class="flex min-w-0 flex-1 flex-col">
         <div
           v-if="current"
@@ -238,7 +215,6 @@ const deliveryWarning = computed(() => {
                 <td class="px-3 py-2 align-top text-[10px] whitespace-nowrap text-muted-foreground">
                   {{ timeAgo(row.at) }}
                 </td>
-                <!-- TEXT ONLY: these values are attacker-writable -->
                 <td
                   v-for="col in columns"
                   :key="col.name"

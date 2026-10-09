@@ -3,18 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { TAILWIND_COLORS, TAILWIND_SHADES, colorHex, parseColorInput } from '@/lib/colors'
 import { computeFloatingPosition } from '@/lib/floating'
 
-/** model is a color value: 'slate-100', 'white', 'transparent', or '#hex' */
 const model = defineModel<string>({ default: 'slate-500' })
 
 const props = withDefaults(
   defineProps<{
-    /** 'sm' is the compact swatch embedded inside a value field; the default
-     * matches the h-7 inputs it sits beside */
     size?: 'default' | 'sm'
-    /** which edge of the trigger the palette aligns to */
     align?: 'left' | 'right'
-    /** 'hex' resolves every pick to a hex value — for design tokens, whose
-     * value compiles into a CSS variable and can't be a palette NAME */
+
     output?: 'value' | 'hex'
   }>(),
   { size: 'default', align: 'right', output: 'value' },
@@ -22,10 +17,6 @@ const props = withDefaults(
 
 const hex = computed(() => colorHex(model.value))
 
-// The palette is teleported to <body> and positioned fixed from the trigger's
-// rect: inline, it was clipped by any overflow-hidden ancestor (the settings
-// modal, the sidebar panel). A click on it therefore isn't inside `root`, so
-// outside-click checks both elements rather than going through useDropdown.
 const open = ref(false)
 const root = ref<HTMLElement>()
 const panel = ref<HTMLElement>()
@@ -55,15 +46,11 @@ function close() {
 }
 
 function pick(value: string) {
-  // a token value compiles into a CSS variable, so it must be hex — including
-  // transparent, which colorHex keeps as a keyword for class use
   model.value =
     props.output === 'hex' ? (value === 'transparent' ? '#00000000' : colorHex(value)) : value
   close()
 }
 
-// free entry: a hex, rgb()/hsl(), a CSS colour name, a palette shade or a
-// token name. Enter commits; what the browser can't read shakes the field red.
 const typed = ref('')
 const typedInvalid = ref(false)
 function commitTyped() {
@@ -92,8 +79,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
 </script>
 
 <template>
-  <!-- flex, not block: an inline button in a block wrapper gains descender space
-       below it, which pushed the swatch up against its neighbours -->
+
   <div ref="root" class="relative flex shrink-0 items-center">
     <button
       v-tooltip="model"
@@ -113,7 +99,6 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
         :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
         @keydown="onKeydown"
       >
-        <!-- the whole palette, no inner scroller: 19 rows of 11 swatches -->
         <div class="flex flex-col gap-0.5">
           <div v-for="(hexes, name) in TAILWIND_COLORS" :key="name" class="flex gap-0.5">
             <button

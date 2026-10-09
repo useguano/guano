@@ -1,16 +1,6 @@
 import { ref } from 'vue'
 import { apiJson } from '@/lib/api'
 
-/**
- * Form settings and submissions, hydrated from the server.
- *
- * None of this is project data. Recipients, the integration that sends and the
- * retention window are admin-only server state (publish.json), and the
- * submissions themselves are files on the server — because they are other
- * people's personal details, and the project blob is written by editors,
- * drafts, merges, contributors and agent tokens.
- */
-
 export interface FormsConfig {
   notifyTo: string[]
   mailer: string
@@ -23,7 +13,6 @@ export interface FormsConfig {
 export interface FormSummary {
   formId: string
   name: string
-  /** false for a form whose submissions remain but which is no longer on the site */
   onSite: boolean
   routes: string[]
   fields: { name: string; kind: string }[]
@@ -54,7 +43,6 @@ export function useFormSubmissions() {
     config.value = await apiJson('/api/forms-config')
   }
 
-  /** returns the server's reason on refusal, so a bad pick is explained */
   async function saveConfig(patch: Partial<FormsConfig>) {
     const next = await apiJson('/api/forms-config', {
       method: 'PUT',
@@ -90,7 +78,6 @@ export function useFormSubmissions() {
     await loadForms()
   }
 
-  /** the CSV download URL — a plain link, so the browser handles the save */
   const csvUrl = (formId: string) =>
     `/api/forms/${encodeURIComponent(formId)}/submissions.csv`
 

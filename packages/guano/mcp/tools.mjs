@@ -10500,10 +10500,20 @@ const tools = [
       const { project } = await loadTargetProject()
       const stats = await preview(project)
       const defaultLocale = project.defaultLocale || 'en'
-      const origin = String(stats.url ?? '').replace(/\/+$/, '')
-      const localeUrls = { [defaultLocale]: `${origin}/` }
+      // `stats.url` is a whole URL, token query and all — NOT an origin. It was
+      // treated as one (`${origin}/${code}/`), which appended the route AFTER
+      // the query: `…/?t=<token>/fr/`. The browser then sent `t=<token>/fr/`,
+      // the HMAC check failed on the slash, and every url the tool returned —
+      // including the home one — answered 401 "preview link missing or
+      // expired". Path first, then the query it came with.
+      const previewUrl = (path) => {
+        const u = new URL(String(stats.url ?? ''))
+        u.pathname = path
+        return u.toString()
+      }
+      const localeUrls = { [defaultLocale]: previewUrl('/') }
       for (const code of (project.locales ?? []).filter((l) => l !== defaultLocale)) {
-        localeUrls[code] = `${origin}/${code}/`
+        localeUrls[code] = previewUrl(`/${code}/`)
       }
       // the SAME checks publish runs. They used to be publish-only, which meant
       // the one surface that puts bytes on the live origin was also the only
@@ -10513,15 +10523,15 @@ const tools = [
       return {
         previewed: true,
         target,
-        url: `${origin}/`,
+        url: previewUrl('/'),
         localeUrls,
         routes: stats.routes,
         bytes: stats.bytes,
         ...(warnings.length ? { warnings } : {}),
         note:
-          'Nothing live changed. Open the url to look — fetching it yourself returns the HTML ' +
-          '(the ?t= token serves the page directly); draft pages are included here and are ' +
-          'NOT in a publish.' +
+          'Nothing live changed. Open a url EXACTLY as returned — the ?t= token serves the ' +
+          'page directly, so fetching it yourself returns the HTML; add nothing after it. ' +
+          'Draft pages are included here and are NOT in a publish.' +
           (warnings.length
             ? ' `warnings` are the same design checks publish runs — fix them here, before you ship.'
             : ''),

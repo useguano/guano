@@ -1,14 +1,4 @@
 <script setup lang="ts">
-// ONE effect, editable in full: what it does, and (unless the surface shows it
-// in its own header) its name and who uses it.
-//
-// Shared by the drawer's two views. The effect view shows the one picked in the
-// library; the trigger view shows the one the selected element's trigger runs,
-// beside that action's options — so an effect is never "opened" from a row, it
-// is simply there.
-//
-// Takes a kind + id and re-resolves, never an object: undo and a branch switch
-// swap the whole project graph, so a held object would detach silently.
 import { computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -20,13 +10,14 @@ import { useEffects } from '@/composables/useEffects'
 import { useInteraction } from '@/composables/useInteraction'
 import { useAnimation } from '@/composables/useAnimation'
 import { useEffectsDrawer, type DrawerKind } from '@/composables/useEffectsDrawer'
+import type { EffectKind } from '@/lib/effectTriggers'
 
 const props = withDefaults(
   defineProps<{
     kind: DrawerKind
     id: string
-    /** false when the surface puts the name in its own header */
     nameRow?: boolean
+    half?: EffectKind
   }>(),
   { nameRow: true },
 )
@@ -38,7 +29,6 @@ const { selected, openEffect } = useEffectsDrawer()
 
 const wrapper = computed(() => (props.kind === 'effect' ? (effects.effectById(props.id) ?? null) : null))
 
-/** the effect, or the lone half — gone means nothing to draw */
 const effect = computed(() => {
   if (props.kind === 'effect') return wrapper.value
   return props.kind === 'interaction'
@@ -46,18 +36,11 @@ const effect = computed(() => {
     : (animations.animationFor(props.id) ?? null)
 })
 
-/**
- * Give a single-engine half its other half. A half that predates the pairing —
- * or one a preset or an agent made — is still one engine; one button completes
- * it, never mere selection: a library row you only looked at must not come back
- * changed. `addHalf` spreads the new half to every element already using it.
- */
 function pairUp() {
   if (props.kind === 'effect') return
   const name = effect.value?.name ?? 'Effect'
   const wrapped = effects.wrap(props.kind, props.id, name)
   effects.addHalf(wrapped, props.kind === 'interaction' ? 'animation' : 'interaction')
-  // the effect view was pointed at the half; point it at the whole
   if (selected.value?.kind === props.kind && selected.value.id === props.id) {
     openEffect('effect', wrapped.id)
   }
@@ -70,7 +53,7 @@ function pairUp() {
       <EffectNameField :kind="kind" :id="id" />
     </div>
 
-    <EffectEditor v-if="kind === 'effect'" :id="id" />
+    <EffectEditor v-if="kind === 'effect'" :id="id" :half="half" />
     <template v-else>
       <StyleEffectEditor v-if="kind === 'interaction'" :id="id" />
       <TimelineEditor v-else :id="id" />

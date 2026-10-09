@@ -9,6 +9,8 @@ const props = withDefaults(
     placeholder?: string
     type?: string
     size?: Size
+    unit?: string
+    inputmode?: 'text' | 'numeric' | 'decimal'
   }>(),
   { type: 'text', size: 'default' },
 )
@@ -33,6 +35,7 @@ const classes = computed(() => [
   base,
   sizes[props.size],
   isPassword.value && (props.size === 'lg' ? 'pr-10' : 'pr-7'),
+  props.unit && 'pr-8',
 ])
 
 const el = ref<HTMLInputElement>()
@@ -40,8 +43,7 @@ defineExpose({ focus: () => el.value?.focus() })
 </script>
 
 <template>
-  <!-- flex, not block: an inline input in a block wrapper gains descender
-       space below it, which pulled the eye button off the input's centre -->
+
   <div v-if="isPassword" class="relative flex w-full">
     <input
       ref="el"
@@ -62,11 +64,28 @@ defineExpose({ focus: () => el.value?.focus() })
       <Eye v-else class="size-4" />
     </button>
   </div>
+  <div v-else-if="unit" class="relative flex w-full">
+    <input
+      ref="el"
+      v-model="model"
+      :type="type"
+      :inputmode="inputmode"
+      spellcheck="false"
+      :placeholder="placeholder"
+      :class="classes"
+    />
+    <span
+      class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-muted-foreground"
+    >
+      {{ unit }}
+    </span>
+  </div>
   <input
     v-else
     ref="el"
     v-model="model"
     :type="type"
+    :inputmode="inputmode"
     spellcheck="false"
     :placeholder="placeholder"
     :class="classes"

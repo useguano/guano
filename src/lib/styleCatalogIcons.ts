@@ -1,7 +1,3 @@
-// name → lucide component map for the Style panel's icon controls.
-// styleCatalog.ts stays node-safe (icon *names* only) so it can be bundled
-// into the MCP runtime; this UI-only module resolves those names to the
-// actual components. Keep the imports in sync with the names used in ico().
 import type { Component } from 'vue'
 import {
   AlignCenter,

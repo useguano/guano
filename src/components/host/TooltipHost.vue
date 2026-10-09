@@ -12,9 +12,6 @@ const style = ref<{ left: string; top: string; visibility: 'hidden' | 'visible' 
   visibility: 'hidden',
 })
 
-// render hidden → measure own size → position (flip/clamp) → reveal.
-// Tooltips are transient (hover), so no continuous tracking loop; any scroll
-// or resize just dismisses the tooltip instead of chasing the anchor.
 watch(active, async (state) => {
   if (!state) return
   style.value = { left: '0px', top: '0px', visibility: 'hidden' }
@@ -44,9 +41,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- a stable id and role, so the trigger can point at this with
-       aria-describedby: without them the label was drawn for sighted users
-       and did not exist for anyone else -->
+
   <span
     v-if="active"
     id="guano-tooltip"

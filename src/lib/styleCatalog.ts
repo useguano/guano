@@ -1,12 +1,7 @@
-// The style catalog: every section/property/control the Style panel offers.
-// Pure data (plus the terse builders that keep it readable) — the class
-// logic (relevance checks, suggestions, validation, applyClass) lives in
-// ./styles.ts, which consumes STYLE_SECTIONS from here.
 import { SPACING } from './tieredBox'
 import type { NamedFormat } from './valueClass'
 import type { Control, Relevance, StyleSection } from './styles'
 
-// reusable relevance tags for the catalog below
 const FLEX = ['flex', 'inline-flex']
 const GRID = ['grid', 'inline-grid']
 const FLEX_GRID = [...FLEX, ...GRID]
@@ -20,17 +15,13 @@ const positioned: Relevance = { when: 'positioned' }
 const whenTransition: Relevance = { when: 'transition' }
 const whenMediaOrBg: Relevance = { when: 'mediaOrBackground' }
 
-
 const OPACITY = ['0', '10', '20', '30', '40', '50', '60', '70', '80', '90', '100']
 
-// terse control builders so the catalog below stays readable
 const sel = (pairs: [string, string][]): Control => ({
   kind: 'select',
   options: pairs.map(([label, cls]) => ({ label, class: cls })),
 })
 const slide = (prefix: string, stops: string[] = SPACING): Control => ({ kind: 'slider', prefix, stops })
-// explicit-class slider (bare/named classes: `border`, `rounded-xl`, `shadow-lg`).
-// `custom` opts the value field into keyword + arbitrary editing (font-size…).
 const slideC = (
   pairs: [string, string][],
   custom?: { prefix: string; format: NamedFormat },
@@ -40,7 +31,6 @@ const slideC = (
   labels: pairs.map(([label]) => label),
   ...(custom ? { custom } : {}),
 })
-// signed slider centred on 0: `-prefix-n … prefix-0 … prefix-n`
 const signed = (prefix: string, mags: string[]): Control => {
   const neg = [...mags].reverse().map((m) => [`-${m}`, `-${prefix}-${m}`] as [string, string])
   const pos = mags.map((m) => [m, `${prefix}-${m}`] as [string, string])
@@ -48,7 +38,6 @@ const signed = (prefix: string, mags: string[]): Control => {
 }
 const col = (prefix: string): Control => ({ kind: 'color', prefix })
 const inp = (prefix: string, placeholder?: string): Control => ({ kind: 'input', prefix, placeholder })
-// icon-button group; each option carries its lucide icon
 const ico = (opts: [string, string, string][]): Control => ({
   kind: 'icons',
   options: opts.map(([label, cls, icon]) => ({ label, class: cls, icon })),
@@ -123,8 +112,6 @@ export const STYLE_SECTIONS: StyleSection[] = [
           ['Evenly', 'content-evenly', 'AlignVerticalDistributeCenter'],
         ]),
       },
-      // Rendered by GapControl (tiered All | X·Y), not the generic row; the
-      // control below only keeps the property visible + relevance-gated.
       { id: 'gap', label: 'Gap', needsDisplay: true, relevance: inFlexGrid, control: slide('gap') },
       {
         id: 'flex',
@@ -276,8 +263,6 @@ export const STYLE_SECTIONS: StyleSection[] = [
   {
     id: 'spacing',
     label: 'Spacing',
-    // Rendered by SpacingControl.vue (a tiered All/X·Y/Sides widget), not the
-    // generic row loop; these two keep the section visible + relevant.
     properties: [
       { id: 'padding', label: 'Padding', control: slide('p') },
       { id: 'margin', label: 'Margin', control: slide('m') },
@@ -417,8 +402,6 @@ export const STYLE_SECTIONS: StyleSection[] = [
   {
     id: 'background',
     label: 'Background',
-    // The media-picker row (node.background) is injected by StyleEditor before
-    // these; object-fit/position steer a video layer, bg-size/repeat a bg image.
     properties: [
       { id: 'bg-color', label: 'Color', control: col('bg') },
       {
@@ -467,8 +450,6 @@ export const STYLE_SECTIONS: StyleSection[] = [
   {
     id: 'border',
     label: 'Border',
-    // Border width is rendered by the cross SpacingBoxControl (like padding/margin),
-    // not the generic rows; Color, Radius and Style follow as ordinary controls.
     properties: [
       { id: 'border-color', label: 'Color', control: col('border') },
       {
@@ -588,8 +569,6 @@ export const STYLE_SECTIONS: StyleSection[] = [
         control: slide('scale', ['0', '50', '75', '90', '95', '100', '105', '110', '125', '150']),
       },
       {
-        // the anchor a scale/rotate grows from — a reveal that scales up from its
-        // own top-left needs this, and there was no way to express it at all
         id: 'transform-origin',
         label: 'Origin',
         control: {

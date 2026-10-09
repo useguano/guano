@@ -7,8 +7,6 @@ import { uid } from '@/lib/shared/ids.js'
 
 const menu = ref<{ x: number; y: number; targetId: string } | null>(null)
 
-// class/interaction copies are node STATE, not structure, so they stay here;
-// the element clipboard lives in useStructure with the ops that use it
 const copiedClasses = ref<string | null>(null)
 const copiedInteractions = ref<InteractionBinding[] | null>(null)
 export function useContextMenu() {
@@ -18,8 +16,6 @@ export function useContextMenu() {
 
   const target = computed(() => (menu.value ? getElement(menu.value.targetId) : null))
   const targetIsBody = computed(() => target.value?.type === 'body')
-
-  // --- keyboard-driven actions operate on the current selection ---
 
   function copySelection() {
     backend.value.copy(selectedElementIds.value)
@@ -49,8 +45,6 @@ export function useContextMenu() {
 
   function openMenu(e: MouseEvent, targetId: string) {
     e.preventDefault()
-    // right-clicking inside a multi-selection keeps it, so a menu action can
-    // operate on the whole group; otherwise collapse to the clicked element
     if (!selectedElementIds.value.includes(targetId)) selectElement(targetId)
     menu.value = { x: e.clientX, y: e.clientY, targetId }
   }
@@ -91,7 +85,6 @@ export function useContextMenu() {
 
   function pasteInteractions() {
     if (target.value && copiedInteractions.value) {
-      // fresh ids so the pasted set never collides with the source's
       target.value.interactions = copiedInteractions.value.map((i) => ({
         ...i,
         id: uid(),

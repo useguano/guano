@@ -5,6 +5,8 @@ import { useElement } from '@/composables/useElement'
 import { useProject } from '@/composables/useProject'
 import { resolveClassesForWidth } from '@/lib/responsive'
 import { FRAME_BREAKPOINT } from '@/components/editor/canvas/frameScope'
+import { declaresOwnBox } from '@/components/editor/canvas/emptyBox'
+import { isLeafElement } from '@/lib/elements'
 import { VARIANT_ACTIVE } from '@/components/editor/canvas/variantScope'
 import { useStructure } from '@/composables/useStructure'
 import EntryScope from '@/components/shared/EntryScope.vue'
@@ -34,9 +36,6 @@ const { backend } = useStructure()
 const { pickingFor, pickTarget } = useInteraction()
 const { openMenu } = useContextMenu()
 
-// shared rendering core (also used by Preview's PreviewRenderer):
-// def/mapping, collection + entry-scope resolution, interaction firing,
-// and the scroll-into-view observer (bound via ref="el")
 const {
   def,
   mapping,
@@ -84,13 +83,9 @@ const untranslated = computed(
 
 const titleAttr = computed(() => (untranslated.value ? 'Not translated' : undefined))
 
-// which breakpoint frame this element is rendered in (null outside the canvas)
 const frameBreakpointId = inject(FRAME_BREAKPOINT, null)
 const { breakpoints, activeBreakpointId, baseBreakpoint } = useProject()
 
-// each frame renders the classes resolved for its own width, so per-breakpoint
-// overrides (`max-[390px]:bg-black`) actually show in the right frame — the real
-// media query can't, since every frame shares the one window width
 const frameWidth = computed(
   () => breakpoints.value.find((b) => b.id === frameBreakpointId)?.width ?? null,
 )
@@ -99,13 +94,10 @@ const framedClasses = computed(() => {
   return frameWidth.value !== null ? resolveClassesForWidth(joined, frameWidth.value) : joined
 })
 
-// --- slider chrome (static on the canvas; Preview runs the real runtime) ---
-
 const sliderHostClass = computed(() =>
   props.node.type === 'slider' ? sliderHostExtraClass(props.node.classes) : '',
 )
-/** the canvas paints the dot rail itself, so it needs its own count: one dot
- * per reachable position at this frame's width */
+
 const canvasDotCount = computed(() => {
   if (props.node.type !== 'slider') return 0
   const slides = sliderBound.value
@@ -119,11 +111,6 @@ const canvasDotCount = computed(() => {
   const count = slides - perView + 1
   return count > 1 ? count : 0
 })
-// selection/highlight outlines only render in the frame being edited, so one
-// selection doesn't light up every breakpoint at once. Always true when the
-// element isn't in a multi-frame canvas.
-// …and, on the components board, only in the drawing being edited: a
-// component with variants is drawn once per option
 const variantActive = inject(VARIANT_ACTIVE, null)
 const inActiveFrame = computed(() => {
   if (variantActive && !variantActive.value) return false
@@ -131,35 +118,29 @@ const inActiveFrame = computed(() => {
   return frameBreakpointId === (activeBreakpointId.value ?? baseBreakpoint.value?.id ?? null)
 })
 
-// `isSelected` / `isHighlighted` / `dropPositionFor` track THIS id only — a
-// selection or hover change must not re-evaluate every element on the canvas
 const selected = computed(() => inActiveFrame.value && isSelected(props.node.id, true))
-// a transient preview highlight (e.g. an interaction's Target hover), shown in a
-// distinct colour and only when this node isn't already the live selection
 const highlighted = computed(
   () => inActiveFrame.value && isHighlighted(props.node.id) && !selected.value,
 )
 const dropPosition = computed(() => dropPositionFor(props.node.id))
 
+const OWN_CANVAS_SHAPE = ['body', 'collection-list', 'collection-item', 'slider', 'custom-code']
+
+const emptyBox = computed(() => {
+  if (!def.value || isLeafElement(props.node.type)) return false
+  if (OWN_CANVAS_SHAPE.includes(props.node.type)) return false
+  if (props.node.children.length || displayContent.value?.trim()) return false
+  return !declaresOwnBox(framedClasses.value)
+})
+
 const classes = computed(() => [
-  // core: body flex-1, master/own classes, interaction classes, bg host —
-  // resolved for this frame's breakpoint width
   framedClasses.value,
-  // text-selection guard: only elements actually showing text content
-  // are selectable; containers and chrome stay select-none
+  emptyBox.value && 'min-h-10 outline-dashed outline-1 -outline-offset-1 outline-input',
   !def.value?.void &&
     !props.node.children.length &&
     !['body', 'collection-list', 'collection-item', 'slider'].includes(props.node.type) &&
     'select-text',
-  // untranslated fallback content renders dimmed under a non-default locale
   untranslated.value && 'opacity-60',
-  // while inline-editing, the accent editing ring (bound in the template)
-  // replaces the selection/highlight outlines instead of fighting them.
-  // The chrome is `!important` AND names its style explicitly: a field's or
-  // button's own `outline-none` is compiled by @tailwindcss/browser into a
-  // stylesheet injected AFTER ours, and it also sets `--tw-outline-style:
-  // none` — the variable the bare `outline` utility reads — so `outline!`
-  // alone still computed to `none` on a selected input.
   selected.value && !editing.value && 'outline-solid! outline-2! -outline-offset-2! outline-sky-500!',
   highlighted.value && !editing.value && 'outline-solid! outline-2! -outline-offset-2! outline-emerald-500!',
   dropPosition.value &&
@@ -167,39 +148,21 @@ const classes = computed(() => [
       ? 'shadow-[0_-2px_0_0_#0ea5e9]'
       : dropPosition.value === 'after'
         ? 'shadow-[0_2px_0_0_#0ea5e9]'
-        : // 'inside' (palette drop as last child): dashed to distinguish
-          // from the solid selection outline
+        :
           'outline-dashed! outline-2! -outline-offset-2! outline-sky-500! bg-sky-500/5'),
 ])
-
-// --- inline text editing (double-click) ---
-// what's editable, what it opens with and where it commits all come from the
-// render core. This canvas is the ONLY place text is edited in place — Play
-// renders the site read-only.
 
 const { editing, editEl, startEditing, finishEditing, onEditKeydown } = useInlineEdit({
   editable: editableText,
   rich: richEditing,
   initialText: inlineInitialText,
   commit: commitInlineText,
-  onExit: () => requestReveal(), // Esc/Enter hands focus back to the Layers tree
+  onExit: () => requestReveal(),
 })
 
-// The Edit canvas is a selection surface, not the site: a link must not
-// navigate, a button not submit, a checkbox not toggle, a label not forward
-// its click, and a field must not take focus and start a caret — every one of
-// those stole the click that was meant to select the element. Form controls
-// also get their mousedown swallowed, which is what focus and a <select>'s
-// native dropdown ride on; the click still reaches us to select.
 const FOCUSING_TAGS = new Set(['input', 'select', 'textarea'])
 const tag = computed(() => def.value?.tag ?? 'div')
 
-/**
- * A form's success / error block is chrome the visitor sees only AFTER a
- * submission, so drawing it inline would misrepresent the page. It is shown
- * while the selection is inside it, which is how it gets styled — the same
- * bargain `list-empty` and a hidden part make.
- */
 function stateBlockVisible(child: ElementNode): boolean {
   const hit = (n: ElementNode): boolean =>
     isSelected(n.id) || (n.children ?? []).some(hit)
@@ -208,8 +171,6 @@ function stateBlockVisible(child: ElementNode): boolean {
 
 const handlers = {
   dblclick: startEditing,
-  // a form on the EDIT canvas must never submit: the page would reload and
-  // take the editor with it. Preview/Play and the published site own that.
   submit(e: Event) {
     e.preventDefault()
   },
@@ -221,23 +182,19 @@ const handlers = {
     e.stopPropagation()
     if (editing.value) return
     e.preventDefault()
-    // a pending "Pick target" claims the click instead of selecting;
-    // inside an instance the shared master id is what gets targeted
     if (pickingFor.value) {
       pickTarget(mapping.value ? mapping.value.master.id : props.node.id)
       return
     }
     fireClickInteractions()
     selectElement(props.node.id)
-    requestReveal() // bring this element's row into view in the Layers tree
+    requestReveal()
   },
   contextmenu(e: MouseEvent) {
     e.stopPropagation()
     openMenu(e, props.node.id)
   },
   ...hoverHandlers,
-  // both events, mirroring the published runtime: 'input' makes text fields
-  // update live rather than only on blur (server/site-runtime.js)
   change: fireChangeInteractions,
   input: fireChangeInteractions,
   dragstart(e: DragEvent) {
@@ -279,8 +236,6 @@ const handlers = {
 </script>
 
 <template>
-  <!-- repeats its children (the inline item template) once per entry -->
-  <!-- a hidden node renders nothing; it lives on in the Layers tree -->
   <template v-if="hidden" />
   <component
     :is="def?.tag ?? 'div'"
@@ -311,12 +266,7 @@ const handlers = {
           />
         </EntryScope>
       </template>
-      <!-- No entries yet. Build is an EDITING surface, so it shows the row
-           template once with placeholders — otherwise a list for an empty
-           collection could never be styled — AND the empty-state block, which is
-           the only thing the site renders here. With entries the empty block is
-           not drawn, matching the site; select it in the Layers tree to style it,
-           exactly like a hidden part. -->
+
       <template v-else>
         <EntryScope :collection="listCollection" :entry="null">
           <ElementRenderer
@@ -333,9 +283,6 @@ const handlers = {
     </div>
   </component>
 
-  <!-- carousel: a scroll-snap track of slides, one per entry when the arg binds
-       a collection, else one per direct child. The chrome is static here —
-       autoplay and drag only run in Preview and on the published site -->
   <component
     :is="def?.tag ?? 'div'"
     v-else-if="node.type === 'slider'"
@@ -369,15 +316,13 @@ const handlers = {
             />
           </EntryScope>
         </div>
-        <!-- no entries yet: show the slide template once with placeholders -->
         <div v-if="!listEntries.length" data-sl-slide :class="SLIDER_SLIDE_CLASSES">
           <EntryScope :collection="listCollection" :entry="null">
             <ElementRenderer v-for="child in node.children" :key="child.id" :node="child" />
           </EntryScope>
         </div>
       </template>
-      <!-- an arg that names nothing is a mistake worth surfacing; no arg at all
-           is manual mode, where each child is its own slide -->
+
       <div
         v-else-if="node.arg"
         data-sl-slide
@@ -428,7 +373,6 @@ const handlers = {
     </div>
   </component>
 
-  <!-- one picked entry rendered through its collection's template -->
   <component
     :is="def?.tag ?? 'div'"
     v-else-if="node.type === 'collection-item'"
@@ -451,9 +395,6 @@ const handlers = {
     </div>
   </component>
 
-  <!-- a form: its fields render normally, its success/error blocks only while
-       the selection is inside them (otherwise the canvas would show a state no
-       visitor sees until they have submitted) -->
   <component
     :is="def?.tag ?? 'form'"
     v-else-if="isForm"
@@ -472,8 +413,6 @@ const handlers = {
     </template>
   </component>
 
-  <!-- an icon: the <svg> is the element itself, so classes, id and listeners
-       land on it like on any other; only its shapes come from the markup -->
   <svg
     v-else-if="iconInfo"
     ref="el"
@@ -486,8 +425,7 @@ const handlers = {
     v-on="handlers"
     v-html="iconInfo.inner"
   />
-  <!-- raw HTML is never rendered live in the editor: a placeholder box wearing
-       the element's classes, so it can still be sized and placed -->
+
   <component
     :is="def?.tag ?? 'div'"
     v-else-if="node.type === 'custom-code'"

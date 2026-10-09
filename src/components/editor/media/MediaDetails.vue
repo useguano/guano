@@ -15,7 +15,6 @@ import { acceptFor, formatBytes } from '@/lib/media'
 
 const props = defineProps<{
   asset: MediaAsset
-  /** cache-buster for previews, bumped by the parent after replace */
   version: number
 }>()
 
@@ -24,7 +23,6 @@ const emit = defineEmits<{ replaced: []; delete: [] }>()
 const { mediaUrl, updateAsset, replaceAsset, folders, usage } = useMedia()
 const { project } = useProject()
 
-// name/alt edit locally, commit on change/blur — not on every keystroke
 const name = ref(props.asset.name)
 const alt = ref(props.asset.alt ?? '')
 watch(
@@ -49,12 +47,10 @@ async function commitAlt() {
   await updateAsset(props.asset.id, { alt: alt.value })
 }
 
-// '' = root; SelectUI models strings
 const folderModel = computed({
   get: () => props.asset.folderId ?? '',
   set: (value: string) => void updateAsset(props.asset.id, { folderId: value || null }),
 })
-/** full "Parent / Child" path for a nested folder */
 function folderPath(id: string): string {
   const names: string[] = []
   const seen = new Set<string>()
@@ -73,7 +69,6 @@ const folderOptions = computed(() => [
     .sort((a, b) => a.label.localeCompare(b.label)),
 ])
 
-// replace-in-place: same id/URL, new bytes
 const replaceInput = ref<HTMLInputElement>()
 const busy = ref(false)
 const error = ref<string | null>(null)
@@ -108,9 +103,6 @@ const uploadedOn = computed(() =>
   }),
 )
 
-// ----- where it's used -----
-// precise walk of the loaded branch (page names), plus the server's
-// cross-branch reference count for everything this client can't see
 const usedOn = computed(() => {
   const url = mediaUrl(props.asset)
   const refersTo = (src?: string) => src === url
@@ -130,7 +122,6 @@ const usedOn = computed(() => {
   let entryRefs = 0
   for (const c of project.value.collections) {
     for (const entry of c.entries) {
-      // reference fields hold id arrays, never media srcs
       entryRefs += Object.values(entry.values).filter(
         (v) => typeof v === 'string' && refersTo(v),
       ).length
@@ -143,7 +134,6 @@ const usedOn = computed(() => {
   return spots
 })
 
-// cross-branch total from the server (this branch included)
 const branchUsage = ref<MediaUsage | null>(null)
 watch(
   () => props.asset.id,
@@ -157,7 +147,6 @@ watch(
   },
   { immediate: true },
 )
-/** shown only when this branch has no usage: references saved on other branches */
 const usageFallback = computed(() => {
   if (branchUsage.value?.total) {
     const n = branchUsage.value.branches.length
@@ -166,7 +155,6 @@ const usageFallback = computed(() => {
   return 'Not used anywhere'
 })
 
-// ----- copy the public URL (the same /media/<id> stored on nodes) -----
 const copied = ref(false)
 function copyUrl() {
   navigator.clipboard
@@ -182,13 +170,11 @@ function copyUrl() {
 <template>
   <div class="flex h-full min-h-0 flex-col">
     <div class="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" style="scrollbar-gutter: stable">
-    <!-- preview: checkerboard so transparent images read as transparent -->
     <div
       class="group relative flex h-56 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/60"
       :class="asset.kind === 'image' && 'checkerboard'"
     >
-      <!-- replace in place: same id/URL, new bytes — on the preview, where
-           the thing being replaced is -->
+
       <ButtonUI
         variant="outline"
         size="xs"
@@ -255,7 +241,6 @@ function copyUrl() {
       </div>
     </div>
 
-    <!-- where it's used: one row per place, not a comma-joined string -->
     <div class="flex flex-col gap-1">
       <span class="px-0.5 section-label">
         Used on
@@ -278,7 +263,6 @@ function copyUrl() {
       <p v-if="error" class="text-xs text-danger">{{ error }}</p>
     </div>
 
-    <!-- actions stay pinned: the preview must never push them out of reach -->
     <div class="flex shrink-0 flex-col gap-1.5 border-t border-input p-4">
       <div class="grid grid-cols-2 gap-1.5">
         <a :href="`${mediaUrl(asset)}?download=1`" :download="asset.filename" class="contents">
@@ -308,7 +292,6 @@ function copyUrl() {
 </template>
 
 <style scoped>
-/* transparency grid behind image previews */
 .checkerboard {
   background-image:
     linear-gradient(45deg, var(--color-muted) 25%, transparent 25%),

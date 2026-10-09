@@ -19,7 +19,7 @@ async function submit() {
   error.value = null
   try {
     await login(email.value.trim(), password.value)
-    window.location.assign('/admin') // full load boots the editor cleanly
+    window.location.assign('/admin')
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Login failed'
     busy.value = false

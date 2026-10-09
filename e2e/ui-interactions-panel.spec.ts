@@ -130,7 +130,13 @@ test("a trigger's effect is edited in place, and Remove takes it off the element
   await openPanel(page)
 
   await addTrigger(page, /^Hover/)
-  await expect(triggerView(page).getByText('On hover')).toBeVisible()
+  // the trigger view has no header of its own: which trigger is open is the
+  // highlighted row in the drawer's index, and which effect is the highlighted
+  // library row beside it
+  await expect(drawer(page).locator('[data-drawer-trigger][aria-current="true"]')).toHaveText(
+    /On hover/,
+  )
+  await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
 
   // the SHARED effect is right there beside the options — nothing to open
   const marker = 'ring-offset-4'
@@ -184,13 +190,12 @@ test('a click is aimed with a verb, never an engine', async ({ page }) => {
   await openPanel(page)
 
   await addTrigger(page, /^Click/)
-  await drawer(page).getByPlaceholder('Effect name').fill('Panel fade')
   await drawer(page).getByRole('button', { name: 'Apply' }).click()
   await page.locator('[data-trigger-row]').filter({ hasText: 'On click' }).click()
 
   // the direction lives in the action's options
-  await actionRows(page).locator('[data-row]').filter({ hasText: 'Does' }).getByRole('button').click()
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+  await actionRows(page).locator('[data-row]').filter({ hasText: 'Action' }).getByRole('button').click()
+  await page.getByRole('button', { name: 'Turn on', exact: true }).click()
 
   await publish(page)
   await page.goto('/')
@@ -214,20 +219,24 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // needs both: `hidden` → `flex` is the only way to switch display, and no
   // class swap expresses the slide — but that split is ours, not the author's,
   // so nothing is chosen between.
+  const effectsBefore = await libraryRows(page).count()
   await addTrigger(page, /^Click/)
-  await drawer(page).getByPlaceholder('Effect name').fill('Sheet')
   await drawer(page).getByPlaceholder('Add class').fill('flex')
   await page.keyboard.press('Enter')
+  // the trigger view shows one half at a time, so the motion half is reached
+  // through the Type switch beside the options
+  await triggerView(page).getByRole('button', { name: 'Motion', exact: true }).click()
   await expect(drawer(page).locator('[data-effect-half="animation"]')).toBeVisible()
   await drawer(page).getByRole('button', { name: 'Apply' }).click()
   await page.locator('[data-trigger-row]').filter({ hasText: 'On click' }).click()
 
   // ONE action, not two: the pair is recognised from the bindings themselves
   await expect(actionRows(page)).toHaveCount(1)
-  await expect(triggerView(page).getByPlaceholder('Effect name')).toHaveValue('Sheet')
 
-  // and the library lists one effect, not one per engine
-  await expect(libraryRows(page).filter({ hasText: 'Sheet' })).toHaveCount(1)
+  // and the library gained one effect, not one per engine — the open one,
+  // which is how the drawer says what is being edited
+  await expect(libraryRows(page)).toHaveCount(effectsBefore + 1)
+  await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
 
   await publish(page)
   await page.goto('/')

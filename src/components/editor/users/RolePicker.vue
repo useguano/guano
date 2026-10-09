@@ -4,8 +4,6 @@ import MenuUI from '@/components/ui/MenuUI.vue'
 import { ROLE_INFO, roleLabel } from '@/lib/roles'
 import type { Role } from '@/composables/useAuth'
 
-// A role dropdown that explains each option. Emits a change request rather than
-// mutating directly, so the parent can confirm a sensitive demotion first.
 const props = defineProps<{ role: Role; disabled?: boolean }>()
 const emit = defineEmits<{ change: [role: Role] }>()
 

@@ -1,20 +1,9 @@
 <script setup lang="ts">
-// The skeleton every docked drawer column shares (Pages, Components): a
-// full-height panel whose centre is ONE surface with two layers — the list
-// (search field + scrolling body) and a detail view that takes its place —
-// swapped with a transform-only push rather than a hard cut. Both layers are
-// absolutely positioned inside the box so nothing reflows mid-transition.
-// Content stays the caller's: the body slot renders its own scroller (the
-// Components tree is also a layer surface and needs its own attributes on
-// it), `detail` the view that replaces the list, and `footer` anything pinned
-// under both — kept out of the swap on purpose, since Pages' locale switcher
-// must stay reachable from the item editor.
 import { ref } from 'vue'
 import { Search } from 'lucide-vue-next'
 
 withDefaults(
   defineProps<{
-    /** when true the detail layer shows instead of the list */
     detail?: boolean
     placeholder?: string
   }>(),
@@ -23,7 +12,6 @@ withDefaults(
 
 const query = defineModel<string>('query', { default: '' })
 
-// the panel root, for useDrawerEscape's "did the last click land inside me"
 const el = ref<HTMLElement>()
 defineExpose({ el })
 </script>
@@ -57,7 +45,6 @@ defineExpose({ el })
 </template>
 
 <style scoped>
-/* the two swap layers stack rather than displace each other */
 .pane {
   position: absolute;
   inset: 0;
@@ -68,7 +55,6 @@ defineExpose({ el })
     transform 0.18s ease-out,
     opacity 0.18s ease-out;
 }
-/* the detail is the deeper layer: it arrives from and leaves to the right */
 .pane-settings.drawer-push-enter-from,
 .pane-settings.drawer-push-leave-to {
   transform: translateX(0.75rem);

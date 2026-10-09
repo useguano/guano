@@ -17,11 +17,6 @@ const style = ref<{ left: string; top: string; visibility: 'hidden' | 'visible' 
   visibility: 'hidden',
 })
 
-// grow the popover out of the corner nearest its anchor (InsertDock's
-// origin-bottom-left trick, generalized to any placement): main axis toward
-// the anchor, cross axis toward the aligned edge. Held in a ref (not a
-// computed off `current`) so it survives the leave animation — `current` is
-// already null by then, and a recompute would snap the origin to center.
 const transformOrigin = ref('50% 50%')
 function originFor(placement: string): string {
   const [side, align = 'center'] = placement.split('-')
@@ -29,13 +24,9 @@ function originFor(placement: string): string {
   if (side === 'left') return `100% ${cross}`
   if (side === 'right') return `0% ${cross}`
   if (side === 'top') return `${cross} 100%`
-  return `${cross} 0%` // bottom
+  return `${cross} 0%`
 }
 
-// rAF loop: the anchor moves under us (canvas pan/zoom, scrolling), so track
-// its live rect every frame and only write style when the position changes
-// (CommentLayer pattern). getBoundingClientRect is immune to ancestor
-// transforms, so zoomed-canvas anchors need no special math.
 let raf = 0
 let last = ''
 function track() {
@@ -68,15 +59,11 @@ watch(current, async (state) => {
   last = ''
   if (!state) return
   transformOrigin.value = originFor(state.placement)
-  // render hidden for one frame so the panel can be measured before placing
   style.value = { left: '0px', top: '0px', visibility: 'hidden' }
   await nextTick()
   track()
 })
 
-// Escape closes the popover unless a modal is above it, a palette drag is
-// being cancelled, or the popover opted out (the sidebar panel owns its own
-// Escape → close + refocus-editor flow)
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return
   const state = current.value
@@ -85,7 +72,6 @@ function onKeydown(e: KeyboardEvent) {
   closePopover()
 }
 
-// outside-click close is opt-in; the release click of a palette drag never counts
 function onDocClick(e: MouseEvent) {
   const state = current.value
   if (!state?.closeOnOutside) return
@@ -107,13 +93,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- same grow-in/out as the InsertDock panel (scale + fade from the anchor
-       corner); transform-origin points at the anchor via transformOrigin -->
+
   <Transition name="pop">
     <div v-if="current" ref="panelEl" class="fixed z-50" :style="[style, { transformOrigin }]">
-      <!-- icon resolves via unref, not toValue — a lucide icon is a bare
-           function and toValue would call it (→ "slots of undefined" crash) -->
-      <HostPopover :title="toValue(current.title)" :icon="unref(current.icon)" @close="closePopover()">
+
+      <HostPopover
+        :title="toValue(current.title)"
+        :icon="unref(current.icon)"
+        :width="current.width"
+        :header="current.header"
+        :scroll="current.scroll"
+        @close="closePopover()"
+      >
         <component :is="current.component" v-bind="current.props" />
       </HostPopover>
     </div>

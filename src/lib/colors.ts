@@ -1,9 +1,5 @@
 export const TAILWIND_SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900']
 
-/** hex values per color, index-aligned with TAILWIND_SHADES */
-// NOTE: these palette names must stay in sync with RESERVED_TOKEN_NAMES in
-// src/lib/shared/tokens.js (which the token validator uses to reject
-// tokens that would shadow a Tailwind color).
 export const TAILWIND_COLORS: Record<string, string[]> = {
   slate: ['#f8fafc', '#f1f5f9', '#e2e8f0', '#cbd5e1', '#94a3b8', '#64748b', '#475569', '#334155', '#1e293b', '#0f172a'],
   gray: ['#f9fafb', '#f3f4f6', '#e5e7eb', '#d1d5db', '#9ca3af', '#6b7280', '#4b5563', '#374151', '#1f2937', '#111827'],
@@ -26,22 +22,18 @@ export const TAILWIND_COLORS: Record<string, string[]> = {
   rose: ['#fff1f2', '#ffe4e6', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e', '#e11d48', '#be123c', '#9f1239', '#881337'],
 }
 
-// project design tokens (bg-brand etc.) — synced by useSettings so the
-// color helpers recognize them without this module becoming reactive
 let TOKEN_HEX: Record<string, string> = {}
 
 export function setColorTokens(map: Record<string, string>) {
   TOKEN_HEX = map
 }
 
-/** 'slate-100' or a design token name → is it a color class value? */
 export function isPaletteColor(value: string): boolean {
   if (value in TOKEN_HEX) return true
   const match = value.match(/^([a-z]+)-(\d{2,3})$/)
   return !!match && match[1]! in TAILWIND_COLORS && TAILWIND_SHADES.includes(match[2]!)
 }
 
-/** css color for a picker value: 'slate-100', 'brand', 'white', '#ff0000' */
 export function colorHex(value: string): string {
   if (TOKEN_HEX[value]) return TOKEN_HEX[value]
   if (value.startsWith('#')) return value
@@ -55,11 +47,6 @@ export function colorHex(value: string): string {
 
 const HEX_ANY_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
-/**
- * Any CSS colour the browser understands → '#rrggbb' (or '#rrggbbaa' when
- * translucent), via a canvas fill-style round trip; null when it isn't one.
- * Pure hex passes straight through, so this works without a DOM too.
- */
 export function cssColorToHex(value: string): string | null {
   const v = value.trim()
   if (HEX_ANY_RE.test(v)) return v.toLowerCase()
@@ -71,7 +58,6 @@ export function cssColorToHex(value: string): string | null {
   ctx.fillStyle = v
   const out = String(ctx.fillStyle)
   if (out.startsWith('#')) return out
-  // translucent colours read back as rgba(r, g, b, a)
   const m = out.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/)
   if (!m) return null
   const part = (n: number) => Math.round(n).toString(16).padStart(2, '0')
@@ -79,11 +65,6 @@ export function cssColorToHex(value: string): string | null {
   return '#' + part(+m[1]!) + part(+m[2]!) + part(+m[3]!) + (alpha < 1 ? part(alpha * 255) : '')
 }
 
-/**
- * What a typed colour means as a picker value: a palette shade or design
- * token keeps its name ('slate-500', 'brand'), everything else the browser
- * accepts becomes hex. null = not a colour.
- */
 export function parseColorInput(text: string): string | null {
   const v = text.trim().toLowerCase()
   if (!v) return null

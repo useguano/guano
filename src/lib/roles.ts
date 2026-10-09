@@ -3,7 +3,6 @@ import type { Role } from '@/composables/useAuth'
 export interface RoleInfo {
   value: Role
   label: string
-  /** one-line explanation shown in pickers */
   blurb: string
 }
 

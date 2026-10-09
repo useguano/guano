@@ -13,26 +13,14 @@ import {
   setNodeHidden as setHidden,
 } from './shared/instances.js'
 
-/**
- * Typed face of `shared/instances.js` — the logic lives in the plain-JS module
- * so the exporter and the MCP tools run the exact same code (see its header).
- */
-
 export interface InstanceMapping {
-  /** the master node this page node stands for: its classes, interactions and
-   * structure live there */
   master: ElementNode
-  /** the root of that master's component, for interaction lookups */
   root: ElementNode
-  /** the component itself */
   def: ComponentDef
-  /** the instance wrapper this node sits in — what keeps a binding's state
-   * unique per instance */
+
   instanceId: string
-  /** nodes between this one and its master that may also carry its state,
-   * most specific first */
+
   mirrors: ElementNode[]
-  /** the instance's variant option per axis */
   picks: Record<string, string>
 }
 
@@ -63,18 +51,14 @@ export const setNodeHidden = setHidden as (
   hidden: boolean,
 ) => void
 
-/** is this mapped node the `:Name` wrapper of its instance? */
 export const isInstanceWrapper = wrapper as (mapping: InstanceMapping | null | undefined) => boolean
 
-/** does this `:Name` wrapper emit no element of its own? One rule for all three
- *  renderers — see the doc comment in shared/instances.js for why it is shared */
 export const isBareWrapper = bareWrapper as (
   node: ElementNode,
   master: ElementNode | null | undefined,
   state?: { classes?: string; targeted?: boolean },
 ) => boolean
 
-/** the components a component's master holds directly, by name */
 export const nestedComponentNames = nested as (def: ComponentDef) => string[]
 
 export const componentReaches = reaches as (
@@ -83,8 +67,6 @@ export const componentReaches = reaches as (
   to: string,
 ) => boolean
 
-/** may an instance of `inner` sit inside `host`'s master? Never in a cycle. */
 export const canNest = nest as (components: ComponentDef[], host: string, inner: string) => boolean
 
-/** each component after everything it holds */
 export const dependencyOrder = order as (components: ComponentDef[]) => ComponentDef[]

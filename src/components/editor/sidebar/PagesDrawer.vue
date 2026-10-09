@@ -1,22 +1,11 @@
 <script lang="ts">
 import { defineAsyncComponent, ref } from 'vue'
 
-// per-collection expand state — module-level because the column unmounts when
-// it is toggled off, and the tree should come back as the user left it
 const expanded = ref<Record<string, boolean>>({})
 </script>
 
 <script setup lang="ts">
-// Pages/collections navigator toggled from the left rail — a docked column
-// beside the rail: it takes the shared 16rem track, stays
-// open while you navigate, and only the rail button closes it. Three zones: a
-// search field, the scrollable Pages + Collections tree, and the locale
-// switcher pinned at the bottom. Clicking a page opens it on the canvas and,
-// on the Edit surface, swaps the drawer to that page's LAYERS; the row's Edit
-// icon does the same from Play. A row also reveals a kebab on hover
-// (settings/duplicate/delete). The list swaps in place for three detail
-// views — layers, page/item settings, collection settings.
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import {
   Plus, Copy, Trash2, Settings, Languages, ChevronDown, ChevronRight, Check,
   House, SquarePen,
@@ -35,12 +24,10 @@ import { useLocale } from '@/composables/useLocale'
 import { useLocaleQuickAdd } from '@/composables/useLocaleQuickAdd'
 import { useModal } from '@/composables/useModal'
 import { useAuth } from '@/composables/useAuth'
-import { useViewMode } from '@/composables/useViewMode'
 import { useDrawerEscape } from '@/composables/useDrawerEscape'
 import { walkNodes } from '@/lib/tree'
 import type { Collection, CollectionEntry, ElementNode, Page } from '@/types/editor'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const CreateCollectionModal = defineAsyncComponent(() => import('@/components/shared/CreateCollectionModal.vue'))
 
 const { homePage, duplicatePage, removePage } = usePage()
@@ -57,13 +44,9 @@ const {
 } = useLocaleQuickAdd()
 const { openModal, confirm } = useModal()
 const { canBuild, canEditContent } = useAuth()
-const { isBuild, setMode } = useViewMode()
 
-// when set, the drawer swaps its list for the page/item settings panel
 const settingsTarget = ref<SettingsTarget | null>(null)
-// the Layers view of the page on the canvas
 const layersOpen = ref(false)
-// the collection whose fields/URL are being edited — an id, never the object
 const collectionSettingsId = ref<string | null>(null)
 const detailOpen = computed(
   () => !!settingsTarget.value || layersOpen.value || !!collectionSettingsId.value,
@@ -74,38 +57,21 @@ function closeDetail() {
   collectionSettingsId.value = null
 }
 
-/** a page row: open the page, and on the Edit surface its layers with it —
- * opening a page IS the act of going to work on it, so the tree comes along
- * rather than waiting behind the row's Edit icon */
 function selectPage(pageId: string) {
-  if (canBuild.value && isBuild.value) {
+  if (canBuild.value) {
     editLayers(pageId)
     return
   }
   openPage(pageId)
 }
 
-/** the Edit icon: put the page on the canvas and show its layers */
 function editLayers(pageId: string) {
-  // structure is a Build job: from Play this brings the canvas back
-  setMode('build')
   openPage(pageId)
   closeDetail()
   layersOpen.value = true
 }
-
-// Layers are an Edit-surface view, so switching to Play drops back to the
-// list. Page/entry and collection settings are content, valid on both
-// surfaces, and stay open.
-watch(isBuild, (building) => {
-  if (!building) layersOpen.value = false
-})
-// name filter across pages, collections and entries
 const query = ref('')
 
-// on open, reveal the entry being edited rather than making the user hunt for
-// it. (The settings view and the filter are plain refs, so toggling the column
-// off discards them and it reopens clean.)
 onMounted(() => {
   if (!activeEntryId.value) return
   const owner = collections.value.find((c) =>
@@ -114,7 +80,6 @@ onMounted(() => {
   if (owner) expanded.value[owner.id] = true
 })
 
-// --- filtering ---
 const needle = computed(() => query.value.trim().toLowerCase())
 const searching = computed(() => needle.value.length > 0)
 const matches = (name: string) => name.toLowerCase().includes(needle.value)
@@ -123,8 +88,6 @@ const visiblePages = computed<Page[]>(() =>
   searching.value ? regularPages.value.filter((p) => matches(p.name)) : regularPages.value,
 )
 
-/** collections to render, each with the entries that survive the filter —
- * a collection whose own name matches keeps all of its entries */
 const visibleCollections = computed<{ collection: Collection; entries: CollectionEntry[] }[]>(() => {
   if (!searching.value) return collections.value.map((c) => ({ collection: c, entries: c.entries }))
   const out: { collection: Collection; entries: CollectionEntry[] }[] = []
@@ -143,7 +106,6 @@ const noResults = computed(
   () => searching.value && !visiblePages.value.length && !visibleCollections.value.length,
 )
 
-// while filtering every group is forced open (without touching the stored state)
 const isExpanded = (id: string) => searching.value || expanded.value[id] === true
 const toggleCollection = (id: string) => {
   if (searching.value) return
@@ -152,28 +114,18 @@ const toggleCollection = (id: string) => {
 
 const isDraft = (status?: string) => status === 'draft'
 
-// Clicking an entry opens it in place: the drawer swaps to the item editor and,
-// when the collection has a template page, the canvas follows so the design
-// updates live beside the panel.
 function openEntryDetail(collection: Collection, entryId: string) {
-  openEntry(collection, entryId) // no-ops for a data-only collection
-  // a reviewer only looks: the canvas follows, the editor does not open
+  openEntry(collection, entryId)
   if (!canEditContent.value) return
   settingsTarget.value = { kind: 'entry', collectionId: collection.id, entryId }
 }
 
-// a new item lands straight in the editor, where it gets named and filled,
-// instead of dropping the user on a template page with a placeholder row
 function addItem(collection: Collection) {
   const entry = newEntry(collection)
-  expanded.value[collection.id] = true // so Back reveals the new row
+  expanded.value[collection.id] = true
   settingsTarget.value = { kind: 'entry', collectionId: collection.id, entryId: entry.id }
 }
 
-// --- locale detail: human name + translation coverage per locale ---
-// There is no per-locale publish state in the model; "coverage" is the number
-// of nodes/entry-fields carrying an override for that locale (the default
-// locale holds the base/source content, so it has no overrides to count).
 const languageNames = (() => {
   try {
     return new Intl.DisplayNames(['en'], { type: 'language' })
@@ -211,7 +163,6 @@ const localeStats = computed<Record<string, number>>(() => {
   return counts
 })
 
-/** the muted second line under a locale name: "EN · Default · source" etc. */
 function localeMeta(code: string): string {
   const parts = [code.toUpperCase()]
   if (code === defaultLocale.value) {
@@ -229,7 +180,6 @@ function pickLocale(code: string, close: () => void) {
   close()
 }
 
-// --- destructive actions (all confirmed) ---
 async function confirmDeletePage(page: Page) {
   const ok = await confirm({
     title: 'Delete page',
@@ -267,14 +217,6 @@ async function confirmDeleteLocale(loc: string) {
 const shell = ref<InstanceType<typeof DrawerShell>>()
 const panel = computed(() => shell.value?.el)
 
-// Escape peels one layer at a time — filter, then a settings view — and never
-// closes the column itself; only the rail does. See useDrawerEscape for why a
-// persistent column can't just claim the key.
-//
-// The LAYERS view is deliberately not peelable. It is a working surface, not a
-// detail you glance at: Escape is what closes a panel, the ⌘E dock and a
-// target pick while you work in it, and each of those would also have thrown
-// you back to the page list. Only its Back button leaves it.
 useDrawerEscape(panel, {
   canPeel: () =>
     searching.value || (!layersOpen.value && (!!settingsTarget.value || !!collectionSettingsId.value)),
@@ -301,7 +243,6 @@ useDrawerEscape(panel, {
       />
     </template>
 
-    <!-- pb leaves room for a row kebab opened near the bottom -->
     <div class="custom-scrollbar flex-1 space-y-0.5 overflow-y-auto pb-10">
       <div v-if="visiblePages.length || !searching" class="flex items-center gap-1 px-2.5 pt-2 pb-1">
         <span class="flex-1 section-label">
@@ -338,7 +279,7 @@ useDrawerEscape(panel, {
           />
         </button>
         <ButtonUI
-          v-if="canBuild && isBuild"
+          v-if="canBuild"
           variant="icon" size="xs" :icon="SquarePen" tooltip="Edit layers"
           class="w-5 shrink-0 text-muted-foreground opacity-0 group-hover/row:opacity-100"
           @click.stop="editLayers(page.id)"
@@ -401,7 +342,7 @@ useDrawerEscape(panel, {
           </button>
 
           <ButtonUI
-            v-if="canBuild && isBuild && collection.templatePageId"
+            v-if="canBuild && collection.templatePageId"
             variant="icon" size="xs" :icon="SquarePen" tooltip="Edit template layers"
             class="w-5 shrink-0 text-muted-foreground opacity-0 group-hover/row:opacity-100"
             @click.stop="editLayers(collection.templatePageId)"
@@ -436,7 +377,6 @@ useDrawerEscape(panel, {
           </MenuUI>
         </div>
 
-        <!-- entries: a guide line carries the nesting at this width -->
         <div v-if="isExpanded(collection.id)" class="mt-0.5 mb-1 ml-3.5 border-l border-input pl-1">
           <p v-if="!entries.length" class="px-1.5 py-1 text-[10px] text-muted-foreground">
             No items yet.
@@ -492,10 +432,6 @@ useDrawerEscape(panel, {
       </p>
     </div>
 
-    <!-- locale switcher: pinned, opens upward. In the footer, outside the
-         swapping panes, on purpose — the item editor's text fields are
-         locale-scoped and show fallbacks, so hiding the switcher behind Back
-         would strand a translator. -->
     <template #footer>
     <div class="shrink-0 border-t border-input p-1">
       <MenuUI
@@ -556,4 +492,3 @@ useDrawerEscape(panel, {
     </template>
   </DrawerShell>
 </template>
-

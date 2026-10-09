@@ -23,8 +23,6 @@ const { startInsertDrag } = useInsertDrag()
 const query = ref('')
 const active = ref(0)
 
-// the filter chips: which part of the set is on show. `all` shows every
-// group; the others narrow both the grid and the search. Reset on open.
 type Tab = 'all' | 'basic' | 'components'
 const TABS: { key: Tab; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -35,8 +33,6 @@ const tab = ref<Tab>('all')
 const input = ref<InstanceType<typeof InputUI>>()
 const listEl = ref<HTMLElement>()
 
-// keep the focus on the search input, but still reveal the keyboard-active
-// card by scrolling the results area to it
 function scrollActiveIntoView() {
   nextTick(() =>
     listEl.value?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' }),
@@ -59,15 +55,11 @@ interface DockItem {
   run: () => void
 }
 
-// full item set: built-in elements, then components when present. Each item
-// is both a drag source (payload) and a click/Enter action (run).
 const allGroups = computed<DockGroup[]>(() => {
   const base: DockGroup[] = ELEMENT_GROUPS.map((g) => ({
     title: g.title,
     tab: 'basic' as const,
     items: g.items.map((item) => ({
-      // a plain entry is addressed by its type; a preset carries its own key,
-      // since Container and Grid are both a `div` now
       key: paletteKey(item),
       label: item.label,
       keywords: [item.type],
@@ -83,9 +75,6 @@ const allGroups = computed<DockGroup[]>(() => {
       run: () => insertElement(item.type, item.classes),
     })),
   }))
-  // on the board the insert lands in a component, so what it offers is what
-  // that component may HOLD: anything but itself, and anything that does not
-  // already hold it
   const card = backend.value.kind === 'master' ? activeCard.value : null
   const host = card?.def ?? null
   const known = host && !components.value.includes(host) ? [...components.value, host] : components.value
@@ -109,7 +98,6 @@ const allGroups = computed<DockGroup[]>(() => {
   return base
 })
 
-// live fuzzy filter; keep a flat list (display order) for keyboard nav
 const results = computed(() => {
   const q = query.value.trim()
   const groups: { title: string; items: { item: DockItem; index: number }[] }[] = []
@@ -143,7 +131,6 @@ const results = computed(() => {
 
 watch([query, tab], () => (active.value = 0))
 
-// what an empty tab says: the set is empty, not the search
 const emptyHint = computed(() => {
   if (results.value.flat.length) return ''
   if (query.value.trim()) return 'No results'
@@ -159,8 +146,6 @@ watch(
   },
 )
 
-// Escape closes the dock from anywhere while it's open — the panel's own
-// @keydown misses it once focus has moved to the editor (after an insert)
 function onWindowKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     e.preventDefault()
@@ -168,14 +153,11 @@ function onWindowKeydown(e: KeyboardEvent) {
   }
 }
 
-// a click anywhere outside the dock (button + panel) closes it
 const dockRoot = ref<HTMLElement>()
 function onDocClick(e: MouseEvent) {
   if (dockRoot.value && !dockRoot.value.contains(e.target as Node)) closePalette()
 }
 
-// focus the search + reset the query each time the panel opens; register the
-// global Escape + click-outside listeners only while open
 watch(open, (isOpen) => {
   if (isOpen) {
     query.value = ''
@@ -183,7 +165,6 @@ watch(open, (isOpen) => {
     active.value = 0
     nextTick(() => input.value?.focus())
     window.addEventListener('keydown', onWindowKeydown)
-    // deferred so the click that opened the dock doesn't immediately close it
     nextTick(() => document.addEventListener('click', onDocClick))
   } else {
     window.removeEventListener('keydown', onWindowKeydown)
@@ -197,13 +178,10 @@ onBeforeUnmount(() => {
 })
 
 function pick(item: DockItem) {
-  item.run() // stays open — add several in a row
-  requestReveal() // bring the new element's row into view
+  item.run()
+  requestReveal()
 }
 
-// spatial navigation over the wrapping card grid: from the active card,
-// pick the nearest card in the pressed direction (cross-axis weighted so
-// it stays aligned to the same row/column)
 function navigate(dir: 'up' | 'down' | 'left' | 'right') {
   const container = listEl.value
   if (!container) return
@@ -270,7 +248,7 @@ function onKeydown(e: KeyboardEvent) {
     const item = results.value.flat[active.value]
     if (item) {
       pick(item)
-      closePalette() // keyboard insert commits and closes
+      closePalette()
     }
   } else if (e.key === 'Escape') {
     e.preventDefault()
@@ -280,15 +258,12 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <!-- the dock floats INSIDE the canvas viewport, so its clicks must not reach
-       the canvas underneath — there, a click on empty space deselects (and in
-       comment mode, drops a comment) -->
+
   <div
     ref="dockRoot"
     class="absolute bottom-1 left-1 z-40 flex max-w-[calc(100%-2rem)] flex-col-reverse items-start gap-2"
     @click.stop
   >
-    <!-- the + button is the anchor the panel grows out of -->
     <button
       v-tooltip.right="'Insert elements (⌘E)'"
       type="button"
@@ -312,8 +287,7 @@ function onKeydown(e: KeyboardEvent) {
               class="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
             />
           </div>
-          <!-- filter chips, same strip as the media library's type chips.
-               mousedown is swallowed so the search keeps the keyboard -->
+
           <div class="flex items-center gap-1">
             <ButtonUI
               v-for="t in TABS"
@@ -392,7 +366,6 @@ function onKeydown(e: KeyboardEvent) {
   opacity: 0;
 }
 
-/* leave room for the ↵ hint so the query text never slides under it */
 .dock-search :deep(input) {
   padding-right: 2rem;
 }

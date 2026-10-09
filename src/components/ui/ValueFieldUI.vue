@@ -2,23 +2,18 @@
 import { ref, computed } from 'vue'
 import { textToTail, arrowStepText } from '@/lib/valueClass'
 
-// A compact text field for a style value (e.g. `4`, `4em`, `-4px`). Edits are
-// local until blur / Enter, then validated: valid text commits, invalid text
-// reverts to the last committed value. Empty commits as '' (unset).
-// ↑/↓ nudge the value along `steps` (Shift = bigger jump).
-
 const props = withDefaults(
   defineProps<{
-    /** the committed value text shown when not editing */
     modelValue: string
     allowNegative?: boolean
     placeholder?: string
-    /** override the default units guard (e.g. size values accept keywords) */
     validate?: (text: string) => boolean
-    /** scale walked by ↑/↓ arrows for bare numbers */
     steps?: string[]
-    /** keywords accepted verbatim (e.g. `auto`), skipped by arrow stepping */
     allowKeywords?: readonly string[]
+
+    unit?: string
+
+    full?: boolean
   }>(),
   { allowNegative: false, placeholder: '–' },
 )
@@ -27,6 +22,12 @@ const emit = defineEmits<{ commit: [string] }>()
 
 const editing = ref<string | null>(null)
 const shown = computed(() => editing.value ?? props.modelValue)
+
+const inputClass = computed(() => [
+  'h-7 rounded-md bg-input px-2 text-right font-mono text-[10px] outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  props.unit ? 'w-full pr-6' : props.full ? 'w-full' : 'w-14 shrink-0',
+  props.modelValue === '' && editing.value === null ? 'text-muted-foreground' : 'text-foreground',
+])
 
 function onFocus() {
   editing.value = props.modelValue
@@ -48,14 +49,12 @@ function commit() {
   editing.value = null
   if (raw === null) return
   const text = raw.trim()
-  // empty is a valid "unset"; otherwise must pass the guard
   if (!isValid(text)) return
   if (text !== props.modelValue) emit('commit', text)
 }
 
 function arrow(dir: 1 | -1, bigger: boolean) {
   const cur = (editing.value ?? props.modelValue).trim()
-  // leave keywords (auto, full) untouched
   if (props.allowKeywords?.includes(cur.toLowerCase())) return
   const next = arrowStepText(cur, dir, {
     steps: props.steps,
@@ -83,12 +82,29 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
+  <div v-if="unit" class="relative flex w-full">
+    <input
+      :value="shown"
+      :placeholder="placeholder"
+      spellcheck="false"
+      :class="inputClass"
+      @focus="onFocus"
+      @input="onInput"
+      @blur="commit"
+      @keydown="onKeydown"
+    />
+    <span
+      class="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[10px] text-muted-foreground"
+    >
+      {{ unit }}
+    </span>
+  </div>
   <input
+    v-else
     :value="shown"
     :placeholder="placeholder"
     spellcheck="false"
-    class="h-7 w-14 shrink-0 rounded-md bg-input px-2 text-right font-mono text-[10px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    :class="modelValue === '' && editing === null ? 'text-muted-foreground' : 'text-foreground'"
+    :class="inputClass"
     @focus="onFocus"
     @input="onInput"
     @blur="commit"

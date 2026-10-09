@@ -6,8 +6,7 @@ import { computeFloatingPosition } from '@/lib/floating'
 const props = withDefaults(
   defineProps<{
     icon?: Component
-    /** accessible name for the trigger — an icon-only button has none, so a
-     *  menu that is the only way to reach an action needs one */
+
     label?: string
     align?: 'left' | 'right'
     side?: 'top' | 'bottom'
@@ -27,9 +26,6 @@ const props = withDefaults(
 
 const triggerIcon = props.icon ?? MoreHorizontal
 
-// The panel is teleported to <body> and positioned fixed from the trigger:
-// rendered inline it was clipped by any scrolling ancestor (a settings pane,
-// a drawer). `data-open` stays on the root so useDrawerEscape still sees it.
 const open = ref(false)
 const root = ref<HTMLElement>()
 const panel = ref<HTMLElement>()

@@ -12,7 +12,6 @@ const props = withDefaults(
 
 const model = defineModel<number>({ default: 0 })
 
-/** filled portion of the track, 0–100% */
 const percent = computed(() => {
   const span = props.max - props.min
   if (span <= 0) return 0
@@ -46,8 +45,6 @@ const percent = computed(() => {
   outline: none;
 }
 
-/* the ring of background around the thumb keeps it legible against both the
-   filled and unfilled halves of the track, in either theme */
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;

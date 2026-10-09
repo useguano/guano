@@ -53,18 +53,14 @@ const { selectedElement, elements } = useElement()
 const { masterFor, editTarget } = useComponents()
 const { activeBreakpoint, baseBreakpoint, breakpoints } = useProject()
 
-// the width of the breakpoint being edited, or null when it's the base (widest)
 const activeWidth = computed(() => {
   const a = activeBreakpoint.value
   if (!a || a.id === baseBreakpoint.value?.id) return null
   return a.width
 })
 
-// the widest breakpoint's width — the base view resolves the cascade here
 const baseWidth = computed(() => baseBreakpoint.value?.width ?? 0)
 
-// the smallest breakpoint wider than the one being edited — the threshold a
-// removed class is scoped above so it survives on larger breakpoints only
 const nextLargerWidth = computed(() => {
   const w = activeWidth.value
   if (w === null) return null
@@ -72,23 +68,12 @@ const nextLargerWidth = computed(() => {
   return wider.length ? Math.min(...wider) : null
 })
 
-// inside a component instance, style edits land on the shared master
 const styleTarget = editTarget
-
-// --- the variant layer ---
-//
-// A component with variant axes has more than one class string per element:
-// the base every option shares, and an override per option. The panel writes
-// ONE of them at a time — `layer`, picked at the top — and this is the only
-// place that knows. Everything below reads and writes a plain class string,
-// exactly as it did before variants existed.
 
 const { activeLayer, layer, layerOptions, selectionContext } = useVariants()
 
 const split = (classes: string | undefined) => (classes ?? '').split(/\s+/).filter(Boolean)
 
-/** in a layer: what the element wears from everything BUT that layer — the
- *  base, and the options worn on the other axes. Null while writing the base. */
 const layerContext = computed(() => {
   const ctx = selectionContext.value
   const target = styleTarget.value
@@ -109,17 +94,11 @@ function pickLayer(key: string) {
   activeLayer.value = key || null
 }
 
-// the element's class string is the single source of truth. Controls edit one
-// breakpoint at a time: they see/write the "effective view" for the active
-// breakpoint (base values + this breakpoint's overrides, prefix stripped) and
-// the wrapper folds edits back into the stored string as max-width variants.
 const { tokens: rawTokens, setTokens: setRawTokens } = useClassField({
   get: () => {
     const target = styleTarget.value
     if (!target) return ''
     if (layerContext.value === null) return target.classes ?? ''
-    // what the element WEARS with this option on: the controls then show real
-    // values, inherited ones included, rather than an empty panel
     return mergeClassLayers(layerContext.value, target.variantClasses?.[layer.value!])
   },
   set: (value) => {
@@ -130,23 +109,16 @@ const { tokens: rawTokens, setTokens: setRawTokens } = useClassField({
       target.classes = value
       return
     }
-    // the override is what differs from the rest. A value set back to what the
-    // base already says drops out of the override on its own.
     const own = split(value).filter((token) => !contextTokens.value.has(token))
     setVariantClasses(ctx.def, target, layer.value, own.join(' '))
   },
 })
-// cascaded view for the active breakpoint (Mobile inherits Tablet, not just base)
 const view = computed(() => breakpointView(rawTokens.value, activeWidth.value, baseWidth.value))
 const tokens = computed(() => view.value.tokens)
 function setTokens(next: string[]) {
   setRawTokens(applyBreakpointEdit(rawTokens.value, activeWidth.value, next, baseWidth.value))
 }
 function removeToken(cls: string) {
-  // removing an inherited value on a smaller breakpoint scopes it so it drops
-  // here and below while larger breakpoints keep it (base-inherited case only)
-  // a class the layer merely inherits is not the layer's to remove: an override
-  // can replace a value, it cannot take one away
   if (layerInherited.value.includes(cls)) return
   if (activeWidth.value !== null && inheritedTokens.value.includes(cls)) {
     const larger = nextLargerWidth.value
@@ -159,10 +131,6 @@ function removeToken(cls: string) {
   setTokens(tokens.value.filter((t) => t !== cls))
 }
 
-// on a smaller breakpoint, the tokens inherited from a larger breakpoint (not
-// this breakpoint's own override) — shown dimmed in the class panel
-/** in a layer, the classes that come from the base (or another axis) rather
- *  than from the option being written */
 const layerInherited = computed(() =>
   layerContext.value === null ? [] : tokens.value.filter((t) => contextTokens.value.has(t)),
 )
@@ -170,9 +138,6 @@ const inheritedTokens = computed(() => [
   ...new Set([...view.value.inherited, ...layerInherited.value]),
 ])
 
-// inherited tokens that come straight from the base (unprefixed) token, so they
-// can be removed (scoped away) here — others (overridden by a larger non-base
-// breakpoint) stay non-removable for now
 const removableInherited = computed(() =>
   activeWidth.value === null
     ? []
@@ -195,7 +160,6 @@ function set(prop: StyleProperty, cls: string) {
 }
 
 function isDisplayDependent(cls: string): boolean {
-  // props (gap, align, justify…) that only make sense once a flex/grid display is set
   return allProps.some((p) => p.needsDisplay && !!matchClass(p, [cls])) || cls.startsWith('gap-')
 }
 
@@ -203,14 +167,10 @@ function remove(prop: StyleProperty) {
   const current = classFor(prop)
   if (!current) return
   let next = tokens.value.filter((cls) => cls !== current)
-  // removing Display also clears the classes that depend on it, so the
-  // auto-display watch can't snap flex back and the user starts clean
   if (prop.id === 'display') next = next.filter((cls) => !isDisplayDependent(cls))
   setTokens(next)
 }
 
-// baseline = the element's classes captured when it was selected, so the revert
-// button can hide once a property is back to what it originally was
 const baseline = ref<string[]>([])
 const backgroundBaseline = ref<string>('')
 watch(
@@ -236,8 +196,6 @@ function revert(prop: StyleProperty) {
   else remove(prop)
 }
 
-// --- accordion open state (all closed by default) ---
-
 const openSections = ref<Record<string, boolean>>(
   Object.fromEntries(STYLE_SECTIONS.map((s) => [s.id, false])),
 )
@@ -249,25 +207,16 @@ const positionProp = propById('position')
 const transitionProp = propById('transition')
 const directionProp = propById('direction')
 
-// flex-col flips which visual axis of the 9-dot align grid maps to justify/items
 const isVerticalFlex = computed(() => {
   const d = matchClass(directionProp, tokens.value)
   return d === 'flex-col' || d === 'flex-col-reverse'
 })
 
-// flex-dependent classes (align, justify, gap…) imply a display — add one so
-// the Display row always reflects reality
 watch(
   tokens,
   () => {
-    // trigger only on this breakpoint's OWN flex/grid-child classes — an
-    // inherited one (e.g. gap kept from base) must not resurrect a display the
-    // user just removed on this breakpoint
     const own = tokens.value.filter((t) => !inheritedTokens.value.includes(t))
     const needsDisplay = allProps.some((p) => p.needsDisplay && matchClass(p, own))
-    // hasDisplayClass, not a match on the Display property: its catalog has
-    // no inline-* forms, so an `inline-flex` element read as having no display
-    // and got a `flex` written beside it just for being opened in this panel
     if (needsDisplay && !hasDisplayClass(tokens.value)) {
       setTokens(['flex', ...tokens.value])
     }
@@ -275,16 +224,11 @@ watch(
   { immediate: true },
 )
 
-// --- relevance: only surface properties that apply to this element ---
-
-// the parent's display drives whether flex/grid *child* props are worth showing
 const parentDisplay = computed(() => {
   const id = selectedElement.value?.id
   if (!id) return undefined
-  // scope-aware: on the components board this resolves inside the master
   const parent = findParent(elements.value, id)
   if (!parent) return undefined
-  // a component-mapped parent carries its style on the shared master
   const parentClasses = (masterFor(parent.id)?.master ?? parent).classes ?? ''
   return matchClass(displayProp, parentClasses.split(/\s+/).filter(Boolean))
 })
@@ -301,7 +245,6 @@ const relevanceContext = computed<RelevanceContext>(() => {
   }
 })
 
-// background media (node.background) — edited on the style target like classes
 const backgroundMedia = computed<string>({
   get: () => styleTarget.value?.background ?? '',
   set: (v) => {
@@ -311,19 +254,13 @@ const backgroundMedia = computed<string>({
 
 function isVisible(prop: StyleProperty): boolean {
   const relevant = isPropertyRelevant(prop, relevanceContext.value)
-  // display/parent-display–gated props (gap, align, grid-cols…) are meaningless
-  // when the display no longer matches — hide them even if a stale class lingers,
-  // rather than showing e.g. Gap for an inline/hidden element
   const r = prop.relevance
   if (r && (r.when === 'display' || r.when === 'parentDisplay') && !relevant) {
     return false
   }
-  // otherwise an already-set property is always shown so it can be seen/removed
   return !!classFor(prop) || relevant
 }
 
-// rows folded into a composite control: the 9-dot AlignGridControl
-// ('align' / 'self' render it) and the cross InsetControl ('top' renders it)
 const GRID_COVERED = new Set([
   'justify',
   'align-content',
@@ -339,11 +276,8 @@ function visibleProps(section: StyleSection): StyleProperty[] {
 
 const ALWAYS_SHOWN = new Set(['spacing', 'size'])
 const visibleSections = computed(() =>
-  // spacing (padding/margin) and size apply to everything, so they're always shown
   STYLE_SECTIONS.filter((s) => ALWAYS_SHOWN.has(s.id) || visibleProps(s).length > 0),
 )
-
-// --- control value mapping (stored value is always the tailwind class) ---
 
 function control<K extends Control['kind']>(prop: StyleProperty, kind: K) {
   return prop.control as Extract<Control, { kind: K }>
@@ -360,7 +294,6 @@ function sliderIndex(prop: StyleProperty): number {
   if (current) {
     const index = classes.indexOf(current)
     if (index !== -1) return index
-    // custom / off-scale value → sit the thumb at the nearest scale stop
     const prefix = sliderPrefix(slider)
     if (prefix) {
       const near = nearestStepIndex(
@@ -370,13 +303,9 @@ function sliderIndex(prop: StyleProperty): number {
       if (near !== -1) return near
     }
   }
-  // resting position with nothing set: centre on the '0' stop (signed
-  // sliders) or fall back to the first stop
   const zero = sliderLabels(slider).indexOf('0')
   return zero === -1 ? 0 : zero
 }
-
-// --- editable slider value ---
 
 function sliderCustomPrefix(prop: StyleProperty): string | null {
   return sliderPrefix(control(prop, 'slider'))
@@ -386,12 +315,10 @@ function sliderValueText(prop: StyleProperty): string {
   const slider = control(prop, 'slider')
   const prefix = sliderPrefix(slider)
   if (!prefix) return ''
-  // named-scale sliders read keyword/arbitrary as the raw suffix (xl, 18px, bold)
   if (slider.custom) return sizeClassToText(prefix, classFor(prop))
   return classToText(prefix, classFor(prop), { allowNegative: sliderAllowNegative(slider) })
 }
 
-// named-scale sliders validate keyword + in-format arbitrary; others use the units guard
 function sliderValidate(prop: StyleProperty): ((text: string) => boolean) | undefined {
   const slider = control(prop, 'slider')
   if (!slider.custom) return undefined
@@ -439,7 +366,6 @@ function setColor(prop: StyleProperty, value: string) {
   set(prop, value.startsWith('#') ? `${prefix}-[${value}]` : `${prefix}-${value}`)
 }
 
-// the editable color value text, '' when unset (vs colorValue's swatch default)
 function colorText(prop: StyleProperty): string {
   const cls = classFor(prop)
   if (!cls) return ''
@@ -447,7 +373,6 @@ function colorText(prop: StyleProperty): string {
   return value.match(/^\[(#[0-9a-fA-F]+)\]$/)?.[1] ?? value
 }
 
-// project design tokens offered as color suggestions (name + hex)
 const { validTokens } = useSettings()
 const colorTokens = computed(() => validTokens.value.map((t) => ({ name: t.name, value: t.value })))
 
@@ -475,7 +400,6 @@ function setInput(prop: StyleProperty, raw: string) {
   set(prop, `${prefix}-${raw.trim() || 'auto'}`)
 }
 
-// `S` in the Layers tree lands the user straight in the class input
 const { pendingFocus } = usePanel()
 const classInput = ref<InstanceType<typeof ClassInput>>()
 
@@ -490,7 +414,6 @@ watch(pendingFocus, consumeFocus)
 
 <template>
   <div class="flex flex-col">
-    <!-- which class string the panel writes: the base, or one option's override -->
     <div
       v-if="layerOptions.length"
       class="flex flex-col gap-1.5 border-b border-input p-3"
@@ -552,7 +475,6 @@ watch(pendingFocus, consumeFocus)
           @update:model-value="setTokens"
         />
         <template v-else>
-        <!-- background media picker (node.background) — image or video -->
         <div v-if="section.id === 'background'" class="relative mb-1.5 flex flex-col gap-1.5 px-2.5 pl-8">
           <div class="absolute left-1 top-0">
             <ButtonUI
@@ -694,7 +616,6 @@ watch(pendingFocus, consumeFocus)
         </template>
       </ContentAccordion>
     </GroupAccordion>
-
 
   </div>
 </template>

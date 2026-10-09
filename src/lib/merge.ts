@@ -16,11 +16,9 @@ import { deepClone } from './tree'
 export type Resolution = 'mine' | 'theirs'
 
 export interface MergeConflict {
-  /** 'page:<id>', 'component:<id>', 'collection:<id>', 'breakpoints', 'locales', or 'settings' */
   key: string
   label: string
   kind: 'changed' | 'deleted-in-branch' | 'deleted-in-main'
-  /** the branch-side alternative: a page, component, collection, interaction, animation, breakpoint set, locale pack, settings, or null (deletion) */
   theirs:
     | Page
     | ComponentDef
@@ -33,27 +31,18 @@ export interface MergeConflict {
     | null
 }
 
-/** the project-level locale settings, merged as one unit like breakpoints */
 export interface LocalePack {
   locales: string[]
   defaultLocale: string
 }
 
 export interface MergeResult {
-  /** three-way merge with every conflict defaulting to Main's side */
   merged: Project
   conflicts: MergeConflict[]
 }
 
 const sig = (value: unknown) => JSON.stringify(value ?? null)
 
-/**
- * Per-item three-way merge of one id-keyed list (pages, components, or
- * collections — they all follow the identical rule). Items changed only in the
- * branch merge in; changed on both sides conflict; a deletion on one side while
- * the other kept editing conflicts too. Every conflict defaults to Main's side;
- * the user resolves via applyResolutions.
- */
 function mergeItemList<T extends { id: string }>(
   base: T[],
   mine: T[],
@@ -78,7 +67,6 @@ function mergeItemList<T extends { id: string }>(
     const baseItem = baseMap.get(mineItem.id)
     const theirItem = theirMap.get(mineItem.id)
     if (!baseItem) {
-      // added on Main after branching
       merged.push(mineItem)
       continue
     }
@@ -94,7 +82,6 @@ function mergeItemList<T extends { id: string }>(
         merged.push(mineItem)
       }
     } else if (!mineChanged) {
-      // deleted in the branch, untouched on Main → accept the deletion
     } else {
       merged.push(mineItem)
       conflict(mineItem, 'deleted-in-branch', null)
@@ -105,10 +92,8 @@ function mergeItemList<T extends { id: string }>(
     if (mineMap.has(theirItem.id)) continue
     const baseItem = baseMap.get(theirItem.id)
     if (!baseItem) {
-      // added in the branch
       merged.push(theirItem)
     } else if (sig(theirItem) !== sig(baseItem)) {
-      // Main deleted it but the branch kept editing it
       conflict(theirItem, 'deleted-in-main', theirItem)
     }
   }
@@ -116,13 +101,6 @@ function mergeItemList<T extends { id: string }>(
   return { merged, conflicts }
 }
 
-/**
- * Replies union by id. Nobody's words are a side to be picked: a thread
- * replied to on Main and in the draft keeps both, in the order they were
- * written. An untouched list is returned verbatim so a merge that found
- * nothing new stays byte-identical, which is what keeps the next merge's
- * signatures stable.
- */
 function unionReplies(mine: CommentReply[] = [], theirs: CommentReply[] = []): CommentReply[] {
   if (sig(mine) === sig(theirs)) return mine
   const have = new Set(mine.map((r) => r.id))
@@ -131,35 +109,14 @@ function unionReplies(mine: CommentReply[] = [], theirs: CommentReply[] = []): C
   return [...mine, ...extra].sort((a, b) => a.createdAt - b.createdAt)
 }
 
-/** one thread present on both sides */
 function mergeComment(base: Comment | undefined, mine: Comment, theirs: Comment): Comment {
   const mineChanged = sig(mine) !== sig(base)
   const theirsChanged = sig(theirs) !== sig(base)
-  // the side that moved wins the scalar fields; Main wins when both did, the
-  // way every other conflict in this file defaults. What that can cost is a
-  // `resolved` flag, which is one click to set again — and never a reply,
-  // because the reply lists are folded back together below.
   const picked = theirsChanged && !mineChanged ? theirs : mine
   const replies = unionReplies(mine.replies, theirs.replies)
   return sig(replies) === sig(picked.replies) ? picked : { ...picked, replies }
 }
 
-/**
- * Comments merge as a UNION, and never raise a conflict.
- *
- * They used to not merge at all: `comments: mine.comments` took Main's list,
- * and `mergeIntoMain` then overrode it with whatever the ACTIVE session had in
- * memory. So which side survived depended on where the person applying the
- * draft happened to be sitting — on the draft, every comment left on Main
- * since it branched was destroyed; on Main, every comment left on the draft
- * was. A review thread is somebody's words, and the merge dialog is the wrong
- * place to ask which person's to keep, so there is nothing here for the user
- * to resolve: both sides' threads come through.
- *
- * Deletions still mean something. A thread the draft deleted and Main never
- * touched goes; one Main deleted stays gone. Only a thread STARTED in the
- * draft is new, and that is the one that used to vanish.
- */
 function mergeComments(base: Comment[], mine: Comment[], theirs: Comment[]): Comment[] {
   const baseMap = new Map(base.map((c) => [c.id, c]))
   const mineMap = new Map(mine.map((c) => [c.id, c]))
@@ -172,33 +129,17 @@ function mergeComments(base: Comment[], mine: Comment[], theirs: Comment[]): Com
     if (theirItem) {
       merged.push(mergeComment(baseItem, mineItem, theirItem))
     } else if (baseItem && sig(mineItem) === sig(baseItem)) {
-      // deleted in the draft, untouched on Main — accept the deletion
     } else {
-      // added on Main after branching, or edited there while the draft
-      // deleted it: an edit outranks a deletion, since words beat a tidy-up
       merged.push(mineItem)
     }
   }
   for (const theirItem of theirs) {
     if (mineMap.has(theirItem.id)) continue
-    // in the base but not on Main means Main deleted it, and that stands;
-    // absent from the base means the draft started it, which is the thread
-    // this whole function exists to carry over
     if (!baseMap.has(theirItem.id)) merged.push(theirItem)
   }
   return merged
 }
 
-/**
- * Two-way union of two comment lists, for carrying the shared set across a
- * branch SWITCH, where there is no base snapshot to compare against and so no
- * way to tell a deletion from an absence. It therefore errs towards keeping:
- * a thread only one side holds comes through, and a thread deleted on one
- * branch while another branch's blob still has it can come back. Losing
- * somebody's feedback is the worse failure of the two, and the real fix is to
- * move comments out of the project blob into a key of their own, so that
- * "shared across branches" stops being a copy made on every switch.
- */
 export function unionComments(mine: Comment[], theirs: Comment[]): Comment[] {
   const theirMap = new Map(theirs.map((c) => [c.id, c]))
   const mineMap = new Map(mine.map((c) => [c.id, c]))
@@ -212,7 +153,6 @@ export function unionComments(mine: Comment[], theirs: Comment[]): Comment[] {
   return merged
 }
 
-/** applies one resolved conflict to its id-keyed list: replace, add, or delete */
 function applyToList<T extends { id: string }>(list: T[], id: string, theirs: T | null) {
   const at = list.findIndex((x) => x.id === id)
   if (theirs === null) {
@@ -224,16 +164,7 @@ function applyToList<T extends { id: string }>(list: T[], id: string, theirs: T 
   }
 }
 
-/**
- * Three-way merge of a branch back into Main, per page (and the shared
- * breakpoint set as one unit). Pages changed only in the branch merge
- * in; changed on both sides they conflict and the user picks a side.
- * Comments are the one list that unions instead, and never conflicts
- * (see mergeComments).
- */
 export function computeMerge(base: Project, mine: Project, theirs: Project): MergeResult {
-  // pages, components, and collections all follow the same per-item three-way
-  // rule — one shared helper keeps them from drifting apart
   const pages = mergeItemList(base.pages, mine.pages, theirs.pages, 'page:', (p) => p.name)
   const components = mergeItemList(
     base.components,
@@ -263,9 +194,6 @@ export function computeMerge(base: Project, mine: Project, theirs: Project): Mer
     'animation:',
     (a) => `Animation ${a.name}`,
   )
-  // the names pairing a class change with a timeline (see useEffects). An
-  // id-keyed list like the two libraries it points at, so it follows the same
-  // rule — spreading `mine` alone would silently drop the other side's.
   const effects = mergeItemList(
     base.effects ?? [],
     mine.effects ?? [],
@@ -339,16 +267,8 @@ export function computeMerge(base: Project, mine: Project, theirs: Project): Mer
     collections: collections.merged,
     interactions: interactions.merged,
     animations: animations.merged,
-    // ALWAYS written, never a conditional spread: an empty merged list is a
-    // real answer (the draft deleted the last effect) and omitting the key let
-    // `...mine` put Main's back, so the deletion was silently reverted. The
-    // key is deleted below when neither side has any, which is what keeps an
-    // untouched project byte-identical for the next merge's signatures.
     effects: effects.merged,
     breakpoints: mergedBreakpoints,
-    // deliberately NOT `mine.comments`: see mergeComments. Comments are
-    // feedback, so both sides' threads come through and nothing here is a
-    // conflict for the user to resolve.
     comments: mergeComments(base.comments ?? [], mine.comments ?? [], theirs.comments ?? []),
     locales: mergedLocales.locales,
     defaultLocale: mergedLocales.defaultLocale,
@@ -358,7 +278,6 @@ export function computeMerge(base: Project, mine: Project, theirs: Project): Mer
   return { merged, conflicts }
 }
 
-/** applies the user's per-conflict picks onto the merged project */
 export function applyResolutions(
   result: MergeResult,
   choices: Record<string, Resolution>,
@@ -380,8 +299,6 @@ export function applyResolutions(
       merged.settings = conflict.theirs as ProjectSettings
       continue
     }
-    // pages / components / collections all resolve the same way: replace the
-    // item, add it back (branch kept an item Main deleted), or drop it
     if (conflict.key.startsWith('component:')) {
       applyToList(
         merged.components,
@@ -428,8 +345,6 @@ export function applyResolutions(
   return merged
 }
 
-// ---------- change summary (draft vs its base snapshot) ----------
-
 export interface ChangeSummary {
   pages: number
   components: number
@@ -442,7 +357,6 @@ export interface ChangeSummary {
   settings: boolean
 }
 
-/** added + changed + deleted count for one id-keyed list vs its base */
 function countListChanges<T extends { id: string }>(base: T[], current: T[]): number {
   const baseMap = new Map(base.map((x) => [x.id, x]))
   let changes = 0
@@ -451,10 +365,9 @@ function countListChanges<T extends { id: string }>(base: T[], current: T[]): nu
     if (!baseItem || sig(item) !== sig(baseItem)) changes++
     baseMap.delete(item.id)
   }
-  return changes + baseMap.size // leftovers in baseMap were deleted
+  return changes + baseMap.size
 }
 
-/** what a draft touched since it branched — per-list change counts + unit flags */
 export function summarizeChanges(base: Project, current: Project): ChangeSummary {
   const pack = (p: Project): LocalePack => ({ locales: p.locales, defaultLocale: p.defaultLocale })
   return {
@@ -463,8 +376,6 @@ export function summarizeChanges(base: Project, current: Project): ChangeSummary
     collections: countListChanges(base.collections, current.collections),
     interactions: countListChanges(base.interactions ?? [], current.interactions ?? []),
     animations: countListChanges(base.animations ?? [], current.animations ?? []),
-    // a draft whose only change is naming a pair would otherwise read as having
-    // none, and never offer to merge
     effects: countListChanges(base.effects ?? [], current.effects ?? []),
     breakpoints: sig(current.breakpoints) !== sig(base.breakpoints),
     locales: sig(pack(current)) !== sig(pack(base)),
@@ -481,7 +392,6 @@ export function hasChanges(s: ChangeSummary): boolean {
   )
 }
 
-/** "3 pages · 1 component · settings" — empty string when nothing changed */
 export function changeSummaryLabel(s: ChangeSummary): string {
   const count = (n: number, word: string) => (n ? `${n} ${word}${n > 1 ? 's' : ''}` : null)
   return [

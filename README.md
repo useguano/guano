@@ -170,6 +170,53 @@ Terminate TLS at the proxy, and set `Strict-Transport-Security` there. Guano
 does not send it: the header belongs to the origin as a whole, including
 whatever else that hostname serves.
 
+## Keyboard shortcuts
+
+Both surfaces (Edit and Play):
+
+| Key | Action |
+|---|---|
+| `⌘Z` / `⌘⇧Z` | Undo / redo |
+| `⌘S` | Save now |
+| `⌘P` | Publish |
+| `C` | Comment mode — then click where the comment goes |
+
+Edit only:
+
+| Key | Action |
+|---|---|
+| `⌘E` | Insert dock |
+| `⌘⇧E` | Effects drawer |
+| `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste elements |
+| `⌘D` | Duplicate |
+| `⌘G` | Wrap in a div |
+| `Backspace` | Delete |
+| `⇧↑` / `⇧↓` | Move the selection one slot |
+
+The canvas (page canvas and components board):
+
+| Key | Action |
+|---|---|
+| `⌘+` / `⌘-` / `⌘0` | Zoom in / out / reset |
+| Hold `Space` + drag | Pan |
+| `⌘`+wheel, or pinch | Zoom |
+
+The layers tree, while it has focus:
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Walk rows |
+| `→` / `←` | Expand or step in / collapse or step out |
+| `⌘⇧↑` / `⌘⇧↓` | Extend the selection |
+| `S` / `D` / `I` | Style / Data / Interactions, with the panel's first field focused |
+| `Enter` | Rename the row's ref |
+
+`Escape` peels one layer per press: a pending target pick, then the insert dock
+or the effects drawer, then an open panel (focus goes back to the tree), then a
+drawer's search or detail pane. It never closes a docked column.
+
+On Windows and Linux, `⌘` is `Ctrl`.
+
 ## Working with an AI agent
 
 Guano ships an MCP server (`guano mcp`) that lets an agent read and write the

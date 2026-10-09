@@ -62,7 +62,6 @@ import { formatBytes } from '@/lib/media'
 import { downloadBlob, filenameFrom } from '@/lib/download'
 import { apiJson } from '@/lib/api'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const FormSubmissionsModal = defineAsyncComponent(() => import('@/components/editor/forms/FormSubmissionsModal.vue'))
 const PublishDialog = defineAsyncComponent(() => import('@/components/shared/PublishDialog.vue'))
 
@@ -86,15 +85,10 @@ const { onMain } = useBranches()
 const { email: authEmail, name: authName, isAdmin, canBuild, canEditContent, updateAccount } = useAuth()
 const { confirm, openModal } = useModal()
 
-// opened via useModal (mounted = open); Esc/backdrop close through the host
 const props = defineProps<{ initialSection?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
-// a reviewer has no project sections to land on, only their own account
 const active = ref(props.initialSection ?? (canEditContent.value ? 'general' : 'account'))
-
-// --- nav: sections under Project / Site / Admin group headings; the Admin
-// group is hidden entirely for non-admins ---
 
 const NAV = computed(() => {
   const project = [
@@ -103,7 +97,6 @@ const NAV = computed(() => {
     { id: 'fonts', label: 'Fonts', icon: Type },
     { id: 'design', label: 'Design', icon: Palette },
   ]
-  // a reviewer changes nothing about the project, so no Project group either
   const groups = canEditContent.value ? [{ label: 'Project', items: project }] : []
   if (canBuild.value) {
     const site = [
@@ -113,8 +106,6 @@ const NAV = computed(() => {
     if (isAdmin.value) site.push({ id: 'code', label: 'Code', icon: Code2 })
     groups.push({ label: 'Site', items: site })
     const connect = [{ id: 'integrations', label: 'Integrations', icon: Plug }]
-    // Forms is admin-only because everything on it is: who gets the
-    // notification, which integration sends it, how long leads are kept
     if (isAdmin.value) connect.push({ id: 'forms', label: 'Forms', icon: Inbox })
     connect.push({ id: 'mcp', label: 'MCP', icon: KeyRound })
     groups.push({ label: 'Connect', items: connect })
@@ -130,18 +121,14 @@ const NAV = computed(() => {
   return groups
 })
 
-// 'account' has no nav item (reached from the user card), so it's always valid
 const NAVLESS_SECTIONS = ['account']
 
-// if the active section disappears (e.g. role loads after mount), fall back
 watch(NAV, (nav) => {
   if (NAVLESS_SECTIONS.includes(active.value)) return
   if (!nav.some((g) => g.items.some((i) => i.id === active.value))) {
     active.value = canEditContent.value ? 'general' : 'account'
   }
 })
-
-// --- my account (all roles; no nav item — opened from the user card) ---
 
 const accName = ref(authName.value)
 const accEmail = ref(authEmail.value ?? '')
@@ -174,7 +161,6 @@ async function saveAccount() {
   }
 }
 
-// section search: filter the sidebar nav by label, dropping empty groups
 const navQuery = ref('')
 const filteredNav = computed(() => {
   const q = navQuery.value.trim().toLowerCase()
@@ -184,14 +170,11 @@ const filteredNav = computed(() => {
     .filter((g) => g.items.length)
 })
 
-// --- API tokens (admin/editor only; the server 403s contributors) ---
-
 const { tokens, load: loadTokens, create: createToken, revoke: revokeTokenApi } = useApiTokens()
 
 const apiTokenName = ref('')
 const apiTokenBusy = ref(false)
 const apiTokenError = ref<string | null>(null)
-// the raw token, shown exactly once right after creation, then unrecoverable
 const freshApiToken = ref<string | null>(null)
 const freshApiName = ref('')
 const apiTokenCopied = ref(false)
@@ -244,17 +227,6 @@ async function onRevokeToken(id: string, label: string) {
   if (ok) await revokeTokenApi(id).catch((e) => (apiTokenError.value = e instanceof Error ? e.message : 'Failed'))
 }
 
-// --- agent policy (server/agent-policy.mjs, data/agent-policy.json) ---
-//
-// What a `guano_` token may do, held server-side and off by default. This panel
-// is the ONLY surface for it, which is the whole reason it exists: the server's
-// own refusals tell an agent to "enable agent Main writes in Settings", and
-// until there was a control here the only way to say yes was to hand-edit
-// agent-policy.json in the data dir — so a fresh instance left every agent
-// permanently unable to touch Main, with nothing in the product to change it.
-//
-// Admin + session only, like /api/users: a token able to flip these would
-// guard nothing, so an editor sees no group at all rather than a failing one.
 type AgentFlag = 'allowMainWrites' | 'allowPublish' | 'allowCustomCode' | 'allowFormSubmissions'
 
 const AGENT_SWITCHES: { id: AgentFlag; label: string; hint: string }[] = [
@@ -289,8 +261,6 @@ const agentPolicy = ref<Record<AgentFlag, boolean>>({
 const agentPolicyBusy = ref<AgentFlag | null>(null)
 const agentPolicyError = ref<string | null>(null)
 
-// immediate watch rather than onMounted: the role can resolve after this panel
-// mounts (the same reason NAV is watched), and a missed load reads as all-off
 watch(
   isAdmin,
   (admin) => {
@@ -298,7 +268,6 @@ watch(
     apiJson('/api/agent-policy')
       .then((policy) => Object.assign(agentPolicy.value, policy))
       .catch(() => {
-        /* best-effort, like the site gate */
       })
   },
   { immediate: true },
@@ -308,7 +277,7 @@ async function setAgentFlag(id: AgentFlag, value: boolean) {
   agentPolicyBusy.value = id
   agentPolicyError.value = null
   const before = agentPolicy.value[id]
-  agentPolicy.value[id] = value // optimistic: the toggle must follow the finger
+  agentPolicy.value[id] = value
   try {
     Object.assign(
       agentPolicy.value,
@@ -321,8 +290,6 @@ async function setAgentFlag(id: AgentFlag, value: boolean) {
     agentPolicyBusy.value = null
   }
 }
-
-// --- general ---
 
 const projectName = computed({
   get: () => project.value.name,
@@ -338,7 +305,6 @@ const faviconDark = computed({
   set: (v: string) => (settings.value.faviconDark = v || undefined),
 })
 
-// private site: one visitor password, kept hashed on the server (publish.json)
 const siteGate = ref({ enabled: false, passwordSet: false })
 const sitePasswordInput = ref('')
 const siteGateBusy = ref(false)
@@ -349,7 +315,6 @@ onMounted(async () => {
     const res = await fetch('/api/site-password')
     if (res.ok) siteGate.value = await res.json()
   } catch {
-    /* best-effort */
   }
 })
 async function putSiteGate(patch: { enabled?: boolean; password?: string }) {
@@ -378,15 +343,11 @@ async function saveSitePassword() {
   if (await putSiteGate({ password: sitePasswordInput.value })) sitePasswordInput.value = ''
 }
 
-// smooth scrolling (settings.motion.scroll): the slider reads as intensity —
-// higher is snappier; lerp is the per-frame catch-up fraction underneath
 const scrollLerp = computed({
   get: () => smoothScroll.value.lerp ?? SCROLL_LERP_DEFAULT,
   set: (v: number) => (smoothScroll.value.lerp = v),
 })
 
-// site-wide body code: an empty value drops the key so a project that never
-// used it stays byte-identical
 const siteBodyCode = computed({
   get: () => settings.value.customCode.body ?? '',
   set: (v: string) => {
@@ -417,16 +378,11 @@ function onAddLocale() {
   closeAddLocale()
 }
 
-
-// --- seo ---
-
 const ogImage = computed({
   get: () => settings.value.seo.ogImage ?? '',
   set: (v: string) => (settings.value.seo.ogImage = v || undefined),
 })
 
-// structured data (schema.org JSON-LD): written through computeds so an
-// untouched project carries no `schema` key, and clearing a field deletes it
 const schemaOn = computed(() => !!settings.value.seo.schema)
 const schemaTypeOptions = [
   { label: 'None', value: '' },
@@ -447,8 +403,6 @@ function schemaField(key: 'custom') {
     },
   })
 }
-// the type select is the switch: "None" removes the whole `schema` key so an
-// untouched project stays byte-identical; picking a type creates it
 const schemaType = computed({
   get: () => settings.value.seo.schema?.type ?? '',
   set: (v: StructuredDataType | '') => {
@@ -474,11 +428,7 @@ function removeSameAs(url: string) {
   sd.sameAs = sd.sameAs.filter((u) => u !== url)
   if (!sd.sameAs.length) delete sd.sameAs
 }
-// --- design ---
 
-// --- type scale (settings.theme) ---
-// Written through computeds so a blank field CLEARS the override rather than
-// storing an empty string the compiler would silently drop.
 function themeField(
   read: () => string | undefined,
   write: (v: string | undefined) => void,
@@ -516,7 +466,6 @@ const themeTextBase = themeField(
     }
   },
 )
-/** which of the three fields hold something the compiler would discard */
 const themeInvalid = computed(() =>
   (
     [
@@ -540,17 +489,10 @@ const googleFontsUrl = computed({
   set: (v: string) => (settings.value.fonts.googleFontsUrl = v.trim() || undefined),
 })
 
-// --- custom webfonts ---
-
 const { assetForSrc } = useMedia()
 
-// --- add-font form: a local draft, committed as one entry ---
-// the format() hint comes from the library asset's mime — assets are stored
-// extensionless, so the URL alone can't tell us, and the exporter must not
-// need the media index to emit the CSS
 const addingFont = ref(false)
 const fontDraft = ref({ src: '', family: '' })
-// an unnamed draft takes its family from the filename ("OffSans.ttf" → OffSans)
 watch(
   () => fontDraft.value.src,
   (src) => {
@@ -582,22 +524,17 @@ function submitFont() {
   closeAddFont()
 }
 
-/** the row's subline: the library file it points at */
 function fontFileLabel(font: CustomFont) {
   const asset = assetForSrc(font.src)
   return asset ? `${asset.name}${font.format ? ` · ${font.format}` : ''}` : font.src
 }
 
-// the shared validator also reports a row that is merely unfinished (no name
-// yet, no file yet) — only real problems are shown
 const INCOMPLETE_FONT = new Set(['Family name required', 'Pick a font file'])
 const fontIssue = (font: CustomFont) => {
   const err = fontError(font, customFonts.value)
   return err && !INCOMPLETE_FONT.has(err) ? err : null
 }
 
-/** families that actually resolve — offered as the base/mono/serif value so
- *  the user picks a registered font instead of retyping its name */
 const customFamilyOptions = computed(() =>
   customFonts.value
     .filter((f) => !fontError(f, customFonts.value))
@@ -629,8 +566,6 @@ function onImportLegacyFonts() {
   legacyImported.value = importLegacyHeadFonts()
 }
 
-// --- site ---
-
 function normalizeDomain() {
   settings.value.domain = settings.value.domain
     .trim()
@@ -659,16 +594,12 @@ async function onUnpublish() {
   }
 }
 
-// --- publish method ---
-
 const publishMethodOptions = [
   { label: 'Server', value: 'server' },
   { label: 'Download .zip', value: 'zip' },
   { label: 'GitHub', value: 'github' },
 ]
 
-// GitHub token is write-only: the server never echoes it, we only learn
-// whether one is set (on mount) and can replace it.
 const ghTokenSet = ref(false)
 const ghToken = ref('')
 const ghSaving = ref(false)
@@ -680,7 +611,6 @@ onMounted(async () => {
     const res = await fetch('/api/publish-config')
     if (res.ok) ghTokenSet.value = (await res.json())?.github?.tokenSet ?? false
   } catch {
-    /* best-effort — leave ghTokenSet false */
   }
 })
 
@@ -703,19 +633,6 @@ async function saveGhToken() {
   }
 }
 
-// --- apiOrigin: where a statically hosted page reaches this instance ---
-//
-// A zip/GitHub export is otherwise a self-contained static site, so the field
-// is shown only once something in the project actually needs it: an ENABLED
-// form, whose action has to post back here. Everything else about the export is
-// root-relative, and asking every author for a studio URL to download a zip
-// read as a step they had to complete.
-//
-// Validated here as well as at export: a typo would make every form on the
-// published site post into nowhere, and the publish warning that catches that
-// is one round trip later than the author.
-
-/** an enabled form anywhere in the project — pages and component masters alike */
 const hasEnabledForm = computed(() => {
   let found = false
   const look = (nodes: ElementNode[]) => walkNodes(nodes, (n) => {
@@ -726,7 +643,6 @@ const hasEnabledForm = computed(() => {
   return found
 })
 
-/** the zip/GitHub methods are served elsewhere; `server` IS this host */
 const needsApiOrigin = computed(
   () => settings.value.publishing.method !== 'server' && hasEnabledForm.value,
 )
@@ -741,7 +657,6 @@ const apiOrigin = computed({
   },
 })
 
-/** https:// with no path, or http:// for localhost only */
 function originError(value: string): string | null {
   if (!value) return null
   let url: URL
@@ -758,17 +673,6 @@ function originError(value: string): string | null {
   if (url.search || url.hash) return 'Just the origin, with no query or fragment'
   return null
 }
-
-// --- integrations: a named set of keys, stored server-side ---
-//
-// The values live in server/data/integrations.json and are reached over
-// /api/integrations (useIntegrations). A SECRET key's value never arrives
-// here — the server's read shape omits it — so a secret row is masked because
-// there is nothing to show, not because the UI hides it.
-//
-// Writes are admin-only server-side, so the add/rename/delete affordances are
-// gated on isAdmin: offering an editor a button that always 403s is worse than
-// not offering it.
 
 const {
   integrations,
@@ -787,19 +691,12 @@ onMounted(() => {
   if (canBuild.value) loadIntegrations()
 })
 
-/** how custom code references a PLAIN key. Secrets get no reference: the
- *  exporter refuses to substitute one (it would print the credential into a
- *  <script> on a public page), so showing it would only invite the attempt. */
 const refFor = (ig: Integration, f: IntegrationField) => envRef(ig.name, f.name)
 
-/** which rows are open. An integration is a LIST ITEM that expands in place,
- *  so the panel stays one section however many there are — a section each put
- *  the keys of the fifth integration five screens down. */
 const openIntegrations = ref(new Set<string>())
 const isIntegrationOpen = (id: string) => openIntegrations.value.has(id)
 function toggleIntegration(id: string) {
   if (openIntegrations.value.delete(id)) {
-    // collapsing the row it belongs to would leave the form open but unreachable
     if (fieldAdding.value === id) closeAddField()
     openIntegrations.value = new Set(openIntegrations.value)
     return
@@ -827,7 +724,6 @@ async function submitIntegration() {
   integrationBusy.value = true
   try {
     const id = await createIntegration(name)
-    // it has no keys yet, so open it on its empty state
     openIntegrations.value = new Set(openIntegrations.value).add(id)
     closeAddIntegration()
   } catch (e) {
@@ -884,7 +780,6 @@ function startReplaceField(ig: Integration, f: IntegrationField) {
   openIntegrations.value = new Set(openIntegrations.value).add(ig.id)
   fieldAdding.value = ig.id
   fieldReplacing.value = f.name
-  // a secret's value was never sent to us, so there is nothing to prefill
   fieldDraft.value = { name: f.name, value: f.secret ? '' : f.value ?? '', secret: f.secret }
   fieldError.value = null
 }
@@ -936,12 +831,6 @@ const savedPlaceholder = (isSet: boolean, hint: string) =>
 
 const ghConfigured = computed(() => !!settings.value.publishing.github.repo && ghTokenSet.value)
 
-// --- forms: recipients, who sends, how long leads are kept ---
-//
-// All of it server-side and admin-only. A recipient list in the project blob
-// would let a draft, a merge or an injected agent redirect other people's
-// leads; a retention window there would let them keep them forever.
-
 const {
   config: formsConfig,
   forms: formList,
@@ -963,9 +852,6 @@ onMounted(async () => {
   }
 })
 
-/** every integration is offered: the server checks the pick carries the keys
- *  the capability needs and refuses by name, which is a better error than a
- *  filtered list that silently omits the one the admin was looking for */
 const integrationOptions = computed(() => [
   { label: 'None', value: '' },
   ...integrations.value.map((ig) => ({ label: ig.name, value: ig.id })),
@@ -977,7 +863,6 @@ async function patchForms(patch: Record<string, unknown>) {
     await saveFormsConfig(patch)
   } catch (e) {
     formsError.value = e instanceof Error ? e.message : 'Could not save'
-    // re-read so the UI shows what is actually stored, not the refused pick
     await loadFormsConfig().catch(() => {})
   }
 }
@@ -1020,8 +905,6 @@ function openSubmissions(formId?: string) {
   openModal(FormSubmissionsModal, formId ? { formId } : {})
 }
 
-// --- snapshots: server-kept project packages (the export, listed) ---
-
 type Snapshot = { id: string; createdAt: number; bytes: number; name: string }
 const snapshots = ref<Snapshot[]>([])
 const snapshotBusy = ref(false)
@@ -1032,7 +915,6 @@ async function loadSnapshots() {
     const res = await fetch('/api/snapshots')
     if (res.ok) snapshots.value = await res.json()
   } catch {
-    /* best-effort */
   }
 }
 onMounted(() => {
@@ -1082,7 +964,6 @@ async function downloadSnapshot(snap: Snapshot) {
   }
 }
 
-// rename: the row's title turns into an input; Enter commits, Escape cancels
 const renamingSnapshot = ref<string | null>(null)
 const snapshotDraftName = ref('')
 function startRenameSnapshot(snap: Snapshot) {
@@ -1095,7 +976,7 @@ async function commitRenameSnapshot(snap: Snapshot) {
   if (id !== snap.id) return
   const name = snapshotDraftName.value.trim()
   if (name === snap.name) return
-  snap.name = name // optimistic; the list reload below is the truth
+  snap.name = name
   await fetch(`/api/snapshots/${snap.id}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -1120,7 +1001,7 @@ const importing = ref(false)
 const importError = ref<string | null>(null)
 async function onImportFile(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (importInput.value) importInput.value.value = '' // allow re-picking the same file
+  if (importInput.value) importInput.value.value = ''
   if (!file) return
   const ok = await confirm({
     title: 'Replace entire project?',
@@ -1144,7 +1025,6 @@ async function onImportFile(e: Event) {
 <template>
   <ModalHost size="xl" @close="emit('close')">
     <div class="flex h-full flex-col">
-      <!-- top bar: [icon] [title] ——— [search] [close] -->
       <div class="flex shrink-0 items-center gap-2 border-b border-input py-2.5 pr-1.5 pl-4">
         <Settings class="size-4 shrink-0 text-muted-foreground" />
         <span class="text-xs font-medium">Project settings</span>
@@ -1165,7 +1045,6 @@ async function onImportFile(e: Event) {
       </div>
 
       <TabsUI v-model:active="active" class="flex min-h-0 min-w-0 flex-1 !flex-row !gap-0">
-      <!-- left sidebar: grouped nav + pinned account footer -->
       <div class="flex w-48 shrink-0 flex-col border-r border-input">
         <nav class="custom-scrollbar flex flex-1 flex-col gap-2 overflow-y-auto p-2">
           <p v-if="!filteredNav.length" class="px-2 py-1 text-[9px] text-muted-foreground">
@@ -1188,7 +1067,6 @@ async function onImportFile(e: Event) {
             </TabUI>
           </div>
         </nav>
-        <!-- user card: click to open the account tab -->
         <div class="flex items-center gap-2 border-t border-input p-2">
           <button
             type="button"
@@ -1207,10 +1085,6 @@ async function onImportFile(e: Event) {
         </div>
       </div>
 
-      <!-- right pane: section content -->
-      <!-- gutter reserved (inline: .custom-scrollbar is unlayered, so a utility
-           can't override its `auto`) so a tab that scrolls doesn't shift the
-           fields of one that doesn't -->
       <div
         class="custom-scrollbar min-w-0 flex-1 overflow-y-auto [&_[data-row]]:px-0"
         style="scrollbar-gutter: stable"
@@ -1307,7 +1181,6 @@ async function onImportFile(e: Event) {
               <RowUI label="Description" align="start">
                 <TextareaUI v-model="settings.seo.description" placeholder="Shown in search results" :rows="2" />
               </RowUI>
-              <!-- structured data (schema.org JSON-LD): "None" turns it off -->
               <RowUI label="Schema">
                 <SelectUI v-model="schemaType" :options="schemaTypeOptions" />
               </RowUI>
@@ -1406,10 +1279,7 @@ async function onImportFile(e: Event) {
           </TabPanelUI>
 
           <TabPanelUI class="gap-9" id="fonts">
-            <!-- fonts hand-written into the head code render on the published
-                 site but NOT in the editor/preview (head code is exporter-only),
-                 which is exactly the bug this tab exists to end. Offer the
-                 conversion; never rewrite their code behind their back. -->
+
             <SettingsGroup
               v-if="legacyHeadFonts.length"
               title="Fonts found in your head code"
@@ -1455,7 +1325,6 @@ async function onImportFile(e: Event) {
                 </ButtonUI>
               </template>
 
-              <!-- inline add form (before the list), like Users' add form -->
               <div v-if="addingFont" class="flex flex-col gap-2 rounded-xl border border-input p-3">
                 <RowUI label="File" align="start">
                   <MediaPickerControl v-model="fontDraft.src" kind="font" compact class="min-w-0 flex-1" />
@@ -1472,7 +1341,6 @@ async function onImportFile(e: Event) {
                 </div>
               </div>
 
-              <!-- registered fonts, laid out like the members list -->
               <div v-if="customFonts.length" class="flex flex-col rounded-xl border border-input">
                 <div
                   v-for="font in customFonts"
@@ -1555,7 +1423,6 @@ async function onImportFile(e: Event) {
                 </ButtonUI>
               </template>
 
-              <!-- inline add form (before the list), like Users' add form -->
               <div v-if="addingLocale" class="flex flex-col gap-2 rounded-xl border border-input p-3">
                 <RowUI label="Code">
                   <InputUI v-model="newLocale" placeholder="fr, pt-br, zh-hant" class="font-mono" @keydown.enter="onAddLocale" />
@@ -1766,7 +1633,6 @@ async function onImportFile(e: Event) {
                 {{ integrationsLoadError }}
               </p>
 
-              <!-- new integration: just a name; its fields are added on its card -->
               <div v-if="addingIntegration" class="flex flex-col gap-2 rounded-xl border border-input p-3">
                 <RowUI label="Name">
                   <InputUI v-model="integrationDraft" placeholder="SMTP, Stripe, Mailchimp…" @keydown.enter="submitIntegration" />
@@ -1784,7 +1650,6 @@ async function onImportFile(e: Event) {
                 </div>
               </div>
 
-              <!-- one row per integration, expanding in place to show its keys -->
               <div v-if="integrations.length" class="flex flex-col rounded-xl border border-input">
                 <div v-for="ig in integrations" :key="ig.id" class="border-b border-input last:border-b-0">
                   <div
@@ -1835,7 +1700,6 @@ async function onImportFile(e: Event) {
                     v-if="isIntegrationOpen(ig.id)"
                     class="flex flex-col gap-2 border-t border-input px-3 py-2.5"
                   >
-                    <!-- inline add / replace form, like Users' add form -->
                     <div v-if="fieldAdding === ig.id" class="flex flex-col gap-2 rounded-xl border border-input p-3">
                       <RowUI label="Key">
                         <InputUI
@@ -2120,9 +1984,7 @@ async function onImportFile(e: Event) {
                 </ButtonUI>
               </template>
 
-              <!-- inline create form (before the list), like Users' add form -->
               <div v-if="addingToken" class="flex flex-col gap-2 rounded-xl border border-input p-3">
-                <!-- step 1: name it -->
                 <template v-if="!freshApiToken">
                   <RowUI label="Name">
                     <InputUI v-model="apiTokenName" placeholder="e.g. mcp-laptop" @keydown.enter="onCreateToken" />
@@ -2136,7 +1998,6 @@ async function onImportFile(e: Event) {
                   </div>
                 </template>
 
-                <!-- step 2: show-once raw token -->
                 <template v-else>
                   <p class="flex items-center gap-1.5 text-xs">
                     <Check class="size-3.5 shrink-0 text-success" />
@@ -2158,7 +2019,6 @@ async function onImportFile(e: Event) {
               </div>
               <p v-else-if="apiTokenError" class="text-[9px] text-danger">{{ apiTokenError }}</p>
 
-              <!-- existing tokens, laid out like the members list -->
               <div v-if="tokens.length" class="flex flex-col rounded-xl border border-input">
                 <div
                   v-for="t in tokens"

@@ -6,7 +6,6 @@ import { useClassField } from '@/composables/useClassField'
 const props = withDefaults(
   defineProps<{
     modelValue: string
-    /** auto-add flex/grid prerequisites (off for transition to-states) */
     prerequisites?: boolean
   }>(),
   { prerequisites: true },

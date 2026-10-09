@@ -15,19 +15,14 @@ const props = defineProps<{
   folders: MediaFolder[]
   assets: MediaAsset[]
   selectedIds: string[]
-  /** appended to preview URLs so replace-in-place busts the browser cache */
   version: number
   view: 'grid' | 'list'
-  /** set to a folder id to immediately offer renaming it (fresh folder) */
   startRenameId?: string | null
-  /** asset count per folder id, for the folder chip's "n items" */
   folderCounts: Record<string, number>
-  /** every folder as a "Parent / Child" path, for the per-item Move to menu */
   folderTargets: { id: string; label: string }[]
 }>()
 
 const emit = defineEmits<{
-  /** additive = a modifier (⌘/ctrl/shift) or the checkbox → extend the selection */
   select: [asset: MediaAsset, additive: boolean]
   bgclick: []
   pick: [asset: MediaAsset]
@@ -49,8 +44,6 @@ const FOLDER_MIME = 'application/x-guano-folder'
 
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
-// folders and assets rename through the same inline input, tracked apart so a
-// commit knows which emit to fire
 
 const KIND_ICONS: Partial<Record<MediaKind, Component>> = {
   video: Film,
@@ -68,7 +61,6 @@ const KEBAB_TRIGGER =
 const KEBAB_ON_TILE =
   'flex size-6 items-center justify-center rounded-md bg-background/90 text-muted-foreground shadow-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent'
 
-/** drag the whole card (not just the grabbed thumbnail) as the drag image */
 function setCardImage(e: DragEvent) {
   const el = (e.currentTarget as HTMLElement).closest('[data-card]') as HTMLElement | null
   if (!el) return
@@ -124,12 +116,8 @@ watch(
 </script>
 
 <template>
-  <!-- ===== GRID ===== -->
   <div v-if="view === 'grid'" class="flex min-h-full flex-col gap-4" @click.self="emit('bgclick')">
-    <!-- folders and items share one grid: a folder is a tile like a file,
-         with the folder glyph where the thumbnail would be. Tiles are fluid
-         and fill the row; the details rail is always mounted (see the modal)
-         so the width they share never changes under a selection -->
+
     <div class="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3" @click.self="emit('bgclick')">
       <div
         v-for="folder in folders"
@@ -188,7 +176,6 @@ watch(
         class="group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:bg-accent/20"
         :class="[isSelected(asset.id) && 'bg-accent/30 ring-1 ring-accent', draggingId === asset.id && 'opacity-40']"
       >
-        <!-- select checkbox -->
         <button
           type="button"
           class="absolute top-3 left-3 z-10 flex size-4 items-center justify-center rounded border bg-background/90 outline-none transition-opacity"
@@ -197,9 +184,7 @@ watch(
         >
           <Check v-if="isSelected(asset.id)" class="size-3" />
         </button>
-        <!-- row actions. the wrapper carries the positioning: MenuUI's root is
-             `relative`, and a `position` utility passed as a class would lose to
-             it (Tailwind emits .relative after .absolute) -->
+
         <div class="absolute top-3 right-3 z-10">
         <MenuUI
           width="w-48"
@@ -273,7 +258,6 @@ watch(
     </div>
   </div>
 
-  <!-- ===== LIST ===== -->
   <div v-else class="flex min-h-full flex-col" @click.self="emit('bgclick')">
     <div
       v-for="folder in folders"

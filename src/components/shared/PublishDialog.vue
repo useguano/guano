@@ -8,7 +8,6 @@ import { useBranches } from '@/composables/useBranches'
 import { useSettings } from '@/composables/useSettings'
 import type { PublishMethod } from '@/types/editor'
 
-// visual minimum so the ring doesn't flash on a fast local POST
 const MIN_DURATION = 800
 
 const emit = defineEmits<{
@@ -19,8 +18,6 @@ const { markPublished } = usePublish()
 const { onMain, activeBranch } = useBranches()
 const { settings } = useSettings()
 
-// capture the method once at mount — a mid-dialog settings change must not
-// morph what this run does (same capture-at-mount discipline as needsConfirm)
 const method = ref<PublishMethod>(settings.value.publishing?.method ?? 'server')
 const repo = settings.value.publishing?.github?.repo ?? ''
 
@@ -37,17 +34,13 @@ const successCopy = computed(() =>
       : 'Published!',
 )
 
-// on a draft, publishing still ships Main — pause on a confirm step so the
-// user reads that before anything deploys (captured at mount: a mid-dialog
-// branch flip must not morph the UI)
 const needsConfirm = ref(!onMain.value)
 
 const published = ref(false)
 const error = ref<string | null>(null)
-const progress = ref(0) // 0 → 1, drives the ring fill
+const progress = ref(0)
 let cancelled = false
 
-// ring geometry
 const R = 34
 const CIRC = 2 * Math.PI * R
 const dashoffset = computed(() => CIRC * (1 - progress.value))
@@ -55,8 +48,6 @@ const dashoffset = computed(() => CIRC * (1 - progress.value))
 async function publish() {
   error.value = null
   progress.value = 0
-  // double rAF: let the empty ring paint first, THEN grow it — otherwise
-  // the browser never sees the start state and skips the transition
   requestAnimationFrame(() => requestAnimationFrame(() => (progress.value = 1)))
   const started = Date.now()
   try {
@@ -87,7 +78,6 @@ function cancel() {
 }
 
 function viewLive() {
-  // hard navigation: the public site always boots fresh
   window.open('/', '_blank')
 }
 </script>

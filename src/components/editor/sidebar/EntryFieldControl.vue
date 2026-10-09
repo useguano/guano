@@ -1,15 +1,5 @@
 <script setup lang="ts">
-/**
- * One collection-entry field, rendered as the right control for its type.
- * Used by the Pages drawer's entry editor (PageSettingsEditor's Content
- * section). All reads/writes go through useEntryField — see its header for
- * the invariants and for the second, not-yet-migrated copy in DataEditor.
- *
- * `entry` is a plain prop object ON PURPOSE: the parent re-derives it from
- * {collectionId, entryId} every render, so it cannot detach when undo, a
- * branch switch or a merge replaces the whole `project` ref. Do not "optimize"
- * it into a stored ref.
- */
+
 import { computed } from 'vue'
 import { ArrowDown, ArrowUp } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -39,38 +29,25 @@ const { assetForSrc } = useMedia()
 
 const locked = computed(() => lockedInLocale(props.field))
 const text = textModel(() => props.entry, () => props.field)
-/** the default-locale value, shown while translating so the field never
- *  reads as empty when it is really falling back */
+
 const fallback = computed(() =>
   isDefault.value || locked.value ? '' : fallbackText(props.entry, props.field),
 )
 
-// --- date: never an unconditional type="date" -------------------------------
-// values are unconstrained strings (nothing parses them; fields.js sorts them
-// as text), and a native date input given "March 2024" renders BLANK — the
-// value would be invisible in the only UI that edits it. Empty and already-ISO
-// values get the picker; a legacy free-form value stays a text box and
-// upgrades itself the moment it becomes ISO.
 const isIso = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
 const dateType = computed(() => (!text.value || isIso(text.value) ? 'date' : 'text'))
 
-// --- number / yes-no / choice ----------------------------------------------
-// All three store a STRING, like every other scalar, so they ride the same
-// locale-aware model — and all three are non-translatable by type, so that
-// model only ever writes the base value.
 const numberError = computed(() => fieldValueError(props.field, text.value))
 const boolModel = computed({
   get: () => text.value === 'true',
   set: (on: boolean) => (text.value = on ? 'true' : 'false'),
 })
-/** the stored VALUE is the option: a page renders its own label per option, so
- *  the key stays stable while the words translate with the markup */
+
 const choiceOptions = computed(() => [
   { label: 'None', value: '' },
   ...(props.field.options ?? []).map((o) => ({ label: o, value: o })),
 ])
 
-// --- references -------------------------------------------------------------
 const refTarget = computed(() =>
   props.field.refCollectionId ? collectionById(props.field.refCollectionId) : null,
 )
@@ -84,15 +61,11 @@ const selectedRef = computed({
 })
 const multiIds = computed(() => refIds(props.entry, props.field.name))
 
-// --- gallery ----------------------------------------------------------------
 const gallery = computed(() => mediaUrls(props.entry, props.field.name))
 function addImage(url: string) {
   if (url) writeList(props.entry, props.field, [...gallery.value, url])
 }
 
-// an image src that is legal but not a library asset (a data: URL, an external
-// https: one) renders as "No file selected" in the picker — surface the raw
-// value so the field never reads as empty while holding data
 const rawSrc = computed(() => (text.value && !assetForSrc(text.value) ? text.value : ''))
 </script>
 
@@ -102,7 +75,6 @@ const rawSrc = computed(() => (text.value && !assetForSrc(text.value) ? text.val
       <BadgeUI v-tooltip="`Edit it in ${defaultLocale}.`">Not translatable</BadgeUI>
     </template>
 
-    <!-- text: rich by the same sanitizer the exporter and MCP use -->
     <RichTextInput
       v-if="field.type === 'text'"
       v-model="text"
@@ -111,9 +83,7 @@ const rawSrc = computed(() => (text.value && !assetForSrc(text.value) ? text.val
       :placeholder="fallback"
     />
 
-    <!-- image: the picker only ever yields /media/<id>, so SAFE_SRC holds -->
     <template v-else-if="field.type === 'image'">
-      <!-- the picker has no disabled prop; a locked field is inert + dimmed -->
       <div :class="locked && 'pointer-events-none opacity-50'">
         <MediaPickerControl v-model="text" kind="image" />
       </div>
@@ -151,7 +121,6 @@ const rawSrc = computed(() => (text.value && !assetForSrc(text.value) ? text.val
       </p>
     </template>
 
-    <!-- references store ids and are never locale-overridden -->
     <template v-else-if="field.type === 'reference'">
       <SelectUI v-if="refTarget" v-model="selectedRef" :options="refOptions" placeholder="None" />
       <p v-else class="text-[10px] text-muted-foreground">
@@ -183,8 +152,6 @@ const rawSrc = computed(() => (text.value && !assetForSrc(text.value) ? text.val
       </p>
     </template>
 
-    <!-- gallery: order is what a :collection-list renders, so it's editable.
-         Clearing a slot removes it — the list never holds holes. -->
     <template v-else-if="field.type === 'multi-image'">
       <div v-for="(url, i) in gallery" :key="`${url}-${i}`" class="flex items-start gap-1">
         <MediaPickerControl

@@ -5,25 +5,17 @@ import { useComponents } from './useComponents'
 import { useStructure } from './useStructure'
 import type { ElementNode } from '@/types/editor'
 
-/** what a palette card puts on the drag: a built-in type or a component */
 export type InsertPayload =
   | { kind: 'element'; type: string; label: string; icon: Component }
   | { kind: 'component'; name: string }
-  /** a library entry the project hasn't added yet — using it adds it */
 
-/** the floating chip's content; null = no drag in flight */
 const payload = ref<InsertPayload | null>(null)
 const pointer = ref({ x: 0, y: 0 })
-/** set for one tick after a drop so open popovers ignore the release click */
 const suppressNextClick = ref(false)
 
-/** a surface with its own geometry (the Layers tree's rows) resolves its own
- *  drop target from the pointer's Y */
 type DropResolver = (clientY: number) => { id: string; position: DropPosition } | null
 let surfaceResolver: DropResolver | null = null
 
-// a drag begins on pointerdown but only activates after a small move,
-// so plain clicks on palette cards stay inert
 const DRAG_THRESHOLD = 4
 
 export function useInsertDrag() {
@@ -38,9 +30,6 @@ export function useInsertDrag() {
   ): { id: string; position: DropPosition } | null {
     if (node.type === 'body') return { id: node.id, position: 'inside' }
 
-    // component instances never accept interior drops — reshaping the
-    // master from a palette drag would mutate every instance. Retarget
-    // to the instance root, before/after only.
     const mapping = masterFor(node.id)
     if (mapping) {
       const root = getElement(mapping.instanceId)
@@ -51,13 +40,9 @@ export function useInsertDrag() {
     }
 
     const rect = hit.getBoundingClientRect()
-    // screen-space edge zone: ratio keeps it zoom-stable, px clamps keep
-    // before/after reachable on tiny frames and sane on huge ones
     const edge = Math.min(Math.max(rect.height * 0.25, 3), 24)
     if (y < rect.top + edge) return { id: node.id, position: 'before' }
     if (y > rect.bottom - edge) return { id: node.id, position: 'after' }
-    // a container takes children through its middle (registry-driven: a
-    // childless :div is still one)
     const container = backend.value.isContainer(node)
     if (container && rect.height >= edge * 3) return { id: node.id, position: 'inside' }
     return { id: node.id, position: y <= rect.top + rect.height / 2 ? 'before' : 'after' }
@@ -67,8 +52,6 @@ export function useInsertDrag() {
     const el = document.elementFromPoint(x, y) as HTMLElement | null
     if (!el) return null
     if (el.closest('[data-insert-surface]')) return surfaceResolver?.(y) ?? null
-    // collection-item interiors render template-page nodes whose ids
-    // aren't in this page — climb until an id resolves
     let marker = el.closest<HTMLElement>('[data-node-id]')
     while (marker) {
       const node = getElement(marker.dataset.nodeId!)
@@ -94,8 +77,6 @@ export function useInsertDrag() {
     backend.value.insert(payload, target.id, target.position)
   }
 
-  /** swallow the click the browser fires after the drag's pointerup, so
-   * the popover stays open and canvas click handlers don't run */
   function suppressReleaseClick() {
     suppressNextClick.value = true
     const swallow = (e: MouseEvent) => {
@@ -165,8 +146,6 @@ export function useInsertDrag() {
     window.addEventListener('keydown', onKeydown, { capture: true })
   }
 
-  /** a surface claims the drop resolution for its own region. One slot: only
-   *  one such surface is ever mounted at a time. */
   function registerDropResolver(fn: DropResolver | null) {
     surfaceResolver = fn
   }

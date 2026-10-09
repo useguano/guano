@@ -1,86 +1,36 @@
-// Custom HTML attribute allowlist, shared VERBATIM by the client renderers
-// (via useRenderNode), the static exporter (server/export.mjs), the Data
-// panel, and the MCP edit_elements tool — plain JS so every side sanitizes
-// the same way. Attributes the renderer already manages (id/class/style/
-// src/href) and anything executable (on* handlers) are refused so custom
-// attributes can't shadow editor state or inject script into the export.
-
-/** attribute names allowed verbatim */
 const ATTR_ALLOW = new Set([
   'target', 'rel', 'download', 'title', 'role', 'type', 'name', 'value',
   'placeholder', 'alt', 'loading', 'tabindex', 'lang', 'dir', 'hidden',
-  // `sizes` tells the browser how WIDE an image will render, which is the one
-  // thing the export cannot know: it emits the srcset, the layout decides the
-  // slot. A plain descriptor string, no security surface.
   'sizes',
   'disabled', 'open', 'for', 'required', 'readonly', 'checked', 'selected',
   'multiple', 'autofocus', 'autocomplete', 'min', 'max', 'step', 'rows',
   'cols', 'maxlength', 'minlength', 'pattern', 'inputmode', 'accept',
-  // translate="no" marks content that must never be localized (code samples,
-  // brand names) — browsers/translators honour it, and the MCP translation
-  // worklist excludes the whole subtree
   'translate',
 ])
 
-/**
- * Attributes whose PRESENCE is the value: `download`, `hidden`, `required`.
- * An empty string is the canonical way to express them, so they must survive
- * sanitization, and they serialize BARE (`<a download>` not `<a download="">`)
- * — `download="false"` would still download, and `hidden=""` vs `hidden` are the
- * same to the parser but only the bare form reads as intended.
- */
 export const BOOLEAN_ATTRS = new Set([
   'download', 'hidden', 'disabled', 'open', 'required', 'readonly',
   'checked', 'selected', 'multiple', 'autofocus',
 ])
 
-/** true when `name` serializes as a bare attribute with an empty value */
 export function isBooleanAttribute(name) {
   return BOOLEAN_ATTRS.has(String(name).toLowerCase().trim())
 }
 
-/** allowed name prefixes (data-*, aria-*) */
 const ATTR_PREFIXES = ['data-', 'aria-']
 
-/**
- * `data-*` names the RENDERERS own, refused as custom attributes.
- *
- * `data-` is an open prefix, so without this an authored attribute can collide
- * with the wiring a renderer emits — and because a duplicate attribute in HTML
- * resolves to the FIRST occurrence, the authored one SHADOWS the renderer's.
- *
- * That was a real hole: `data-form-redirect` carries the post-submission
- * navigation, validated at write AND at export as an internal route
- * (`isInternalRoute`), and the published runtime calls `location.assign` on it.
- * Set as a custom attribute it bypassed both checks, which bought an
- * unconditional open redirect and — because `location.assign` honours a
- * `javascript:` URL — script execution on the published origin. Under the
- * `server` publish method that origin is the one serving `/admin` and `/api`,
- * and setting an attribute is not gated by the agent policy's
- * `allowCustomCode`, so a prompt-injected agent with publish rights could ship
- * it.
- *
- * Matched by exact name or by prefix for the families (`data-sl-*`). Nothing an
- * author could usefully want is in here: every one of these is a channel
- * between the exporter and its own runtime.
- */
 const RESERVED_DATA_ATTRS = new Set([
-  // forms: the endpoint, the redirect, the state blocks, the fallback message
   'data-form',
   'data-form-redirect',
   'data-form-success',
   'data-form-error',
   'data-form-fallback',
-  // interactions / animations: the state wiring the site runtime reads
   'data-int',
   'data-anim',
   'data-tgt',
   'data-atgt',
-  // the carousel's config blob and its chrome
   'data-slider',
-  // which channel an element listens on (lib/shared/channels.js)
   'data-channel',
-  // identity the editor and the agent format address nodes by
   'data-node-id',
   'data-id',
   'data-ref',
@@ -88,18 +38,8 @@ const RESERVED_DATA_ATTRS = new Set([
   'data-source',
 ])
 
-/** reserved FAMILIES — a prefix the renderer owns outright */
 const RESERVED_DATA_PREFIXES = ['data-sl-', 'data-form-']
 
-/**
- * Attributes that belong to the LINK, not to the element carrying it.
- *
- * A non-anchor element with a link is wrapped in a generated `<a>` (see
- * linkWrap in server/export.mjs). These attributes were landing on the inner
- * element, where they do nothing: `target="_blank"` on a `<div>` never opens a
- * new tab, and `aria-label` on a non-interactive div is not announced as the
- * link's name. They hoist onto the generated anchor instead.
- */
 const LINK_ATTRS = new Set([
   'target',
   'rel',
@@ -142,39 +82,21 @@ export function withSafeRel(record) {
   return { ...record, rel: 'noopener noreferrer' }
 }
 
-/** a syntactically valid attribute name (lowercase, no colons/uppercase) */
 const NAME_RE = /^[a-z][a-z0-9-]*$/
 
-/** does the renderer own this `data-*` name? (see RESERVED_DATA_ATTRS) */
 export function isReservedAttribute(name) {
   const n = String(name).toLowerCase().trim()
   return RESERVED_DATA_ATTRS.has(n) || RESERVED_DATA_PREFIXES.some((p) => n.startsWith(p))
 }
 
-/** is `name` an allowed custom attribute? */
 export function isAllowedAttribute(name) {
   const n = String(name).toLowerCase().trim()
   if (!NAME_RE.test(n)) return false
-  // a renderer-owned name is refused even though `data-` is an open prefix:
-  // an authored duplicate shadows the renderer's own value
   if (isReservedAttribute(n)) return false
   if (ATTR_ALLOW.has(n)) return true
   return ATTR_PREFIXES.some((p) => n.startsWith(p) && n.length > p.length)
 }
 
-/**
- * Keep only allowed attributes, lowercased names with string values. Returns a
- * fresh object (never mutates the input).
- *
- * EMPTY VALUES ARE KEPT. They used to be dropped, which made `alt=""` (the
- * correct markup for a decorative image) and every boolean attribute
- * (`download`, `hidden`, `required`) unexpressible — and because callers infer
- * the rejection reason by diffing key names, the loss was reported as
- * "attribute not allowed", pointing at the wrong thing entirely.
- *
- * `true` coerces to the empty string (so an agent can pass a real boolean) and
- * `false` drops the attribute (absence IS false for booleans).
- */
 export function sanitizeAttributes(record) {
   /** @type {Record<string, string>} */
   const out = {}
@@ -202,46 +124,25 @@ export function serializeAttribute(name, value, escape) {
   return value === '' && isBooleanAttribute(name) ? name : `${name}="${escape(value)}"`
 }
 
-/**
- * Attributes whose value is TEXT A VISITOR READS, and so can be translated.
- * `type`, `role` and `name` are structural and never localized; these four are
- * copy, and on a multilingual site they used to render in the default language
- * on every locale route with no way to change it.
- */
 export const LOCALIZABLE_ATTRS = [
   'placeholder',
   'aria-label',
   'alt',
   'title',
-  // the carousel chrome's own words (SLIDER_LABEL_ATTRS in shared/slider.js).
-  // Renderer-invented, so they are in no tree and nothing translated them: a
-  // French route shipped "Previous slide" on every slider while the worklist
-  // reported `missingTranslatable: 0`. Consumed by the slider renderers, never
-  // emitted as attributes.
   'data-prev-label',
   'data-next-label',
   'data-dots-label',
   'data-dot-label',
 ]
 
-/** true when `name` carries text worth translating */
 export function isLocalizableAttribute(name) {
   return LOCALIZABLE_ATTRS.includes(String(name).toLowerCase().trim())
 }
 
-/**
- * The attributes an element renders: the component master's, with this
- * placement's own overrides on top, then the active locale's text overrides.
- *
- * Shared by both Vue renderers and the exporter so the canvas, Preview and the
- * published page agree. `localeAttrs` is already narrowed to the locale being
- * rendered (absent on the default locale).
- */
 export function mergeAttributeLayers(shared, instance, localeAttrs) {
   const out = { ...(shared ?? {}) }
   for (const [name, value] of Object.entries(instance ?? {})) out[name] = value
   for (const [name, value] of Object.entries(localeAttrs ?? {})) {
-    // a locale override only applies to copy, and only when it says something
     if (isLocalizableAttribute(name) && String(value) !== '') out[name] = value
   }
   return out

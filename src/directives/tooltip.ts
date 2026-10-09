@@ -28,18 +28,6 @@ function resolve(value: TooltipValue, modifiers: Partial<Record<string, boolean>
   return { text: '', side: modSide ?? 'top' }
 }
 
-/**
- * v-tooltip — hover label rendered by the app-level TooltipHost (never the
- * native title attribute). Value: a string, `{ text, side }`, or a falsy value
- * for no tooltip; side also via modifier (`v-tooltip.bottom="…"`). Shows after
- * a short delay; a click suppresses it until the pointer leaves (clicking
- * usually opens something).
- *
- * Also reachable by KEYBOARD, and described to assistive tech. It used to bind
- * pointer events only, so a tooltip-only control said nothing to a screen
- * reader and showed nothing to someone tabbing through — which for an icon
- * button whose tooltip IS its label meant an unlabelled control.
- */
 export const tooltip: Directive<TooltipEl, TooltipValue> = {
   mounted(el, binding) {
     const { show, hide } = useTooltip()
@@ -86,7 +74,6 @@ export const tooltip: Directive<TooltipEl, TooltipValue> = {
     state.side = next.side
     const { active, show, hide } = useTooltip()
     if (active.value?.el === el) {
-      // reactive text change while shown (e.g. save-status pill)
       if (state.text) show(el, state.text, state.side)
       else hide(el)
     }

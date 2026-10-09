@@ -4,20 +4,11 @@ import SelectUI from '@/components/ui/SelectUI.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import { RotateCcw } from 'lucide-vue-next'
 
-// A Figma-style 9-dot alignment picker. One click writes both axis classes
-// (e.g. items-center + justify-center); clicking the active dot clears them.
-// Values a dot can't express (between/around/evenly, stretch/baseline) live
-// in the two escape-hatch selects below the grid.
-
 const props = withDefaults(
   defineProps<{
-    /** the element's class tokens — the single source of truth */
     modelValue: string[]
-    /** container writes items-* + justify-*; self writes self-* + justify-self-* */
     mode?: 'container' | 'self'
-    /** main axis runs vertically (flex-col) — swaps which family each grid axis writes */
     vertical?: boolean
-    /** the element's classes at selection time — revert hides when back to this */
     baseline?: string[]
   }>(),
   { mode: 'container' },
@@ -46,7 +37,6 @@ const families = computed(() =>
 const mainIndex = computed(() => families.value.main.findIndex((c) => props.modelValue.includes(c)))
 const crossIndex = computed(() => families.value.cross.findIndex((c) => props.modelValue.includes(c)))
 
-// visual x/y → main/cross class family (flex-col swaps the axes)
 const swapAxes = computed(() => props.mode === 'container' && props.vertical)
 
 function axesFor(x: number, y: number) {
@@ -58,7 +48,6 @@ function cellState(x: number, y: number): 'on' | 'half' | 'off' {
   const mainOn = mainIndex.value === m
   const crossOn = crossIndex.value === c
   if (mainOn && crossOn) return 'on'
-  // one axis set, the other free (e.g. justify-between active) — hint the line
   if ((mainOn && crossIndex.value === -1) || (crossOn && mainIndex.value === -1)) return 'half'
   return 'off'
 }
@@ -67,7 +56,6 @@ function strip(list: string[], remove: string[]): string[] {
   return list.filter((cls) => !remove.includes(cls))
 }
 
-// every class this widget manages, for the revert button
 const managed = computed(() => {
   const f = families.value
   return [...f.main, ...f.mainExtra, ...f.cross, ...f.crossExtra]
@@ -80,7 +68,6 @@ function managedOf(list: string[]): string {
     .join(' ')
 }
 
-// dirty only when the managed classes differ from the selection-time baseline
 const hasValue = computed(() => managedOf(props.modelValue) !== managedOf(props.baseline ?? []))
 
 function revert() {
@@ -102,8 +89,6 @@ function cellTitle(x: number, y: number): string {
   const { m, c } = axesFor(x, y)
   return `${f.cross[c]} ${f.main[m]}`
 }
-
-// --- escape-hatch selects ---
 
 const spacing = computed(
   () => props.modelValue.find((cls) => families.value.mainExtra.includes(cls)) ?? '',
@@ -156,7 +141,6 @@ const DOT_CLASS = {
 </script>
 
 <template>
-  <!-- px-2.5 pl-8 mirrors RowUI so the label/gutter line up with the other rows -->
   <div class="relative flex items-start gap-2 min-h-9 px-2.5 pl-8 py-1.5">
     <div class="absolute left-1 top-1.5">
       <ButtonUI
@@ -188,7 +172,6 @@ const DOT_CLASS = {
       </button>
     </div>
 
-    <!-- Spacing / Stretch escape hatches, stacked to the right of the grid -->
     <div class="flex min-w-0 flex-1 flex-col gap-1.5">
       <SelectUI
         v-if="mode === 'container'"

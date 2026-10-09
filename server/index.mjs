@@ -1503,7 +1503,7 @@ async function handlePreview(req, res) {
     return send(
       res,
       200,
-      JSON.stringify({ ok: true, ...stats, url: await previewOrigin(req) }),
+      JSON.stringify({ ok: true, ...stats, url: await previewLink(req) }),
     )
   } catch (err) {
     // Same rule as the publish catch, which this did not follow: a raw
@@ -1519,7 +1519,10 @@ async function handlePreview(req, res) {
  * visible. `status` is restored nowhere else: this is a copy. */
 const previewPublished = (page) => (page.status === 'published' ? page : { ...page, status: 'published' })
 
-/** where the preview server answers: same host, PREVIEW_PORT */
+/** The whole preview LINK — same host, PREVIEW_PORT, and the access token in
+ * the query. Not an origin, whatever it used to be called: the MCP tool treated
+ * it as one and appended route paths after the query string, so every url it
+ * handed out carried `t=<token>/<route>/` and answered 401. */
 /**
  * Access control for the preview port.
  *
@@ -1566,7 +1569,12 @@ async function mintPreviewToken() {
 }
 
 async function previewTokenValid(raw) {
-  const [exp, mac] = String(raw ?? '').split('.')
+  // A trailing '/' or a '#anchor' is tolerated: the link is pasted, hand-edited
+  // and appended to by people and agents, and a slash that landed after the
+  // query made the mac compare fail with a 401 that read as "expired". The
+  // exp and the mac still have to verify — this trims, it never forgives.
+  const value = String(raw ?? '').split('#')[0].replace(/\/+$/, '')
+  const [exp, mac] = value.split('.')
   if (!exp || !mac || !(Number(exp) > Date.now())) return false
   return timingSafeEqualStr(mac, sign(await previewSecret(), exp))
 }
@@ -1579,7 +1587,7 @@ async function previewUnlocked(req) {
   return !!have && timingSafeEqualStr(have, previewCookie(await previewSecret()))
 }
 
-async function previewOrigin(req) {
+async function previewLink(req) {
   const host = String(req.headers.host ?? `localhost:${port}`).split(':')[0]
   return `http://${host}:${previewPort}/?t=${await mintPreviewToken()}`
 }

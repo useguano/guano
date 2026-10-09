@@ -27,7 +27,7 @@ Usage:
                          for other MCP clients). Works before /admin setup
                          too — the token is bound to the first admin.
                          --offline never talks to a server (what
-                         `npm create @useguano` runs for you)
+                         \`npm create @useguano\` runs for you)
   guano mcp              run the MCP server (stdio) for AI agents
   guano --version
 

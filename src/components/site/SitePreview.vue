@@ -1,11 +1,4 @@
 <script setup lang="ts">
-// The full-site live preview used inside the editor shell's Preview mode:
-// the site rendered as one navigable full-width column (no breakpoint frames).
-// For an admin or editor it is READ-ONLY — the site as a visitor gets it, with
-// links, interactions and motion running for real; content is edited on the
-// Edit surface. A contributor (pinned here) also edits content in place: see
-// usePreviewEditing, whose "Edit content" menu is rendered below. Anyone can
-// review: hold C and click to drop a comment.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PreviewRenderer from '@/components/site/PreviewRenderer.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -26,7 +19,6 @@ import { reducedMotion, SCROLL_LERP_DEFAULT } from '@/lib/motion'
 import { createLerpScroller, wheelDeltaPx, insideNestedScroller } from '@/lib/shared/scroll.js'
 import { walkNodes } from '@/lib/tree'
 
-// runtime Tailwind so class strings typed in the editor compile in the preview
 void import('@tailwindcss/browser')
 
 const { activePage } = usePage()
@@ -34,15 +26,10 @@ const { collections, activeCollection, activeEntry } = useCollections()
 const { project } = useProject()
 const { addComment, activeComment, focusTick } = useComments()
 
-// C toggles the comment-drop tool (Esc exits); click drops a comment pinned
-// to the element under the cursor
 const { commentMode } = useCommentMode()
 const mainEl = ref<HTMLElement>()
 
-// the contributor's "Edit content" menu (opened by a renderer's contextmenu)
 const { contentEditing, menu, closeMenu, requestEdit } = usePreviewEditing()
-// Escape closes it — capture-phase and stopped, so it peels this one layer
-// rather than reaching the editor's own Escape handlers
 function onMenuKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape' || !menu.value) return
   e.preventDefault()
@@ -56,9 +43,6 @@ watch(
     else window.removeEventListener('keydown', onMenuKeydown, true)
   },
 )
-// opened at the pointer, then pulled back inside the viewport once its size is
-// known — a right-click near the bottom or right edge would otherwise put it
-// off-screen
 const menuEl = ref<HTMLElement>()
 const menuPos = ref({ x: 0, y: 0 })
 watch(menu, async (m) => {
@@ -73,8 +57,6 @@ watch(menu, async (m) => {
     y: Math.max(margin, Math.min(m.y, window.innerHeight - rect.height - margin)),
   }
 })
-// `main` is overflow-hidden (fixed-child containment); this inner wrapper is
-// what actually scrolls, so scrub progress measures against it
 const scrollEl = ref<HTMLElement>()
 
 function onPreviewClick(e: MouseEvent) {
@@ -82,23 +64,13 @@ function onPreviewClick(e: MouseEvent) {
   const anchor = anchorFromPoint(e.clientX, e.clientY, mainEl.value)
   if (!anchor) return
   e.preventDefault()
-  e.stopPropagation() // capture-phase: beat the renderer's navigation click
+  e.stopPropagation()
   addComment({ pageId: activePage.value.id, anchor })
 }
 
-// --- scroll-driven (scrub) animations ---
-// Preview is the only editor surface with a real scroll container (the canvas
-// frames don't scroll), so this is where scrub bindings can be previewed for
-// real. The published site does the same thing against the window.
 const { animationFor } = useAnimation()
 const motion = useMotion()
 
-/** every scrub binding on the page, with the node its animation moves.
- * ownerId is the node the binding LIVES on — progress is measured against the
- * owner's viewport position (it is the scroll trigger), exactly like the
- * published runtime; targetId is only where the values land. Measuring the
- * target instead diverges as soon as targetId points elsewhere (a marker
- * driving a pinned stage). */
 const scrubBindings = computed(() => {
   const list: {
     ownerId: string
@@ -126,24 +98,14 @@ function updateScrub() {
     if (!animation) continue
     const el = root.querySelector(`[data-node-id="${ownerId}"]`)
     if (!el) continue
-    // top relative to the scroll container, so progress matches what the
-    // viewer sees rather than the document
     const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top
     motion.scrubTo(binding, animation, targetId, motion.scrubProgressFor(binding, top, vh))
   }
 }
 function onScroll() {
-  // scrolled by anything other than our own lerp (scrollbar, keyboard, a
-  // scrollIntoView)? that position becomes the scroller's new starting point
   if (scroller && Math.abs((scrollEl.value?.scrollTop ?? 0) - ownWrite) > 1) scroller.sync()
   if (scrubFrame === null) scrubFrame = requestAnimationFrame(updateScrub)
 }
-
-// --- smooth (inertia) scrolling ---
-// The same shared scroller the published site uses, over this pane's own
-// overflow container instead of the window — Preview is where the site's feel
-// gets judged, so it has to feel like the published site. The Build canvas has
-// nothing to apply it to: it pans a transformed world, it never scrolls.
 
 const smoothEnabled = computed(
   () => !!project.value.settings.motion?.scroll?.enabled && !reducedMotion(),
@@ -158,7 +120,6 @@ function smoothStep(now: number) {
   lastFrame = now
   const moving = scroller!.step(dt)
   ownWrite = scrollEl.value?.scrollTop ?? 0
-  // scrub in the same frame we scrolled in, so parallax can't lag the page
   updateScrub()
   smoothFrame = moving ? requestAnimationFrame(smoothStep) : ((lastFrame = 0), null)
 }
@@ -183,7 +144,6 @@ function onWheel(event: WheelEvent) {
   }
 }
 
-// the intensity setting is baked into the scroller, so drop it when it changes
 watch(
   () => [smoothEnabled.value, project.value.settings.motion?.scroll?.lerp],
   () => {
@@ -204,10 +164,8 @@ onBeforeUnmount(() => {
   if (scrubFrame !== null) cancelAnimationFrame(scrubFrame)
   if (smoothFrame !== null) cancelAnimationFrame(smoothFrame)
 })
-// a page switch re-seats every scrub binding at its scroll position
 watch(() => activePage.value.id, () => void nextTick(updateScrub))
 
-// clicking a comment in the list scrolls the preview to its anchored element
 watch(focusTick, async () => {
   await nextTick()
   const anchor = activeComment.value?.anchor
@@ -217,7 +175,6 @@ watch(focusTick, async () => {
     ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 })
 
-// design tokens + Google Fonts for the preview
 useThemeTokens()
 
 const templateCollection = computed(() =>
@@ -233,19 +190,7 @@ const fontStyle = computed(() => ({
 
 <template>
   <div class="relative h-full">
-    <!-- This pane IS the site's viewport, and it has to behave like one on two
-         axes:
-         · `isolate` traps the site in its own stacking context, so a user
-           element's z-index (even a fixed one at z-100000000) can never paint
-           over the editor chrome (pages drawer, rail, sidebar).
-         · `contain-paint` makes it the containing block for `position: fixed`
-           descendants, so a fixed header/nav/cookie bar spans THIS pane rather
-           than the browser window — otherwise it slid under the left rail and
-           over the right sidebar.
-         The containment must sit on a NON-scrolling element with the scrolling
-         moved to the wrapper below: put both on one element and fixed children
-         are confined but scroll away with the content, which is worse than the
-         original bug (a "fixed" header would visibly scroll off). -->
+
     <main
       ref="mainEl"
       data-site-scope
@@ -254,10 +199,7 @@ const fontStyle = computed(() => ({
       :style="fontStyle"
       @click.capture="onPreviewClick"
     >
-      <!-- `custom-scrollbar`: the pane is the one place a native scrollbar
-           would show up inside the site's own white ground, where its track
-           read as a pale gutter down the edge of the page. Same thin
-           transparent-track bar the rest of the chrome uses. -->
+
       <div ref="scrollEl" class="custom-scrollbar h-full overflow-auto">
         <div class="flex min-h-full flex-col">
           <EntryScope
@@ -277,12 +219,8 @@ const fontStyle = computed(() => ({
       </div>
     </main>
 
-    <!-- floating comment pins over the preview -->
     <CommentLayer :root="mainEl ?? null" />
 
-    <!-- a contributor's "Edit content" context menu — teleported, since the
-         pane's containment would make `fixed` mean the pane, not the viewport,
-         and the menu sits at the pointer's viewport coordinates -->
     <Teleport v-if="menu && contentEditing" to="body">
       <div class="fixed inset-0 z-[90]" @click="closeMenu" @contextmenu.prevent="closeMenu" />
       <div

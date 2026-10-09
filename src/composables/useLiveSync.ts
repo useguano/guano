@@ -8,24 +8,6 @@ import {
 import { rehydrateStore } from '@/lib/store'
 import { readStoredProject } from '@/lib/storage'
 
-/**
- * Live agent sync: subscribes to the server's change feed (GET /api/events,
- * SSE) and reacts to writes made by an AI agent (the MCP server) on the
- * active branch:
- *
- *  - live-applies each save so the canvas shows the agent's work in real time
- *    (via adoptRemote — never persisted back: an echo write could race
- *    a newer agent save and revert it on the latest-wins store)
- *  - hard-locks the UI while the session is active (AgentLockHost renders the
- *    overlay off `agentLocked`) and suspends autosave, because a debounced
- *    save of the stale in-memory project would clobber the agent's writes
- *
- * "Active" is a sliding window: the lock engages on the first agent write and
- * releases after QUIET_MS without one. The human can take over early —
- * autosave resumes and the agent's next stale write gets rejected instead
- * (the version-hash check covers that direction).
- */
-
 const QUIET_MS = 10_000
 const APPLY_DEBOUNCE_MS = 250
 
@@ -50,7 +32,6 @@ export function useLiveSync() {
       const stored = readStoredProject(key)
       if (stored) adoptRemote(stored)
     } catch {
-      // fetch hiccup — the next event (or reload) converges
     }
   }
 
@@ -91,11 +72,8 @@ export function useLiveSync() {
       if (event.key !== projectStorageKey(activeBranchId.value)) return
       onAgentWrite(event.key)
     }
-    // EventSource auto-reconnects on error; nothing to do here
   }
 
-  /** the human explicitly breaks the lock: autosave resumes, and the agent's
-   * next write on a changed page is rejected by its version check instead */
   function takeOver() {
     overrideLock.value = true
     if (weSuspendedAutosave) {

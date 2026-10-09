@@ -12,7 +12,6 @@ export function defaultBreakpoints(): Breakpoint[] {
   ]
 }
 
-/** a page's root: the `:body` wrap every document is built around */
 export function createBody(arg?: string): ElementNode {
   const body = createNode('body')
   if (arg) body.arg = arg
@@ -32,7 +31,6 @@ export function createPage(name: string, path: string, _locale = 'en'): Page {
   }
 }
 
-// A project always has at least its home page
 export function createProject(name: string): Project {
   return {
     id: uid(),

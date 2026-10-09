@@ -22,6 +22,11 @@ const runtimePromise = import(
  *  rather than passed bare so the body element's own state is exercised too. */
 export const pageHtml = (body: string) => `<body>\n${body}\n</body>`
 
+/** the token shape the server mints: `<expiry>.<hmac>`. The preview tool must
+ *  hand this back untouched — a character appended to it is a 401. */
+export const PREVIEW_TOKEN = '9999999999999.dd636db5c0a14f1a9b3e7c2d8f5a6f461435'
+export const PREVIEW_LINK = `http://localhost:4175/?t=${PREVIEW_TOKEN}`
+
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 
 export interface McpSession {
@@ -101,6 +106,9 @@ export async function mcpSession(
       store.set(k, v)
     },
     publish: async () => publishStats,
+    // what POST /api/preview answers: the stats plus the WHOLE link, token
+    // query and all (`previewLink` in server/index.mjs)
+    preview: async () => ({ ok: true, routes: 1, bytes: 1, url: PREVIEW_LINK }),
     mediaIndex: async () => ({ assets: [], folders: [] }),
     mediaUpload: async () => ({ id: 'm1' }),
   }

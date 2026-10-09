@@ -8,7 +8,6 @@ import { useModal } from '@/composables/useModal'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 
-// opened on demand, never on first paint — split out of the editor chunk
 const CreateComponentModal = defineAsyncComponent(() => import('@/components/editor/canvas/CreateComponentModal.vue'))
 
 const { masterFor, detachComponent, isHidden, setHidden } = useComponents()
@@ -22,9 +21,6 @@ const componentInstanceId = computed(() =>
   target.value ? (masterFor(target.value.id)?.instanceId ?? null) : null,
 )
 
-/** an instance held by ANOTHER component's instance. Detaching it here would
- *  be an edit to that component — every Card would lose its Button — which is
- *  not what "detach this one" says. It is detached in the component instead. */
 const instanceIsNested = computed(() => {
   const id = componentInstanceId.value
   return !!id && (masterFor(id)?.mirrors.length ?? 0) > 0

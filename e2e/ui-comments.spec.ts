@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
 
 // The comments review loop, and the four things it got wrong.
@@ -58,6 +58,42 @@ async function openEditor(page: Page) {
   await expect(ready).toBeVisible({ timeout: 30_000 })
 }
 
+/** the element the canvas would anchor a comment to at this point, and its box
+ *  in that same instant */
+async function nodeAt(page: Page, point: { x: number; y: number }) {
+  return page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y) as HTMLElement | null
+    const el = hit?.closest('[data-node-id]') as HTMLElement | null
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { nodeId: el.dataset.nodeId!, left: r.left, top: r.top, width: r.width, height: r.height }
+  }, point)
+}
+
+/**
+ * Wait for the node under a point to hold still.
+ *
+ * `CanvasEditor` compiles Tailwind in the BROWSER (`@tailwindcss/browser`, so
+ * classes typed at runtime work) and the project's fonts load after first
+ * paint, so the frames reflow a few hundred ms in — in this fixture the header
+ * under the click is 24.4px tall before the stylesheet lands and 19.5px after.
+ * Watching the FRAME is no good: its own box never changes, so the wait
+ * returned instantly and the reflow was still pending.
+ */
+async function settledAt(page: Page, point: { x: number; y: number }) {
+  await page.evaluate(() => document.fonts.ready)
+  let last = ''
+  let held = 0
+  await expect(async () => {
+    const sig = JSON.stringify(await nodeAt(page, point))
+    held = sig !== 'null' && sig === last ? held + 1 : 0
+    last = sig
+    // four agreeing samples ~600ms apart in total, not two: the compile is
+    // debounced, so a single quiet gap proves nothing
+    expect(held, `canvas still reflowing at ${point.x},${point.y}`).toBeGreaterThanOrEqual(3)
+  }).toPass({ timeout: 20_000, intervals: [150, 150, 150, 150, 200, 300, 500] })
+}
+
 async function readProject(page: Page) {
   const res = await page.request.get(`/api/store?keys=${KEY}`)
   const map = await res.json()
@@ -83,19 +119,21 @@ test('a comment lands in the frame it was dropped in, signed by its author', asy
   await openEditor(page)
 
   const tablet = page.locator(`[data-breakpoint-id="${TABLET}"]`)
-  const desktop = page.locator(`[data-breakpoint-id="${DESKTOP}"]`)
   await expect(tablet).toBeVisible()
-  const frame = (await tablet.boundingBox())!
-  const desktopBox = (await desktop.boundingBox())!
+  const offset = { x: 24, y: 24 }
+  const framePos = (await tablet.boundingBox())!
+  const clicked = { x: framePos.x + offset.x, y: framePos.y + offset.y }
 
   // arm the tool and drop a pin inside the TABLET frame. Whatever node is
   // under the click (at minimum the page body) is rendered in all three
   // frames, which is exactly the ambiguity the anchor's breakpoint resolves.
   await page.keyboard.press('c')
   await expect(page.locator('.cursor-crosshair')).toHaveCount(1)
-  const offset = { x: 24, y: 24 }
+  await settledAt(page, clicked)
+  // the box the anchor will be computed against, read in the instant before
+  // the click so a later reflow cannot make this number a lie
+  const target = (await nodeAt(page, clicked))!
   await tablet.click({ position: offset })
-  const clicked = { x: frame.x + offset.x, y: frame.y + offset.y }
 
   // the thread opens on the new pin — the first message becomes the comment
   const draft = page.getByPlaceholder('Add a comment…')
@@ -123,17 +161,50 @@ test('a comment lands in the frame it was dropped in, signed by its author', asy
   await page.keyboard.press('Escape')
   const pin = page.getByRole('button', { name: 'Comment pin' })
   await expect(pin).toHaveCount(1)
-  const pinBox = (await pin.boundingBox())!
 
-  // the pin is drawn over the tablet frame, and nowhere near the desktop one
-  const pinX = pinBox.x + pinBox.width / 2
-  expect(pinX).toBeGreaterThan(frame.x)
-  expect(pinX).toBeLessThan(frame.x + frame.width)
-  expect(pinX < desktopBox.x || pinX > desktopBox.x + desktopBox.width).toBeTruthy()
+  // 1. the anchor REPRODUCES the click, in the box that existed when it
+  //    happened. An anchor is relative (rx/ry inside the node), so this is the
+  //    only frame of reference in which "where I clicked" means anything.
+  const anchor = (await storedComments(page))[0].anchor!
+  expect(anchor.nodeId).toBe(target.nodeId)
+  expect(Math.abs(target.left + anchor.rx * target.width - clicked.x)).toBeLessThan(1)
+  expect(Math.abs(target.top + anchor.ry * target.height - clicked.y)).toBeLessThan(1)
 
-  // and its tail — the bottom-left corner — sits on the point that was clicked
-  expect(Math.abs(pinBox.x - clicked.x)).toBeLessThan(3)
-  expect(Math.abs(pinBox.y + pinBox.height - clicked.y)).toBeLessThan(3)
+  // 2. the pin is DRAWN at that anchor's current position, by its tail. Node,
+  //    pin and both frames are measured in ONE instant: the canvas reflows as
+  //    the browser-side Tailwind compile lands, and a pin read a frame later
+  //    than the node it is anchored to is off by exactly that reflow — which
+  //    is what made this assertion fail alone and pass in a full run.
+  const drawn = await page.evaluate(
+    ({ nodeId, bp, desktopBp, rx, ry }) => {
+      const box = (el: Element) => {
+        const r = el.getBoundingClientRect()
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }
+      }
+      const frame = document.querySelector(`[data-breakpoint-id="${bp}"]`)!
+      const node = frame.querySelector(`[data-node-id="${nodeId}"]`)!
+      const r = node.getBoundingClientRect()
+      const pin = document.querySelector('[aria-label="Comment pin"]')!
+      const p = pin.getBoundingClientRect()
+      return {
+        want: { x: r.left + rx * r.width, y: r.top + ry * r.height },
+        // the pin's TAIL is its bottom-left corner, not its top-left — it used
+        // to be positioned by the latter and hung a pin-height below the click
+        tail: { x: p.left, y: p.bottom },
+        centreX: (p.left + p.right) / 2,
+        frame: box(frame),
+        desktop: box(document.querySelector(`[data-breakpoint-id="${desktopBp}"]`)!),
+      }
+    },
+    { nodeId: anchor.nodeId, bp: TABLET, desktopBp: DESKTOP, rx: anchor.rx, ry: anchor.ry },
+  )
+  expect(Math.abs(drawn.tail.x - drawn.want.x)).toBeLessThan(1)
+  expect(Math.abs(drawn.tail.y - drawn.want.y)).toBeLessThan(1)
+
+  // 3. ...which puts it over the tablet frame, and nowhere near the desktop one
+  expect(drawn.centreX).toBeGreaterThan(drawn.frame.left)
+  expect(drawn.centreX).toBeLessThan(drawn.frame.right)
+  expect(drawn.centreX < drawn.desktop.left || drawn.centreX > drawn.desktop.right).toBeTruthy()
 })
 
 test('unseen comments show on the rail, and opening the panel clears them', async ({ page }) => {

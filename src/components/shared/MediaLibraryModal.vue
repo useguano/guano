@@ -51,7 +51,6 @@ onMounted(() => {
 
 const selecting = computed(() => selectAccept.value !== null)
 
-// ----- toolbar state -----
 const KINDS = Object.keys(KIND_LABELS) as MediaKind[]
 const type = ref<'all' | MediaKind>('all')
 const query = ref('')
@@ -65,7 +64,6 @@ const sortDir = ref<'asc' | 'desc'>('desc')
 const sizeFilter = ref<'any' | 's' | 'm' | 'l' | 'xl'>('any')
 const dateFilter = ref<'any' | 'today' | '7d' | '30d' | '1y'>('any')
 
-/** kinds shown as chips — narrowed to the accepted set in select mode */
 const visibleKinds = computed(() => KINDS.filter((k) => !selectAccept.value || selectAccept.value.includes(k)))
 
 const SORT_OPTIONS = [
@@ -89,7 +87,6 @@ const DATE_OPTIONS = [
   { label: 'Last year', value: '1y' },
 ]
 
-/** badge on the Filter button — sort isn't a filter, so it doesn't count */
 const activeFilters = computed(
   () => (sizeFilter.value !== 'any' ? 1 : 0) + (dateFilter.value !== 'any' ? 1 : 0),
 )
@@ -103,10 +100,8 @@ function resetFilters() {
   dateFilter.value = 'any'
 }
 
-// ----- folder navigation -----
 const currentFolderId = ref<string | null>(null)
 
-// any active filter/search flattens the view: show every match across folders
 const flatMode = computed(
   () =>
     type.value !== 'all' ||
@@ -180,7 +175,6 @@ const visibleFolders = computed(() =>
 )
 const isEmpty = computed(() => !visibleFolders.value.length && !visibleAssets.value.length)
 
-/** direct asset count per folder, for the folder chips */
 const folderCounts = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {}
   for (const a of assets.value) {
@@ -189,27 +183,19 @@ const folderCounts = computed<Record<string, number>>(() => {
   return counts
 })
 
-// ----- selection (single → details rail, multiple → floating batch pill) -----
 const selectedIds = ref<string[]>([])
-// ---- the details rail is sized to the grid, not the other way round ----
-// The grid is `repeat(auto-fill, minmax(9.5rem, 1fr))`: n columns of equal
-// width col = (G − (n−1)·gap) / n over the content width G. A rail of any
-// other width makes the columns re-solve and every tile changes size on each
-// selection. A rail of exactly 2·col + 2·gap removes two whole columns and
-// leaves col unchanged, so tiles never move.
-const TILE_MIN = 152 // 9.5rem
-const TILE_GAP = 12 // gap-3
-const CONTENT_PAD = 32 // p-4 both sides
+const TILE_MIN = 152
+const TILE_GAP = 12
+const CONTENT_PAD = 32
 const contentEl = ref<HTMLElement>()
 const railWidth = ref(288)
 let ro: ResizeObserver | null = null
 function measureRail() {
   const el = contentEl.value
   if (!el) return
-  // the full content width, as if the rail were closed
   const full = el.clientWidth + (selected.value ? railWidth.value : 0) - CONTENT_PAD
   const n = Math.floor((full + TILE_GAP) / (TILE_MIN + TILE_GAP))
-  if (n < 4) return // too narrow to give two columns away; keep the last width
+  if (n < 4) return
   const col = (full - (n - 1) * TILE_GAP) / n
   railWidth.value = Math.round(2 * col + 2 * TILE_GAP)
 }
@@ -245,7 +231,6 @@ function onPick(asset: MediaAsset) {
   if (selecting.value) pickAndClose(asset)
 }
 
-// full "Parent / Child" folder paths for the move-to menus
 function folderPath(id: string): string {
   const names: string[] = []
   const seen = new Set<string>()
@@ -281,7 +266,6 @@ async function batchDelete() {
   clearSelection()
 }
 
-// ----- upload (file input + drag-and-drop share one path) -----
 const uploadInput = ref<HTMLInputElement>()
 const uploadProgress = ref<string | null>(null)
 const uploadError = ref<string | null>(null)
@@ -289,7 +273,6 @@ const uploadError = ref<string | null>(null)
 async function uploadFiles(files: File[], folderId?: string) {
   if (!files.length || uploadProgress.value) return
   uploadError.value = null
-  // no explicit target → the folder currently open
   folderId ??= currentFolderId.value ?? undefined
   for (const [i, file] of files.entries()) {
     uploadProgress.value = `${i + 1}/${files.length}`
@@ -309,7 +292,6 @@ function onUploadFiles(e: Event) {
   void uploadFiles(files)
 }
 
-// OS file drop overlay (only for OS file drags, not tile/folder moves)
 const dragDepth = ref(0)
 const dragActive = computed(() => dragDepth.value > 0)
 const isFileDrag = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files')
@@ -325,12 +307,10 @@ function onDrop(e: DragEvent) {
   if (files.length) void uploadFiles(files)
 }
 
-// ----- MediaGrid events -----
 function openFolder(folder: MediaFolder) {
   currentFolderId.value = folder.id
 }
 async function onMoveAsset(assetId: string, folderId: string | null) {
-  // dragging one of several selected items moves the whole selection
   const ids =
     selectedIds.value.includes(assetId) && selectedIds.value.length > 1
       ? [...selectedIds.value]
@@ -348,7 +328,6 @@ function onRenameFolder(id: string, name: string) {
 function onRenameAsset(id: string, name: string) {
   void updateAsset(id, { name }).catch((e) => (uploadError.value = errMsg(e)))
 }
-/** the grid has no <a>, so the download is triggered programmatically */
 function downloadAsset(asset: MediaAsset) {
   const a = document.createElement('a')
   a.href = `${mediaUrl(asset)}?download=1`
@@ -357,7 +336,6 @@ function downloadAsset(asset: MediaAsset) {
 }
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'action failed')
 
-// ----- create folder (at the current level, opens straight into rename) -----
 const freshFolderId = ref<string | null>(null)
 async function createFolderHere() {
   try {
@@ -368,7 +346,6 @@ async function createFolderHere() {
   }
 }
 
-// ----- breadcrumb drop targets (move up to an ancestor / root) -----
 function onCrumbDrop(e: DragEvent, folderId: string | null) {
   const assetId = e.dataTransfer?.getData('application/x-guano-asset')
   if (assetId) return void onMoveAsset(assetId, folderId)
@@ -376,7 +353,6 @@ function onCrumbDrop(e: DragEvent, folderId: string | null) {
   if (fId && fId !== folderId) void onMoveFolder(fId, folderId)
 }
 
-// ----- delete (asset / folder) -----
 async function requestDelete(asset: MediaAsset) {
   let message = `Delete “${asset.name}”? This cannot be undone.`
   try {
@@ -389,7 +365,6 @@ async function requestDelete(asset: MediaAsset) {
         '. Elements using it will appear broken after deletion.'
     }
   } catch {
-    /* ignore */
   }
   if (!(await confirm({ title: 'Delete file', message }))) return
   await removeAsset(asset.id)
@@ -412,7 +387,6 @@ async function requestFolderDelete(folder: MediaFolder) {
 <template>
   <ModalHost size="full" @close="emit('close')">
     <div class="flex h-full flex-col">
-      <!-- header: [icon] [title] ——— [search] [close] -->
       <div class="flex shrink-0 items-center gap-2 border-b border-input py-2.5 pr-1.5 pl-4">
         <ImageIcon class="size-4 shrink-0 text-muted-foreground" />
         <span class="text-xs font-medium">{{ selecting ? 'Choose a file' : 'Media library' }}</span>
@@ -430,8 +404,6 @@ async function requestFolderDelete(folder: MediaFolder) {
         <ButtonUI variant="icon" size="sm" :icon="X" class="w-7 text-muted-foreground" @click="emit('close')" />
       </div>
 
-      <!-- toolbar: type chips ——— filter · view · new folder · upload. The right
-           cluster is one family: h-9, rounded-xl, text-xs, 3.5 icons -->
       <div class="flex shrink-0 items-center gap-2 border-b border-input px-4 py-2">
         <div class="flex min-w-0 flex-wrap items-center gap-1">
           <ButtonUI
@@ -458,7 +430,6 @@ async function requestFolderDelete(folder: MediaFolder) {
 
         <div class="flex-1" />
 
-        <!-- filter & sort: a small form, not a list of menu items -->
         <MenuUI
           width="w-64"
           trigger-class="flex h-9 items-center gap-2 rounded-xl border border-accent px-3 text-xs font-medium outline-none hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-accent"
@@ -505,8 +476,6 @@ async function requestFolderDelete(folder: MediaFolder) {
           </template>
         </MenuUI>
 
-        <!-- view switch: a segmented control — a recessed track with the
-             active segment raised, the same height as the buttons beside it -->
         <div
           role="radiogroup"
           aria-label="View"
@@ -546,7 +515,6 @@ async function requestFolderDelete(folder: MediaFolder) {
         />
       </div>
 
-      <!-- errors get their own line so they can't distort the toolbar -->
       <div
         v-if="uploadError"
         class="flex shrink-0 items-center gap-2 border-b border-input px-4 py-1.5 text-xs text-danger"
@@ -556,7 +524,6 @@ async function requestFolderDelete(folder: MediaFolder) {
       </div>
 
       <div class="flex min-h-0 flex-1">
-        <!-- content -->
         <div
           ref="contentEl"
           class="custom-scrollbar relative min-w-0 flex-1 overflow-y-auto p-4"
@@ -567,7 +534,6 @@ async function requestFolderDelete(folder: MediaFolder) {
           @dragleave="onDragLeave"
           @drop.prevent="onDrop"
         >
-          <!-- breadcrumbs (browse mode only) -->
           <div v-if="!flatMode" class="mb-3 flex items-center gap-1 text-xs">
             <button
               type="button"
@@ -635,8 +601,6 @@ async function requestFolderDelete(folder: MediaFolder) {
             @remove-asset="requestDelete"
           />
 
-          <!-- batch actions: a pill floating over the grid. sticky (not absolute)
-               so it stays put while the grid scrolls under it -->
           <div
             v-if="batch"
             class="sticky bottom-0 z-20 mx-auto mt-4 flex w-fit items-center gap-1 rounded-2xl border border-input bg-background p-1.5 shadow-xl"
@@ -683,9 +647,6 @@ async function requestFolderDelete(folder: MediaFolder) {
           </div>
         </div>
 
-        <!-- rail: single-item details. Its width is exactly two grid columns
-             (plus their gaps), so opening it drops two columns and every
-             remaining tile keeps the width it had — see railWidth. -->
         <div
           v-if="selected"
           class="flex shrink-0 flex-col border-l border-input"
@@ -700,7 +661,6 @@ async function requestFolderDelete(folder: MediaFolder) {
         </div>
       </div>
 
-      <!-- select mode: confirm the chosen file -->
       <div
         v-if="selecting && selected"
         class="flex shrink-0 items-center gap-3 border-t border-input px-4 py-2.5"

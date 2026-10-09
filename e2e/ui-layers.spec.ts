@@ -187,6 +187,29 @@ test('dragging a row INTO a container re-parents it, and it publishes that way',
   expect(nested).toBeGreaterThan(0)
 })
 
+test('an empty container is given a box on the canvas, until it holds something', async ({
+  page,
+}) => {
+  await openEditor(page)
+  await openLayers(page)
+
+  // a section seeds no child, so it renders as nothing at all: zero height,
+  // no background, nowhere to drop into
+  await rows(page).first().click()
+  await insertFromDock(page, 'section')
+  const sectionId = await idAt(page, (await rows(page).count()) - 1)
+  // one per breakpoint frame; the first is the one in the active frame
+  const box = page.locator(`[data-node-id="${sectionId}"]`).first()
+  const minHeight = () => box.evaluate((el) => getComputedStyle(el).minHeight)
+
+  await expect.poll(minHeight).toBe('40px')
+
+  // the section is still selected, so this lands INSIDE it — and the moment it
+  // holds something of its own the canvas stops forcing the box
+  await insertFromDock(page, 'h2')
+  await expect.poll(minHeight).not.toBe('40px')
+})
+
 test('a row names a ref, and refuses one already used on the page', async ({ page }) => {
   await openEditor(page)
   await openLayers(page)
@@ -431,19 +454,24 @@ test('the Edit / Play toggle swaps the surface, and Play edits nothing', async (
   await expect(play).toBeVisible()
   await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)
 
-  // open a page's layers, then leave for Play: layers are an Edit-surface
-  // view, so the drawer drops back to the page list
+  // A builder's layers are NOT an Edit-surface view: the tree is how they
+  // work on structure from either surface, so leaving for Play keeps it open
+  // and a row still offers the way in. Only the canvas changes.
   await openLayers(page)
   await expect(rows(page).first()).toBeVisible()
   await play.click()
 
   await expect(page.locator('[data-frame-drop]')).toHaveCount(0) // no frames
-  await expect(rows(page)).toHaveCount(0) // no tree
-  await expect(page.getByPlaceholder('Search pages, items…')).toBeVisible()
-  // and no way back into structure from a row
+  await expect(rows(page).first()).toBeVisible() // the tree stays
   const row = page.locator('[data-page-row="Home"]')
+  await page.getByRole('button', { name: 'Back' }).first().click()
+  await expect(page.getByPlaceholder('Search pages, items…')).toBeVisible()
   await row.hover()
-  await expect(row.getByRole('button', { name: 'Edit layers' })).toHaveCount(0)
+  await expect(row.getByRole('button', { name: 'Edit layers' })).toHaveCount(1)
+  await row.getByRole('button', { name: 'Edit layers' }).click()
+  await expect(rows(page).first()).toBeVisible()
+  // and it is still Play underneath — the icon never switches the surface
+  await expect(page.locator('[data-frame-drop]')).toHaveCount(0)
 
   // For a builder Play is READ-ONLY: they edit on the Edit canvas, so the
   // gestures a contributor edits content with in Play — double-click for text,
@@ -456,11 +484,9 @@ test('the Edit / Play toggle swaps the surface, and Play edits nothing', async (
   await hero.dispatchEvent('contextmenu')
   await expect(page.getByRole('button', { name: 'Edit content' })).toHaveCount(0)
 
-  // Edit brings the frames and the way in back
+  // Edit brings the frames back
   await edit.click()
   await expect(page.locator('[data-frame-drop]').first()).toBeVisible()
-  await row.hover()
-  await expect(row.getByRole('button', { name: 'Edit layers' })).toHaveCount(1)
 
   // the board has nothing to play, so it carries no toggle
   await rail(page, 'Components').click()

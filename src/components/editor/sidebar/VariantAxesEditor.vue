@@ -1,15 +1,6 @@
 <script setup lang="ts">
-/**
- * A component's variant axes: what its instances can differ along (`variant`,
- * `size`) and the options on each.
- *
- * This edits the NAMES only. What an option looks like is styled on the board
- * like anything else — wear the option on the card, then pick it under
- * "Editing" in the Style panel.
- *
- * Holds an id, never the object, like the pane it sits in.
- */
-import { computed, ref } from 'vue'
+
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { Plus, Star, X } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import InputUI from '@/components/ui/InputUI.vue'
@@ -26,7 +17,7 @@ import {
   type VariantResult,
 } from '@/lib/variantOps'
 
-const props = defineProps<{ componentId: string }>()
+const props = defineProps<{ componentId: string; autofocus?: boolean }>()
 
 const { project } = useProject()
 const def = computed(() => project.value.components.find((c) => c.id === props.componentId) ?? null)
@@ -34,10 +25,13 @@ const axes = computed(() => def.value?.variants ?? [])
 
 const error = ref('')
 const newAxis = ref('')
-/** the "add option" draft, per axis name */
+const newAxisInput = ref<InstanceType<typeof InputUI>>()
 const newOption = ref<Record<string, string>>({})
 
-/** run an operation and show why it was refused, if it was */
+onMounted(() => {
+  if (props.autofocus) void nextTick(() => newAxisInput.value?.focus())
+})
+
 function run(op: (d: NonNullable<typeof def.value>) => VariantResult): boolean {
   const d = def.value
   if (!d) return false
@@ -46,7 +40,6 @@ function run(op: (d: NonNullable<typeof def.value>) => VariantResult): boolean {
   return result.ok
 }
 
-/** names are lowercase-with-dashes; meet the author halfway on the obvious */
 const tidy = (raw: string) => raw.trim().toLowerCase().replace(/[\s_]+/g, '-')
 
 function addAxis() {
@@ -147,7 +140,12 @@ const blur = (e: Event) => (e.target as HTMLInputElement).blur()
     </DrawerField>
 
     <div class="flex items-center gap-1">
-      <InputUI v-model="newAxis" placeholder="New axis: size, variant…" @keydown.enter="addAxis" />
+      <InputUI
+        ref="newAxisInput"
+        v-model="newAxis"
+        placeholder="New axis: size, variant…"
+        @keydown.enter="addAxis"
+      />
       <ButtonUI variant="icon" size="sm" :icon="Plus" tooltip="Add axis" class="w-7" @click="addAxis" />
     </div>
     <p v-if="error" class="text-[10px] text-danger" data-variant-error>{{ error }}</p>

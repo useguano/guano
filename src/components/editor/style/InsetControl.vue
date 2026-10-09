@@ -5,13 +5,6 @@ import { SPACING } from '@/lib/tieredBox'
 import { parseTail, buildTailClass } from '@/lib/valueClass'
 import { Lock, LockOpen } from 'lucide-vue-next'
 
-// Cross-shaped inset editor: top / left · right / bottom steppers laid out in a
-// plus, with a centre lock that syncs all four sides to one value.
-//
-//         [-] 12 [+]
-//  [-] 12 [+] 🔒 [-] 12 [+]
-//         [-] 12 [+]
-
 const props = defineProps<{ modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
@@ -21,7 +14,6 @@ type Side = (typeof SIDES)[number]
 const STEPS = SPACING
 const KEYWORDS = ['auto'] as const
 
-// the current value tail for a side (e.g. '4', '[4em]', '-4', 'auto'), or null
 function tailOf(side: Side): string | null {
   for (const c of props.modelValue) {
     const tail = parseTail(c, side, { allowKeywords: KEYWORDS })
@@ -30,12 +22,10 @@ function tailOf(side: Side): string | null {
   return null
 }
 
-// side tokens include the negative form (-top-4); clear both spellings
 function stripSide(list: string[], side: Side): string[] {
   return list.filter((c) => parseTail(c, side, { allowKeywords: KEYWORDS }) === null)
 }
 
-// lock on by default when all four already share one value
 const locked = ref(
   SIDES.every((s) => tailOf(s) !== null) && new Set(SIDES.map(tailOf)).size === 1,
 )
@@ -54,7 +44,6 @@ function setSide(side: Side, tail: string | null) {
 function toggleLock() {
   locked.value = !locked.value
   if (!locked.value) return
-  // equalise to the first side that has a value
   const first = SIDES.map(tailOf).find((v) => v !== null) ?? null
   if (first !== null) apply(SIDES, first)
 }

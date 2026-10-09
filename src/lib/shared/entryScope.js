@@ -1,8 +1,3 @@
-// Shared by the editor (useInteraction), both Vue renderers and
-// server/export.mjs. ONE implementation: the canvas and the published site
-// must agree on every interaction/animation key, or an effect that works on
-// one is inert on the other.
-
 /**
  * Which nodes a route renders under an ENTRY SCOPE, and which scope.
  *
@@ -26,8 +21,6 @@ export function buildScopeRoots(trees) {
   const index = new Map()
   const walk = (nodes, root) => {
     for (const n of nodes ?? []) {
-      // a repeat's OWN node renders once, under the scope around it — only its
-      // children are per-entry
       if (root) index.set(n.id, root)
       walk(n.children, isEntryScopeRoot(n) ? n.id : root)
     }
@@ -36,26 +29,16 @@ export function buildScopeRoots(trees) {
   return index
 }
 
-/** does this node render its children once per entry? */
 export function isEntryScopeRoot(node) {
   return node.type === 'collection-list' || (node.type === 'slider' && !!node.arg)
 }
 
-/**
- * The entry part of a binding's scope: carried only when owner and target share
- * an entry scope. `entryId` is the entry being rendered, if any.
- */
 export function entryScopePart(scopeRoots, ownerId, targetId, entryId) {
   if (!entryId) return null
   const of = (id) => scopeRoots?.get(id) ?? null
   return of(ownerId) === of(targetId) ? `e${entryId}` : null
 }
 
-/**
- * Join the two halves of a binding scope into the string the key carries.
- * `instanceId` isolates one component instance from another; the entry part
- * isolates one row of a repeat from the next.
- */
 export function bindingScope(instanceId, entryPart) {
   return [instanceId, entryPart].filter(Boolean).join('~') || undefined
 }

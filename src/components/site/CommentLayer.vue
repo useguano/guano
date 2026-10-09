@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// Floating comment pins over a scroll container (the content preview). Pins
-// are element-anchored, so their screen position is recomputed from each
-// node's live rect every frame — tracking scroll, reflow, and content edits.
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import CommentMarker from '@/components/shared/CommentMarker.vue'
 import { useComments } from '@/composables/useComments'
@@ -30,7 +27,6 @@ function recompute() {
       const pos = anchorScreenPos(comment.anchor, root)
       if (pos) next.push({ comment, x: pos.x, y: pos.y })
     }
-    // only touch reactive state when something actually moved
     const s = sig(next)
     if (s !== lastSig) {
       pins.value = next

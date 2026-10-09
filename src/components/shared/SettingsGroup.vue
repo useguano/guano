@@ -1,8 +1,4 @@
 <script setup lang="ts">
-// Flat section for the project settings modal: title + one-line description,
-// a hairline, then the fields. No card — the panel separates sections with
-// spacing instead, so a settings page reads as one column rather than a stack
-// of boxes. `danger` marks destructive groups; `action` is a header-right slot.
 defineProps<{
   title: string
   description?: string

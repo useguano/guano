@@ -7,9 +7,6 @@ import ModalActions from '@/components/modal/ModalActions.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import InputUI from '@/components/ui/InputUI.vue'
 
-// A one-field rename dialog, opened through useModal: resolves with the new
-// name, or null when dismissed. Replaces inline renames where a text field
-// swapping into a tile or row was easy to miss and easy to blur by accident.
 const props = withDefaults(
   defineProps<{
     title?: string

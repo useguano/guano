@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// Body of the right-sidebar panel popover, rendered by the app PopoverHost.
-// Reads the active panel id itself so switching panels swaps the body without
-// reopening the popover.
 import GroupPopover from '@/components/popover/GroupPopover.vue'
 import StyleEditor from '@/components/editor/style/StyleEditor.vue'
 import InteractionsEditor from '@/components/editor/interactions/InteractionsEditor.vue'
@@ -29,9 +26,6 @@ const { selectedElement, isMultiSelect } = useElement()
     </GroupPopover>
   </template>
 
-  <!-- the panel only ever shows what THIS element does. What an effect itself
-       does is project-level and shared, so it is edited in the bottom drawer
-       (EffectsDrawer) rather than taking this panel over. -->
   <InteractionsEditor v-else-if="activePanelId === 'interactions'" />
 
   <BranchesEditor v-else-if="activePanelId === 'branches'" />

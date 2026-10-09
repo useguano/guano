@@ -1,9 +1,4 @@
 <script lang="ts">
-// One pending link navigation for the whole tree: while content editing is on,
-// a single click schedules it and ANY double-click cancels it (clicks bubble —
-// a dblclick on an image inside a link must cancel the link's timer, and
-// stopPropagation on the child's dblclick would otherwise hide it from the
-// parent).
 const NAV_DELAY_MS = 250
 let pendingNav: number | null = null
 function cancelPendingNav() {
@@ -15,17 +10,6 @@ function cancelPendingNav() {
 </script>
 
 <script setup lang="ts">
-// Preview-mode renderer: the site rendered like a live preview, navigable by
-// clicking links (state-driven — switches the active page/entry, no URL
-// change). Built on the shared rendering core (useRenderNode).
-//
-// For an admin or editor Play is READ-ONLY: the site the way a visitor gets
-// it, with interactions, animations, sliders and links running for real, and
-// content edited on the Edit surface. A CONTRIBUTOR is pinned to Play, so for
-// them it is also where content is edited (`usePreviewEditing`): double-click
-// text to edit it in place, double-click an image/video to replace it, and
-// right-click for "Edit content" / "Replace background". Only content — the
-// server's contributor merge drops anything else.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Code2 } from 'lucide-vue-next'
 import EntryScope from '@/components/shared/EntryScope.vue'
@@ -73,43 +57,21 @@ const {
   motionStyle,
   sliderBound, sliderResolved, sliderTrackClass, sliderWire,
   isForm, formStateChildren, formFieldChildren,
-} = useRenderNode(() => props.node)
+} = useRenderNode(() => props.node, { restingMotion: true })
 
-// --- forms in Play ---
-//
-// Play runs the site for real, with one deliberate exception: a submission is
-// NOT sent. Play is an editor surface, and a test submission landing in the
-// real inbox (or a real lead list) would be a surprise nobody asked for. So a
-// submit validates natively, shows the success block and says plainly that
-// nothing was sent.
-//
-// Before this, a form in Play had no submit handling at all: it posted to the
-// SPA's own URL and reloaded the editor, losing whatever was unsaved.
 const submitted = ref(false)
 
 const classes = computed(() => [baseClasses.value])
-
-// --- slider: the published runtime, running live in Preview ---
 
 const sliderHostClass = computed(() =>
   props.node.type === 'slider' ? sliderHostExtraClass(props.node.classes) : '',
 )
 
 let destroySlider: (() => void) | null = null
-// two runs of the watcher can straddle the `await` below (the template ref
-// lands mid-flush, re-queueing it). Without a generation token the second run
-// would find `destroySlider` still null, destroy nothing, and leave the first
-// instance alive forever — its autoplay interval would keep advancing the
-// track at double rate, even after the node unmounts.
 let sliderGeneration = 0
 
 if (props.node.type === 'slider') {
   watch(
-    // re-init when the element mounts, when anything the runtime MEASURES
-    // changes (the track classes carry gap and slides-per-view), or when the
-    // number of slides does. `listEntries` itself is a fresh array on every
-    // recompute, so only its length is a source — otherwise editing any entry
-    // in Preview would tear down every slider on the page.
     [
       el,
       () => JSON.stringify(sliderWire.value),
@@ -121,7 +83,6 @@ if (props.node.type === 'slider') {
       destroySlider?.()
       destroySlider = null
       await nextTick()
-      // a newer run started while we awaited — it owns the instance now
       if (generation !== sliderGeneration) return
       const host = el.value
       if (!host) return
@@ -136,27 +97,15 @@ if (props.node.type === 'slider') {
   })
 }
 
-// --- links (state-driven navigation) ---
-
-// '@item' resolution + scheme allowlist live in the render core
 const linkTarget = computed(() => {
   const raw = linkRaw.value
   return raw ? { raw, internal: raw.startsWith('/') } : null
 })
 
-// --- content editing (contributors only — see usePreviewEditing) ---
-// what's editable, what it opens with and where it commits all come from the
-// render core; Play differs from the Edit canvas only in Esc committing
-
 const textEditable = computed(() => contentEditing.value && editableText.value)
 const isMedia = computed(
   () => contentEditing.value && (props.node.type === 'image' || props.node.type === 'video'),
 )
-// A background inside a component instance is the MASTER's (backgroundInfo
-// renders from it, like style), and the contributor merge keeps masters from
-// the stored copy — offering it would be a write that silently goes nowhere.
-// Text leaves (a heading, a paragraph) don't offer one either: their menu is
-// about their words, and a background is a section's or a card's.
 const backgroundEditable = computed(
   () =>
     contentEditing.value &&
@@ -180,7 +129,6 @@ async function pickMedia() {
   ])
   if (!picked) return
   const url = useMedia().mediaUrl(picked)
-  // a collection-bound image writes the entry field; a plain image its src
   if (boundField.value?.type === 'image' && boundEntry.value) {
     setEntryValue(boundEntry.value, boundField.value.name, url)
   } else {
@@ -194,7 +142,6 @@ async function pickBackground() {
   props.node.background = useMedia().mediaUrl(picked)
 }
 
-/** the edit action for this node's content */
 function edit(e?: Event) {
   if (textEditable.value) startEditing(e)
   else if (isMedia.value) void pickMedia()
@@ -202,19 +149,12 @@ function edit(e?: Event) {
 
 const contentEditable = computed(() => textEditable.value || isMedia.value)
 
-// a context-menu item targets a node by id — claim it here
 watch(editRequest, () => {
   const kind: PreviewEditKind | null = consumeEditRequest(props.node.id)
   if (kind === 'content') edit()
   else if (kind === 'background') void pickBackground()
 })
 
-// The affordance Play owes a visitor is the one the published site gives: a
-// pointer over something a click follows (any element can carry a link, not
-// just an <a>, so the cursor is ours to set). A contributor also gets a soft
-// outline over what double-click can edit, suppressed while editing so it
-// can't fight the solid ring. Cursor precedence: linked → pointer (click
-// navigates), editable text → text cursor, media → pointer.
 const hoverAffordance = computed(() => {
   if (editing.value) return null
   if (contentEditable.value) {
@@ -233,14 +173,11 @@ function navigate(raw: string) {
   if (resolved.kind === 'entry') {
     openEntry(resolved.collection, resolved.entry.id)
   } else {
-    activeEntryId.value = null // leaving any loaded entry
+    activeEntryId.value = null
     setActivePage(resolved.page.id)
   }
 }
 
-/** navigate with the site's page transition around it, when one is configured.
- * `enter` runs synchronously after the switch — the new tree hasn't rendered
- * yet, so its first frame is in place before it paints. */
 async function followLink(raw: string) {
   await pageTransition.leave()
   navigate(raw)
@@ -251,8 +188,6 @@ const handlers = {
   submit(e: Event) {
     e.preventDefault()
     const form = e.target as HTMLFormElement
-    // the browser's own validation still runs, so a required field or a bad
-    // email reads exactly as it will on the site
     if (typeof form.reportValidity === 'function' && !form.reportValidity()) return
     submitted.value = true
   },
@@ -262,9 +197,6 @@ const handlers = {
     if (!linkTarget.value?.internal) return
     e.preventDefault()
     const raw = linkTarget.value.raw
-    // nothing to edit → follow at once. Otherwise a dblclick always fires a
-    // click first, so navigation waits one beat and any double-click cancels
-    // it (shared timer: see the module script above)
     if (!contentEditing.value) {
       void followLink(raw)
       return
@@ -283,24 +215,17 @@ const handlers = {
     edit(e)
   },
   contextmenu(e: MouseEvent) {
-    // the nearest element that can do anything claims the menu. A background
-    // is offered only when the right-click lands on the element's OWN surface
-    // (a section's empty space) — otherwise a click on an instance's header,
-    // which offers nothing, would bubble up and offer the page's background
     const background = backgroundEditable.value && e.target === el.value
     if (!contentEditable.value && !background) return
     openMenu(e, props.node.id, { content: contentEditable.value, background })
   },
   ...hoverHandlers,
-  // both events, mirroring the published runtime: 'input' makes text fields
-  // update live rather than only on blur (server/site-runtime.js)
   change: fireChangeInteractions,
   input: fireChangeInteractions,
 }
 </script>
 
 <template>
-  <!-- a hidden node renders nothing; it lives on in the Layers tree -->
   <template v-if="hidden" />
   <component
     :is="def?.tag ?? 'div'"
@@ -329,7 +254,6 @@ const handlers = {
         />
       </EntryScope>
     </template>
-    <!-- nothing to repeat: the empty-state block, if the author wrote one -->
     <PreviewRenderer
       v-else-if="listCollection"
       v-for="child in listEmptyChildren"
@@ -338,8 +262,6 @@ const handlers = {
     />
   </component>
 
-  <!-- carousel — the same DOM the published site gets, driven by the same
-       initSlider from shared/slider.js, so Preview and the live site match -->
   <component
     :is="def?.tag ?? 'div'"
     v-else-if="node.type === 'slider'"
@@ -400,7 +322,6 @@ const handlers = {
         v-html="SLIDER_NEXT_SVG"
       />
     </template>
-    <!-- the runtime fills the dot rail, so it knows the real reachable count -->
     <div
       v-if="sliderResolved.dots"
       data-sl-dots
@@ -428,8 +349,6 @@ const handlers = {
     </template>
   </component>
 
-  <!-- a form: real native validation, and the success block on submit — but
-       nothing is sent from an editor surface (see `submitted` above) -->
   <component
     :is="def?.tag ?? 'form'"
     v-else-if="isForm"
@@ -452,7 +371,6 @@ const handlers = {
     </template>
   </component>
 
-  <!-- an icon: the <svg> is the element itself (see ElementRenderer) -->
   <svg
     v-else-if="iconInfo"
     ref="el"
@@ -464,8 +382,7 @@ const handlers = {
     v-on="handlers"
     v-html="iconInfo.inner"
   />
-  <!-- raw HTML is not rendered on Play either: the same placeholder as the
-       canvas, so a reviewer sees where the embed sits -->
+
   <component
     :is="def?.tag ?? 'div'"
     v-else-if="node.type === 'custom-code'"

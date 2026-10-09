@@ -1,11 +1,4 @@
 <script setup lang="ts">
-// The Layers view: the element tree of the page on the canvas, and the surface
-// its structure is authored on. Opened from a page's (or a collection
-// template's) Edit icon in the Pages drawer, which swaps its list for this.
-//
-// The tree IS the structure now: an element's type, nesting, ref, binding and
-// link are the node's own, and everything else (classes, content, media,
-// interactions, translations) is edited in the panels.
 import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronLeft, Search, TriangleAlert, X } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -33,9 +26,6 @@ const roots = computed(() => backend.value.roots.value)
 const isPage = computed(() => backend.value.kind === 'page')
 const title = computed(() => activePage.value?.name ?? 'Layers')
 
-// --- search: find a row by the words it shows ---
-// The tree is the only index of a page now, and a deep one has no Cmd+F. The
-// field is off until the glass is pressed so the header stays a header.
 const searching = ref(false)
 const query = ref('')
 const queryInput = ref<HTMLInputElement>()
@@ -51,12 +41,8 @@ function closeSearch() {
   query.value = ''
 }
 
-// Leaving the page drops a stale filter — its ids belong to a tree that is
-// no longer on screen. (Keyed off the page, not `roots`: a structural edit
-// re-derives the tree, and the search must survive one.)
 watch(() => activePage.value?.id, closeSearch)
 
-/** matches plus every ancestor of one: a hit keeps the nesting around it */
 const visibleIds = computed<Set<string> | null>(() => {
   const needle = query.value.trim().toLowerCase()
   if (!searching.value || !needle) return null
@@ -82,22 +68,12 @@ const { onKeydown } = useLayerSurface({
   canRename: () => isPage.value,
 })
 
-// --- issues: the only place a human sees that a document is broken ---
-// (they still arrive from agents, merges and older projects)
-
 const issues = computed(() => {
-  // ONE context builder, shared with the HTML writer's diagnostics — these
-  // were two copies of the same lines, so a check added to one reported
-  // nothing in the other
   const ctx = validateContext(project.value)
   if (isPage.value) {
     const body = activePage.value?.elements.find((n) => n.type === 'body')
     return body ? validateTree(body, ctx) : []
   }
-  // A MASTER is a tree too, and it was validated NOWHERE: the board showed an
-  // empty footer however broken the component was, so a channel on a master
-  // root, a component holding itself or a misplaced list-empty only surfaced
-  // at publish, buried in a truncated warning list.
   return roots.value.flatMap((root) => validateTree(root, ctx))
 })
 </script>

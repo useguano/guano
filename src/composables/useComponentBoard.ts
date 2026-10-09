@@ -4,31 +4,18 @@ import { setSelectionScope, useElement } from './useElement'
 import { findNode } from '@/lib/tree'
 import type { ComponentDef } from '@/types/editor'
 
-/**
- * The components board: what the canvas shows while the Components column is
- * open. Every component of the project is on it, once, in its own card.
- */
-
 export const UNCATEGORIZED = 'Uncategorized'
 
 export interface BoardCard {
-  /** the component id */
   key: string
   def: ComponentDef
   category: string
 }
 
-/** the drawer asks the board to bring a card into view */
 const focusRequest = ref<{ key: string; tick: number } | null>(null)
 
-/** the card the user is working in — set by focusing one, and by selecting
- *  any element inside one */
 const focusedKey = ref<string | null>(null)
 
-/** true while the board is on the canvas. What decides that structural edits
- *  target a component master rather than the page — derived from the session
- *  actually being mounted, not from the view mode, so there is no render where
- *  the two disagree. */
 const boardActive = ref(false)
 
 export function focusCard(key: string) {
@@ -48,7 +35,6 @@ export function useComponentBoard() {
     })),
   )
 
-  /** cards by category, alphabetically, Uncategorized last */
   const groups = computed<{ name: string; cards: BoardCard[] }[]>(() => {
     const byName = new Map<string, BoardCard[]>()
     for (const card of cards.value) {
@@ -62,8 +48,6 @@ export function useComponentBoard() {
       .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
   })
 
-  /** the component being edited: whichever card owns the selection, else the
-   *  focused one */
   const activeCard = computed<BoardCard | null>(() => {
     const selected = selectedElement.value
     if (selected) {
@@ -76,16 +60,10 @@ export function useComponentBoard() {
   return { cards, groups, focusRequest, focusedKey, activeCard, boardActive }
 }
 
-/**
- * Everything that must hold only WHILE the board is on the canvas. Call from
- * the board component's setup: it tears itself down on unmount.
- */
 export function useComponentBoardSession() {
   const { cards } = useComponentBoard()
   boardActive.value = true
 
-  // selection resolves against the component masters instead of the page, so
-  // Style / Data / Interactions edit a master node like any page node
   setSelectionScope(() => cards.value.map((c) => c.def.root))
 
   onBeforeUnmount(() => {

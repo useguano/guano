@@ -54,9 +54,8 @@ test('setup, edit content, publish, view live, auth guard', async ({ page, conte
   await expect(page.locator('h1', { hasText: marker }).first()).toBeVisible()
 
   // 4b. Play renders the edited site. Play (the Preview surface internally) is
-  //     a MODE inside the one editor shell, not a route (/admin/preview
-  //     redirects to /admin) — so the assertion is that the site renders, not
-  //     the URL. The switch is the canvas's Edit / Play toggle, not a rail
+  //     a MODE inside the one editor shell, not a route — so the assertion
+  //     is that the site renders, not the URL. The switch is the canvas's Edit / Play toggle, not a rail
   //     button. It is read-only: what it shows is what publish will emit.
   await page.getByRole('button', { name: 'Play', exact: true }).click()
   await expect(page.locator('h1', { hasText: marker }).first()).toBeVisible({ timeout: 30_000 })

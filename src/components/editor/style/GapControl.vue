@@ -8,12 +8,8 @@ import { SPACING } from '@/lib/tieredBox'
 import { parseTail, buildTailClass, classToText, textToClass, nearestStepIndex } from '@/lib/valueClass'
 import { UnfoldHorizontal, FoldHorizontal, RotateCcw } from 'lucide-vue-next'
 
-// Gap as a slider row with a button to split into independent X (column) and
-// Y (row) gaps. Unified writes `gap-N`; split writes `gap-x-N` + `gap-y-N`.
-
 const props = defineProps<{
   modelValue: string[]
-  /** the element's classes at selection time — revert hides when back to this */
   baseline?: string[]
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
@@ -33,7 +29,6 @@ function gapTokens(list: string[]): string {
     .join(' ')
 }
 
-// dirty only when the gap classes differ from the selection-time baseline
 const hasGap = computed(() => gapTokens(props.modelValue) !== gapTokens(props.baseline ?? []))
 
 function revert() {
@@ -41,12 +36,10 @@ function revert() {
   emit('update:modelValue', [...strip(ALL), ...restore])
 }
 
-// gap-x-* / gap-y-* both start with 'gap-', so strip axis tokens explicitly
 function strip(prefixes: string[]): string[] {
   return props.modelValue.filter((c) => !prefixes.some((p) => c.startsWith(`${p}-`)))
 }
 
-// the token / value text / tail currently set for a gap prefix
 function tokenFor(prefix: string): string | undefined {
   return props.modelValue.find((c) => parseTail(c, prefix) !== null)
 }
@@ -62,8 +55,6 @@ function sliderIdx(prefix: string): number {
   return near === -1 ? 0 : near
 }
 
-// --- writes ---
-
 function setUnifiedClass(cls: string | null) {
   emit('update:modelValue', [...strip(ALL), ...(cls ? [cls] : [])])
 }
@@ -73,7 +64,6 @@ function setAxisClass(prefix: 'gap-x' | 'gap-y', cls: string | null) {
   emit('update:modelValue', [...strip(ALL), ...(cls ? [cls] : []), keep])
 }
 
-// slider drag → clean scale class; text commit → custom (guarded) class
 function setUnifiedStop(i: number) {
   setUnifiedClass(`gap-${STOPS[i]}`)
 }
@@ -94,7 +84,6 @@ function enableSplit() {
   emit('update:modelValue', [...strip(ALL), buildTailClass('gap-x', tail), buildTailClass('gap-y', tail)])
 }
 function disableSplit() {
-  // collapse back to a single gap using the X value
   emit('update:modelValue', [...strip(ALL), buildTailClass('gap', tailFor('gap-x'))])
 }
 </script>
@@ -156,7 +145,6 @@ function disableSplit() {
       />
     </RowUI>
     <RowUI label="Gap Y">
-      <!-- empty gutter keeps Gap Y's left inset aligned with Gap X -->
       <template #start><span class="block size-6" /></template>
       <SliderUI
         :min="0"

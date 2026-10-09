@@ -1,8 +1,3 @@
-<script setup lang="ts">
-// The empty state of a settings list: the same bordered row the list draws
-// for an item, with a hollow dot and a muted line, so an empty section keeps
-// the shape of a filled one instead of collapsing to a sentence.
-</script>
 
 <template>
   <div class="flex flex-col rounded-xl border border-dashed border-input">

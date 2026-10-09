@@ -2,24 +2,12 @@
 import { computed, ref } from 'vue'
 import ColorPickerUI from '@/components/ui/ColorPickerUI.vue'
 
-// A color value text field (hex, palette name, keyword, or a project design
-// token) with an autocomplete dropdown of the project's design tokens. Edits
-// stay local until blur / Enter, then validate: valid text commits, invalid
-// reverts. Empty commits as '' (unset). Focusing shows every token; typing
-// filters by name. ↑/↓ + Enter pick a suggestion.
-// With `swatch`, the palette picker rides inside the field rather than sitting
-// beside it, so a colour is one control instead of two.
-
 const props = withDefaults(
   defineProps<{
-    /** committed value shown when not editing */
     modelValue: string
-    /** project design tokens (name + hex) offered as suggestions */
     tokens: { name: string; value: string }[]
-    /** guard applied to typed text before commit */
     validate?: (text: string) => boolean
     placeholder?: string
-    /** resolved colour for the embedded picker; omit to hide the swatch */
     swatch?: string
   }>(),
   { placeholder: '–' },
@@ -31,8 +19,6 @@ const editing = ref<string | null>(null)
 const shown = computed(() => editing.value ?? props.modelValue)
 const active = ref(0)
 
-// while focused, suggest tokens — all of them until the user types, then
-// filter by name (empty query lists everything so the palette is discoverable)
 const filtered = computed(() => {
   if (editing.value === null) return []
   const q = editing.value.trim().toLowerCase()
@@ -77,8 +63,6 @@ function onKeydown(e: KeyboardEvent) {
     active.value = (active.value - 1 + filtered.value.length) % filtered.value.length
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    // pick the highlighted token only when the user has typed a query that
-    // matches one; a bare focus (no typing) just commits and blurs
     const typed = (editing.value ?? '').trim()
     if (open.value && typed !== '' && filtered.value[active.value]) {
       pick(filtered.value[active.value]!.name)

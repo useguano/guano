@@ -8,28 +8,18 @@ export interface FloatingSize {
 
 export interface FloatingOptions {
   placement: Placement
-  /** gap between anchor and floating box (px) */
   offset?: number
-  /** minimum distance from the viewport edges (px) */
   padding?: number
 }
 
 export interface FloatingPosition {
   left: number
   top: number
-  /** the side actually used after flipping */
   side: Side
 }
 
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }
 
-/**
- * Position a floating box (tooltip/popover) against an anchor rect in viewport
- * coordinates, for `position: fixed` rendering. Flips to the opposite side when
- * the preferred side would clip the viewport on the main axis (only if the
- * opposite side actually fits better), then clamps the cross axis into
- * [padding, viewport - padding]. Pure math — callers pass measured rects.
- */
 export function computeFloatingPosition(
   anchor: DOMRect,
   floating: FloatingSize,
@@ -56,7 +46,6 @@ export function computeFloatingPosition(
 
   const vertical = side === 'top' || side === 'bottom'
 
-  // main axis
   let left: number
   let top: number
   if (side === 'top') top = anchor.top - offset - floating.height
@@ -64,7 +53,6 @@ export function computeFloatingPosition(
   else if (side === 'left') left = anchor.left - offset - floating.width
   else left = anchor.right + offset
 
-  // cross axis: start = leading edges aligned, end = trailing edges, center = midpoints
   if (vertical) {
     left =
       align === 'start' ? anchor.left
@@ -77,7 +65,6 @@ export function computeFloatingPosition(
       : anchor.top + anchor.height / 2 - floating.height / 2
   }
 
-  // clamp both axes into the viewport (cross axis mainly; main axis as a last resort)
   left = Math.min(Math.max(left!, padding), Math.max(padding, vw - padding - floating.width))
   top = Math.min(Math.max(top!, padding), Math.max(padding, vh - padding - floating.height))
 

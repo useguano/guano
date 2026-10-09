@@ -4,18 +4,12 @@ import { Minus, Plus } from 'lucide-vue-next'
 import { tailToText, textToTail, nearestStepIndex } from '@/lib/valueClass'
 import ValueFieldUI from './ValueFieldUI.vue'
 
-// A compact ‹ − value + › stepper over an ordered list of step values.
-// modelValue null = unset (shows –); stepping below the first step clears it.
-// With allowCustom the value becomes an editable field: the model may then hold
-// an off-scale / arbitrary "tail" (e.g. '[4em]', '-4') and the − / + buttons
-// nudge the nearest scale stop.
 const props = withDefaults(
   defineProps<{
     steps: string[]
     modelValue: string | null
     allowCustom?: boolean
     allowNegative?: boolean
-    /** keywords the field accepts verbatim (e.g. `auto` for margins) */
     allowKeywords?: readonly string[]
   }>(),
   { allowCustom: false, allowNegative: false },
@@ -25,7 +19,6 @@ const emit = defineEmits<{ 'update:modelValue': [string | null] }>()
 const neg = computed(() => (props.modelValue ?? '').startsWith('-'))
 const text = computed(() => tailToText(props.modelValue))
 
-// index into `steps` for the current value: exact member, else nearest by magnitude
 const index = computed(() => {
   if (props.modelValue === null) return -1
   const magnitude = props.modelValue.replace(/^-/, '')
@@ -35,7 +28,6 @@ const index = computed(() => {
 const canDec = computed(() => index.value >= 0)
 const canInc = computed(() => index.value < props.steps.length - 1)
 
-// stepping keeps the current sign but writes a clean scale value
 function emitMagnitude(mag: string | null) {
   if (mag === null) emit('update:modelValue', null)
   else emit('update:modelValue', neg.value ? `-${mag}` : mag)
@@ -48,8 +40,6 @@ function inc() {
   if (index.value === -1) emitMagnitude(props.steps[0]!)
   else if (canInc.value) emitMagnitude(props.steps[index.value + 1]!)
 }
-
-// --- editable field ---
 
 function onCommit(value: string) {
   if (value === '') return emit('update:modelValue', null)

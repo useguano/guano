@@ -14,7 +14,6 @@ import { useLocale } from '@/composables/useLocale'
 import { useAuth } from '@/composables/useAuth'
 import { timeAgo } from '@/lib/time'
 
-/** what the drawer is showing settings for */
 export type SettingsTarget =
   | { kind: 'page'; pageId: string }
   | { kind: 'entry'; collectionId: string; entryId: string }
@@ -33,7 +32,6 @@ const STATUS_OPTIONS = [
   { label: 'Draft', value: 'draft' },
 ]
 
-// --- resolve the target (narrow the union through a local const) ---
 const page = computed(() => {
   const t = props.target
   return t.kind === 'page' ? (pages.value.find((p) => p.id === t.pageId) ?? null) : null
@@ -49,24 +47,17 @@ const entry = computed(() => {
     : null
 })
 
-/** the thing that carries seo / status / timestamps, whichever kind */
 const item = computed(() => page.value ?? entry.value)
 const kindLabel = computed(() => (props.target.kind === 'page' ? 'Page' : 'Item'))
 const headerLabel = computed(() =>
   props.target.kind === 'entry' ? 'Edit item' : `${kindLabel.value} settings`,
 )
 
-// the target can vanish under us — deleted on the canvas, by another client
-// through live sync, or with its whole collection. The root is `v-if="item"`
-// with no v-else, so without this the panel would render blank with Escape as
-// the only way out. (onDuplicate/onDelete also emit back; a double emit just
-// clears settingsTarget twice, which is harmless.)
 watch(item, (it) => {
   if (!it) emit('back')
 })
 const isHome = computed(() => props.target.kind === 'page' && page.value?.id === homePage.value.id)
 
-// --- title / slug: committed on change (page edits rebuild the @setup block) ---
 const titleField = ref('')
 const slugField = ref('')
 watch(
@@ -102,8 +93,6 @@ const status = computed({
   },
 })
 
-// --- SEO: mutated directly; empty values prune so untouched items stay
-// byte-identical. The edit-tracking watcher stamps updatedAt. ---
 function seoField(key: 'title' | 'description') {
   return computed({
     get: () => item.value?.seo?.[key] ?? '',
@@ -121,11 +110,6 @@ function seoField(key: 'title' | 'description') {
 const seoTitle = seoField('title')
 const seoDescription = seoField('description')
 
-// --- per-page custom code: page metadata, so it lives here rather than in the
-// right rail. Pages only (entries have no customCode) and build roles only —
-// raw <script> on a published page is the same privilege the server gates a
-// contributor's write on, so don't offer an input that would 403. Empty prunes
-// the field, like the SEO overrides above. ---
 function customCodeField(key: 'head' | 'body') {
   return computed<string>({
     get: () => page.value?.customCode?.[key] ?? '',
@@ -143,7 +127,6 @@ function customCodeField(key: 'head' | 'body') {
 const headCode = customCodeField('head')
 const bodyCode = customCodeField('body')
 
-// --- actions ---
 function onDuplicate() {
   if (page.value) duplicatePage(page.value.id)
   else if (collection.value && entry.value) duplicateEntry(collection.value, entry.value.id)
@@ -225,11 +208,6 @@ const hasHistory = computed(() => Boolean(item.value?.createdAt || item.value?.u
           />
         </DrawerField>
 
-        <!-- two mutually exclusive values never needed a popover; segments also
-             keep the row from reflowing as a dropdown opens and closes. The
-             active one is accent-tinted, the same "this is selected" the
-             drawer's own page/entry rows use — `bg-background` would read as
-             raised in the dark theme and inset in the light one. -->
         <DrawerField label="Status">
           <div class="flex h-7 w-full items-center gap-0.5 rounded-lg bg-input p-0.5">
             <button
@@ -289,8 +267,6 @@ const hasHistory = computed(() => Boolean(item.value?.createdAt || item.value?.u
         </DrawerField>
       </DrawerSection>
 
-      <!-- history is reference, not a field: it sits with the actions rather
-           than taking a section and two label gutters of its own -->
       <div class="mt-auto flex flex-col gap-2 pt-2">
         <div v-if="hasHistory" class="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
           <span v-if="item.createdAt" class="truncate">

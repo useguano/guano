@@ -2,11 +2,12 @@
 import { computed, ref, watch, type Component } from 'vue'
 import {
   Palette, Zap, GitBranch, Sun, Moon, Paperclip,
-  MessageCircle, CircleCheck, CircleAlert, CircleX, Rocket,
+  MessageCircle, CircleCheck, CircleAlert, CircleX, Rocket, Keyboard,
 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import PanelPopoverBody from '@/components/editor/sidebar/PanelPopoverBody.vue'
 import PublishPopover from '@/components/editor/sidebar/PublishPopover.vue'
+import ShortcutsPopover from '@/components/editor/sidebar/ShortcutsPopover.vue'
 import CommentsEditor from '@/components/shared/CommentsEditor.vue'
 import { useBranches } from '@/composables/useBranches'
 import { useComments } from '@/composables/useComments'
@@ -38,14 +39,6 @@ const ALL_PANELS: Panel[] = [
 
 const { canBuild, canEditContent } = useAuth()
 
-// The sidebar options are PER ACCOUNT TYPE, not per mode — build roles keep the
-// full inspector in both Build and Preview. Contributors are content-only, so
-// they only get Drafts (they can create/apply drafts and publish); the
-// element-editing panels are hidden for them. Per-page custom code is NOT here
-// — it is page metadata, so it lives in the page's own settings view
-// (PageSettingsEditor, from the Pages drawer).
-// A reviewer gets none: they hold no drafts and publish nothing, so the
-// rail is the comments button alone.
 const panels = computed<Panel[]>(() =>
   canBuild.value
     ? ALL_PANELS
@@ -59,16 +52,10 @@ const activePanel = computed(() => panels.value.find((p) => p.id === activePanel
 const { pickingFor } = useInteraction()
 const { selectedElement, isMultiSelect, requestReveal } = useElement()
 
-// Escape always returns to the Layers tree with the current selection in view:
-// it closes an open panel first, and otherwise pulls focus back from the
-// canvas/sidebar. It defers to a focused text field (inputs handle their own
-// Escape) and to target picking.
-// The panel popover opts out of the PopoverHost Escape (closeOnEscape: false)
-// so this handler stays the single owner of that flow.
 function onWindowKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return
-  if (useModal().stack.value.length) return // an open modal owns Escape
-  if (pickingFor.value) return // target picking cancels first
+  if (useModal().stack.value.length) return
+  if (pickingFor.value) return
   if (activePanelId.value) {
     closePanel()
     requestReveal()
@@ -82,14 +69,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 const { onMain } = useBranches()
 const { theme, toggleTheme } = useTheme()
 
-// rail buttons (w-7) sit inset ~10px inside the w-12 rail; the default 8px gap
-// would leave popovers nearly flush against the sidebar, so bump the offset to
-// clear its edge by ~8px — matching the InsertDock's gap-2 (8px) between its
-// trigger button and the panel that grows out of it
 const RAIL_POPOVER_OFFSET = 18
 
-// save status as a bare stroke-circle icon (check / ! / ✕); click opens the
-// save/publish popover (status badges + the Publish button live there)
 const { status } = usePersistence()
 const SAVE_ICONS = { saved: CircleCheck, pending: CircleAlert, error: CircleX } as const
 const SAVE_COLORS = { saved: 'text-success', pending: 'text-pending', error: 'text-danger' } as const
@@ -110,14 +91,11 @@ function togglePublish() {
   })
 }
 
-// comments popover, anchored to its rail button in the app PopoverHost
 const commentsBtn = ref<InstanceType<typeof ButtonUI>>()
 const { hasUnseen, unseenCount } = useComments()
 function toggleComments() {
   const anchor = commentsBtn.value?.$el as HTMLElement | undefined
   if (!anchor) return
-  // the stamp that puts the unseen dot out is CommentsEditor's own, on mount:
-  // whoever opens the panel, however, is then the one marking it read
   usePopover().togglePopover({
     id: 'comments',
     component: CommentsEditor,
@@ -130,10 +108,24 @@ function toggleComments() {
   })
 }
 
-// element-editing panels show the selected element's icon in the header
+const shortcutsBtn = ref<InstanceType<typeof ButtonUI>>()
+function toggleShortcuts() {
+  const anchor = shortcutsBtn.value?.$el as HTMLElement | undefined
+  if (!anchor) return
+  usePopover().togglePopover({
+    id: 'shortcuts',
+    component: ShortcutsPopover,
+    anchor,
+    placement: 'left-end',
+    offset: RAIL_POPOVER_OFFSET,
+    title: 'Keyboard shortcuts',
+    icon: Keyboard,
+    closeOnOutside: true,
+  })
+}
+
 const ELEMENT_PANELS = ['data', 'style', 'interactions']
 
-/** these panels edit a single element, so they're blocked during a multi-selection */
 const blocked = (id: string) => ELEMENT_PANELS.includes(id) && isMultiSelect.value
 function onTabClick(id: string) {
   if (blocked(id)) return
@@ -146,22 +138,13 @@ const headerIcon = computed(() => {
   return activePanel.value?.icon
 })
 
-/** the popover title. `title` is passed as a getter, so it stays live without
- * reopening — the panel no longer drills into anything, so it is just the
- * panel's own label. */
 function panelTitle(): string {
   return activePanel.value?.label ?? ''
 }
 
-// --- the panel popover lives in the app PopoverHost, anchored to the rail
-// button that opened it (so it sits vertically vis-à-vis its trigger, like the
-// publish/comments popovers). Switching panels re-anchors to the new button: a
-// same-id openPopover updates anchor/title/icon in place — no reopen, no
-// onClose — so PanelPopoverBody's body still swaps reactively.
 const railEl = ref<HTMLElement>()
 const { currentId, openPopover, closePopover } = usePopover()
 
-// per-panel button DOM nodes, keyed by panel id (function refs in the v-for)
 const panelBtns = new Map<string, HTMLElement>()
 function setPanelBtn(id: string, el: unknown) {
   const dom = (el as { $el?: HTMLElement } | null)?.$el
@@ -192,8 +175,7 @@ watch(activePanel, (panel) => {
 
 <template>
   <aside ref="railEl" class="relative flex h-full w-12 flex-col items-center gap-1 py-4">
-    <!-- the save/publish status: a reviewer saves only comments and never
-         publishes, so there is nothing for the popover to show them -->
+
     <ButtonUI
       v-if="canEditContent"
       ref="statusBtn"
@@ -227,7 +209,7 @@ watch(activePanel, (panel) => {
         "
         @click="onTabClick(panel.id)"
       />
-      
+
     </template>
     <div class="relative flex">
       <ButtonUI
@@ -239,21 +221,28 @@ watch(activePanel, (panel) => {
         :class="currentId === 'comments' ? '!bg-accent/30 text-accent-foreground' : 'text-muted-foreground'"
         @click="toggleComments"
       />
-      <!-- unseen activity: a dot rather than a count, which at this size
-           would be unreadable. The ring keeps it legible over the rail in
-           either theme. The aria-label above carries the number. -->
+
       <span
         v-if="hasUnseen"
         class="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-success ring-2 ring-background"
       />
     </div>
     <ButtonUI
+      ref="shortcutsBtn"
+      variant="ghost"
+      :icon="Keyboard"
+      aria-label="Keyboard shortcuts"
+      class="mt-auto w-7"
+      :class="currentId === 'shortcuts' ? '!bg-accent/30 text-accent-foreground' : 'text-muted-foreground'"
+      @click="toggleShortcuts"
+    />
+    <ButtonUI
       variant="ghost"
       :icon="theme === 'light' ? Sun : Moon"
       :aria-label="theme === 'light' ? 'Switch to dark' : 'Switch to light'"
-      class="mt-auto w-7 text-muted-foreground"
+      class="w-7 text-muted-foreground"
       @click="toggleTheme"
     />
-    
+
   </aside>
 </template>

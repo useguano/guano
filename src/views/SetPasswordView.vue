@@ -58,7 +58,6 @@ async function submit() {
     })
     const detail = await res.json().catch(() => null)
     if (!res.ok) throw new Error(detail?.error ?? 'Could not set the password')
-    // one editor shell for everyone; contributors open pinned to Preview mode
     window.location.assign('/admin')
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Could not set the password'

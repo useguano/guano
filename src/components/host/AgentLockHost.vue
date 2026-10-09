@@ -3,12 +3,6 @@ import { watch, onBeforeUnmount } from 'vue'
 import { useLiveSync, agentLocked, agentWriteCount } from '@/composables/useLiveSync'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 
-// Hard lock while an AI agent (MCP) is editing the active branch: a scrim
-// blocks every pointer interaction (the canvas stays visible underneath —
-// that's the live show) and a capture-phase keydown listener swallows
-// shortcuts (⌘Z, delete, typing) that would mutate mid-session. The only
-// affordance is Take over, which breaks the lock deliberately.
-
 const { takeOver } = useLiveSync()
 
 function swallowKeys(e: KeyboardEvent) {
