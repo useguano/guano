@@ -30,7 +30,7 @@ function onKeydownCapture(e: KeyboardEvent) {
   if (e.key !== 'Escape' || !open.value) return
   if (interactions.pickingFor.value) return
   if (useModal().stack.value.length) return
-  if (usePopover().current.value) return
+  if (usePopover().current.value?.closeOnEscape !== false) return
   if (isEditable(document.activeElement)) return
   e.stopPropagation()
   closeDrawer()

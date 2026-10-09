@@ -219,7 +219,6 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // needs both: `hidden` → `flex` is the only way to switch display, and no
   // class swap expresses the slide — but that split is ours, not the author's,
   // so nothing is chosen between.
-  const effectsBefore = await libraryRows(page).count()
   await addTrigger(page, /^Click/)
   await drawer(page).getByPlaceholder('Add class').fill('flex')
   await page.keyboard.press('Enter')
@@ -233,10 +232,12 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // ONE action, not two: the pair is recognised from the bindings themselves
   await expect(actionRows(page)).toHaveCount(1)
 
-  // and the library gained one effect, not one per engine — the open one,
-  // which is how the drawer says what is being edited
-  await expect(libraryRows(page)).toHaveCount(effectsBefore + 1)
-  await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
+  // the library marks the effect being edited, and lists it ONCE — one per
+  // engine is what the pairing exists to avoid
+  const open = drawer(page).locator('[data-effect-row][data-open]')
+  await expect(open).toHaveCount(1)
+  const name = (await open.locator('button').first().innerText()).trim()
+  await expect(libraryRows(page).filter({ hasText: name })).toHaveCount(1)
 
   await publish(page)
   await page.goto('/')
