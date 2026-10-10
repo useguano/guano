@@ -1209,6 +1209,7 @@ function elementSummary(project, page, opts = {}) {
       ...(b.appearMode ? { appearMode: b.appearMode } : {}),
       ...(b.appearAt ? { appearAt: b.appearAt } : {}),
       ...(b.scrub ? { scrub: b.scrub } : {}),
+      ...(b.mouse ? { mouse: b.mouse } : {}),
       ...(b.delay ? { delay: b.delay } : {}),
       ...(b.breakpoints ? { breakpoints: b.breakpoints } : {}),
     }))
@@ -2757,6 +2758,7 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
             ...(bind.appearMode ? { appearMode: bind.appearMode } : {}),
             ...(bind.appearAt ? { appearAt: bind.appearAt } : {}),
             ...(bind.scrub ? { scrub: bind.scrub } : {}),
+            ...(bind.mouse ? { mouse: bind.mouse } : {}),
             ...(bind.delay ? { delay: bind.delay } : {}),
             ...(bind.breakpoints?.length ? { breakpoints: bind.breakpoints } : {}),
           })
@@ -3020,6 +3022,7 @@ function masterNodeRows(project, def, opts = {}) {
                     ...(b.appearMode ? { appearMode: b.appearMode } : {}),
                     ...(b.appearAt ? { appearAt: b.appearAt } : {}),
                     ...(b.scrub ? { scrub: b.scrub } : {}),
+                    ...(b.mouse ? { mouse: b.mouse } : {}),
                     ...(b.delay ? { delay: b.delay } : {}),
                     ...(b.breakpoints?.length ? { breakpoints: b.breakpoints } : {}),
                   })),
@@ -8116,7 +8119,7 @@ const tools = [
                     animationId: { type: 'string' },
                     trigger: {
                       type: 'string',
-                      enum: ['load', 'appear', 'scrub', 'hover', 'click', 'scrolled', 'change'],
+                      enum: ['load', 'appear', 'scrub', 'mouse', 'hover', 'click', 'scrolled', 'change'],
                     },
                     targetId: { type: 'string', description: 'element id to move; omit for the element itself' },
                     targetRef: {
@@ -8158,11 +8161,24 @@ const tools = [
                       },
                       additionalProperties: false,
                     },
+                    mouse: {
+                      type: 'object',
+                      description:
+                        'mouse only — which pointer axis drives progress, measured across this ' +
+                        'element or the viewport. Rests at 0.5, so author the track from -n to n. ' +
+                        'See get_guide {section: "animations"}.',
+                      properties: {
+                        axis: { type: 'string', enum: ['x', 'y'] },
+                        area: { type: 'string', enum: ['element', 'page'] },
+                        smooth: { type: 'number' },
+                      },
+                      additionalProperties: false,
+                    },
                     delay: {
                       type: 'integer',
                       minimum: 0,
                       description:
-                        'ms the play waits after the trigger fires (not scrub) — one "pop in" ' +
+                        'ms the play waits after the trigger fires (not scrub/mouse) — one "pop in" ' +
                         'serves every beat of a sequence; a reverse never waits',
                     },
                     breakpoints: {

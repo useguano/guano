@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import SelectUI from '@/components/ui/SelectUI.vue'
-import ButtonUI from '@/components/ui/ButtonUI.vue'
 import ClassFieldInput from '@/components/editor/style/ClassFieldInput.vue'
 import { useInteraction } from '@/composables/useInteraction'
 
@@ -34,35 +33,50 @@ const durationOptions = computed(() => {
   if (!current || DURATION_OPTIONS.some((d) => d.value === current)) return DURATION_OPTIONS
   return [{ label: current.replace(/^duration-/, '') + 'ms', value: current }, ...DURATION_OPTIONS]
 })
+
+// the strip is one line: the classes, and — only while it is being worked in —
+// the timing. Collapsed it is just what the effect applies.
+const expanded = ref(false)
+
+function onFocusIn() {
+  expanded.value = true
+}
+
+function onFocusOut(event: FocusEvent) {
+  const root = event.currentTarget as HTMLElement
+  const next = event.relatedTarget as Node | null
+  if (!next || !root.contains(next)) expanded.value = false
+}
 </script>
 
 <template>
-  <div v-if="effect" class="flex items-center gap-2 px-2.5 py-2">
-    <ClassFieldInput v-model="effect.toClasses" :prerequisites="false" class="min-w-0 flex-1 font-mono" />
-    <div class="w-24 shrink-0">
-      <SelectUI
-        :model-value="effect.duration"
-        :options="durationOptions"
-        @update:model-value="(v) => v && (effect!.duration = v)"
-      />
-    </div>
-    <div class="w-32 shrink-0">
-      <SelectUI
-        :model-value="effect.easing"
-        :options="easingOptions"
-        @update:model-value="(v) => v && (effect!.easing = v)"
-      />
-    </div>
-
-    <ButtonUI
-      variant="outline"
-      size="sm"
-      class="shrink-0"
-      tooltip="Lock scroll and trap focus while this is on"
-      :class="effect.modal && 'bg-accent text-accent-foreground'"
-      @click="effect!.modal = effect!.modal ? undefined : true"
-    >
-      Modal
-    </ButtonUI>
+  <div
+    v-if="effect"
+    class="flex items-center gap-2 px-2.5 py-2"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+  >
+    <ClassFieldInput
+      v-model="effect.toClasses"
+      :prerequisites="false"
+      drop-up
+      class="min-w-0 flex-1 font-mono"
+    />
+    <template v-if="expanded">
+      <div class="w-24 shrink-0">
+        <SelectUI
+          :model-value="effect.duration"
+          :options="durationOptions"
+          @update:model-value="(v) => v && (effect!.duration = v)"
+        />
+      </div>
+      <div class="w-32 shrink-0">
+        <SelectUI
+          :model-value="effect.easing"
+          :options="easingOptions"
+          @update:model-value="(v) => v && (effect!.easing = v)"
+        />
+      </div>
+    </template>
   </div>
 </template>

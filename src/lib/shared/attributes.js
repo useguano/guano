@@ -25,6 +25,7 @@ const RESERVED_DATA_ATTRS = new Set([
   'data-form-success',
   'data-form-error',
   'data-form-fallback',
+  'data-fx',
   'data-int',
   'data-anim',
   'data-tgt',

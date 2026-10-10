@@ -14,8 +14,7 @@ export interface DrawerSelection {
 const open = ref(false)
 const selected = ref<DrawerSelection | null>(null)
 const trigger = ref<string | null>(null)
-
-const fresh = ref<string | null>(null)
+const action = ref<string | null>(null)
 
 const view = computed<'effect' | 'trigger' | 'empty'>(() =>
   selected.value ? 'effect' : trigger.value ? 'trigger' : 'empty',
@@ -49,9 +48,6 @@ function startWatchers() {
         ] as const,
       () => {
         if (selected.value && !resolves(selected.value)) selected.value = null
-        if (fresh.value && !project.value.effects?.some((e) => e.id === fresh.value)) {
-          fresh.value = null
-        }
       },
     )
   })
@@ -65,25 +61,15 @@ export function useEffectsDrawer() {
     open.value = true
   }
 
-  function openTrigger(key: string) {
-    keepEffect()
+  function openTrigger(key: string, actionKey: string | null = null) {
     selected.value = null
     trigger.value = key
-    open.value = true
-  }
-
-  function keepEffect() {
-    fresh.value = null
-  }
-
-  function effectCreated(effectId: string) {
-    fresh.value = effectId
+    action.value = actionKey
     open.value = true
   }
 
   function closeDrawer() {
     open.value = false
-    keepEffect()
   }
 
   function toggleDrawer() {
@@ -95,12 +81,10 @@ export function useEffectsDrawer() {
     open,
     selected,
     trigger,
-    fresh,
+    action,
     view,
     openEffect,
     openTrigger,
-    effectCreated,
-    keepEffect,
     closeDrawer,
     toggleDrawer,
   }

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { classTriggers, wired, wiredById } from './fixtures/fxWire'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 // @ts-expect-error untyped server module
@@ -141,21 +142,14 @@ function fixture() {
   }
 }
 
-/** every data-int meta on the page, in document order */
+/** every class trigger on the page, in document order */
 async function metas(html: string) {
-  const out: { t: string; k: string; s: string; a?: string }[] = []
-  for (const m of html.matchAll(/data-int="([^"]*)"/g)) {
-    const json = m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')
-    out.push(...JSON.parse(json))
-  }
-  return out
+  return classTriggers(html, SITE)
 }
 
-/** the state keys a [data-tgt] element listens on */
+/** the state keys the element with this html id listens on */
 function targetKeys(html: string, htmlId: string) {
-  const el = new RegExp(`<[^>]*id="${htmlId}"[^>]*>`).exec(html)?.[0] ?? ''
-  const tgt = /data-tgt="([^"]*)"/.exec(el)?.[1] ?? ''
-  return tgt.replaceAll('&amp;', '&').split(' ').filter(Boolean)
+  return wiredById(html, htmlId, SITE)?.t ?? []
 }
 
 test.describe('bindings across a collection-list boundary', () => {
@@ -163,33 +157,43 @@ test.describe('bindings across a collection-list boundary', () => {
     await exportSite(fixture(), SITE)
   })
 
+  // The published keys are route-local ordinals (src/lib/shared/fxWire.js), so
+  // these assert the RELATIONSHIP rather than a composed uuid — which is what
+  // the bug was anyway: the row button wrote one key and the sheet listened on
+  // another, so the click did nothing while every tool reported success.
   test('a row trigger and the shared sheet outside the list agree on one state key', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
     const all = await metas(html)
+    const listens = targetKeys(html, 'sheet')
+    expect(listens).toHaveLength(1)
+    const sheetKey = listens[0]!
 
-    // the list repeated, so there are two row-open triggers
-    const opens = all.filter((m) => m.a === 'on' && m.s.startsWith(`${SHOW}:sheet`))
+    // the list repeated, so there are two row-open triggers, and BOTH key the
+    // sheet's one effect: neither carries an entry scope, because the sheet
+    // renders once, outside the repeat
+    const opens = all.filter((m) => m.s === sheetKey && m.a === 'on')
     expect(opens).toHaveLength(2)
 
-    // neither carries an entry scope: the sheet renders once, outside the repeat
-    for (const m of opens) expect(m.s).toBe(`${SHOW}:sheet`)
-
-    // the close button inside the sheet keys the same effect
-    const close = all.find((m) => m.a === 'off')!
-    expect(close.s).toBe(`${SHOW}:sheet`)
-
-    // and the sheet itself listens on exactly that key — this is the match that
-    // used to fail
-    expect(targetKeys(html, 'sheet')).toContain(`${SHOW}:sheet`)
+    // the close button inside the sheet keys that same effect
+    const closes = all.filter((m) => m.a === 'off')
+    expect(closes).toHaveLength(1)
+    expect(closes[0]!.s).toBe(sheetKey)
   })
 
   test('a per-row effect stays independent row to row', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
-    const toggles = (await metas(html)).filter((m) => m.s.startsWith(`${SHOW}:rowPanel`))
+    // each repeat renders its own panel, and the two listen on DIFFERENT keys —
+    // without the entry scope a hover on one card fires every row
+    const sheetKey = targetKeys(html, 'sheet')[0]!
+    const panels = wired(html, SITE).filter(({ fx }) => fx.t && !fx.t.includes(sheetKey))
+    expect(panels).toHaveLength(2)
+    const rowKeys = new Set(panels.flatMap(({ fx }) => fx.t!))
+    expect(rowKeys.size).toBe(2)
+
+    // and each row's trigger declares the key its own panel listens on
+    const toggles = (await metas(html)).filter((m) => rowKeys.has(m.s))
     expect(toggles).toHaveLength(2)
-    // one key per entry, never shared
-    const keys = new Set(toggles.map((m) => m.s))
-    expect(keys).toEqual(new Set([`${SHOW}:rowPanel@ee1`, `${SHOW}:rowPanel@ee2`]))
+    expect(new Set(toggles.map((m) => m.s))).toEqual(rowKeys)
   })
 
   test('the row button actually opens the sheet in the browser', async ({ page }) => {

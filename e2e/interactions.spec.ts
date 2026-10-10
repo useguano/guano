@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { classTriggers, manifest, motionTriggers, wiredById } from './fixtures/fxWire'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 // server modules under test — plain ESM, safe to import into the spec runner
@@ -329,57 +330,52 @@ test.describe('interactions', () => {
 
   test('the emitted keys identify EFFECTS, not triggers', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
-    const fx = JSON.parse(/id="int-fx"[^>]*>([^<]*)</.exec(html)![1]!)
+    // one state key for the modal, whatever the number of triggers. Published
+    // keys are route-local ordinals, so the assertion is the relationship.
+    const listens = wiredById(html, 'modal', SITE)!.t!
+    expect(listens).toHaveLength(1)
+    const modalKey = listens[0]!
 
-    // one state key for the modal, whatever the number of triggers
-    const modalKeys = Object.keys(fx).filter((k) => k.startsWith(`${SHOW}:modal`))
-    expect(modalKeys).toEqual([`${SHOW}:modal`])
-
-    const metas = [...html.matchAll(/data-int="([^"]*)"/g)]
-      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-      .flat()
-    const open = metas.find((i) => i.k === 'b1')
-    const close = metas.find((i) => i.k === 'b2')
+    const open = wiredById(html, 'open', SITE)!.c![0]!
+    const close = wiredById(html, 'close', SITE)!.c![0]!
     expect(open.s).toBe(close.s) // THE fix: one shared state key
+    expect(open.s).toBe(modalKey)
     expect(open.a).toBe('on')
     expect(close.a).toBe('off')
     expect(close.c).toEqual(['outside', 'escape'])
 
-    // the target lists its state key once, and its transition setup once —
-    // three bindings used to mean three copies of both
+    // the target's transition setup appears once — three bindings used to mean
+    // three copies of it
     const tag = /<div[^>]*id="modal"[^>]*>/.exec(html)![0]!
-    expect(tag.match(/i-show:modal/g)!).toHaveLength(1)
     expect(tag.match(/duration-300/g)!).toHaveLength(1)
     // the conflicting base class is keyed by state key, so `hidden` is dropped
     // while the effect is on
-    const fxrm = JSON.parse(/id="int-fxrm"[^>]*>([^<]*)</.exec(html)![1]!)
-    expect(fxrm[`${SHOW}:modal`]).toBe('hidden')
+    expect(manifest(html, SITE).rm![modalKey]).toBe('hidden')
+    expect(SHOW).toBeTruthy()
   })
 
   test('a click play is keyed per (animation, target), not per binding', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
-    const metas = [...html.matchAll(/data-anim="([^"]*)"/g)]
-      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-      .flat()
-
-    const open = metas.find((m) => m.k === 'ab1')
-    const close = metas.find((m) => m.k === 'ab2')
+    const open = wiredById(html, 'anim-open', SITE)!.m![0]!
+    const close = wiredById(html, 'anim-close', SITE)!.m![0]!
     // THE fix: both clicks drive ONE play, so the close button can rewind what
     // the open button ran. Keyed per binding, it rewound a play of its own that
     // nothing had ever started.
+    expect(open.s).toBeTruthy()
     expect(open.s).toBe(close.s)
-    expect(open.s).toBe(`${FADE}:animPanel`)
+    // …and the play key is NOT either binding's own key
+    expect(open.s).not.toBe(open.k)
+    expect(open.s).not.toBe(close.k)
     expect(open.ac).toBe('on')
     expect(close.ac).toBe('off')
 
     // a hover drives both directions itself, so it has no state to share and
     // stays keyed per binding — no `s` on the wire at all
-    expect(metas.find((m) => m.k === 'ab3').s).toBeUndefined()
+    expect(wiredById(html, 'card', SITE)!.m![0]!.s).toBeUndefined()
 
     // the panel lists both bindings as targets, so either key resolves it
-    const tag = /<div[^>]*id="anim-panel"[^>]*>/.exec(html)![0]!
-    expect(tag).toContain('ab1')
-    expect(tag).toContain('ab2')
+    expect(wiredById(html, 'anim-panel', SITE)!.a).toEqual([open.k, close.k])
+    expect(FADE).toBeTruthy()
   })
 
   test('an animated panel is opened by one button and rewound by another', async ({ page }) => {
@@ -402,17 +398,11 @@ test.describe('interactions', () => {
   test('the two engines answer the same triggers', async ({ page }) => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
 
-    // a class change on load rides in data-int like any other trigger…
-    const metas = [...html.matchAll(/data-int="([^"]*)"/g)]
-      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-      .flat()
-    expect(metas.find((i) => i.k === 'b6').t).toBe('load')
+    // a class change on load rides in the manifest like any other trigger…
+    expect(wiredById(html, 'loaded', SITE)!.c![0]!.t).toBe('load')
 
     // …and a timeline on scrolled carries its threshold
-    const anims = [...html.matchAll(/data-anim="([^"]*)"/g)]
-      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-      .flat()
-    const shrink = anims.find((m) => m.k === 'ab4')
+    const shrink = wiredById(html, 'shrink', SITE)!.m![0]! as { t: string; at2?: number }
     expect(shrink.t).toBe('scrolled')
     expect(shrink.at2).toBe(40)
 
@@ -690,8 +680,11 @@ test.describe('a modal interaction', () => {
 
   test('the flag reaches the wire as its own tag', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
-    const keys = JSON.parse(/id="int-modal"[^>]*>([^<]*)</.exec(html)![1]!)
-    expect(keys).toEqual([`${DIALOG}:mdPanel`])
+    // exactly one state key is a modal, and it is the one the panel listens on
+    const keys = manifest(html, SITE).modal!
+    expect(keys).toHaveLength(1)
+    expect(wiredById(html, 'md-panel', SITE)!.t).toContain(keys[0])
+    expect(DIALOG).toBeTruthy()
     // and the inertia scroller really is on this route
     expect(html).toContain('/assets/motion.js')
   })

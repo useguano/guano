@@ -63,6 +63,22 @@ export interface McpSession {
   runtime: any
 }
 
+/**
+ * The effects manifest ships as a sidecar file (`assets/fx-<hash>.js`), and the
+ * two helpers below hand a spec an html STRING after deleting the temp dir — so
+ * the sidecar is inlined back in as the island it replaced, which is the shape
+ * fxWire's reader falls back to. That the real export references a FILE is the
+ * delivery contract, covered by e2e/export-fx-sidecar.spec.ts against a real
+ * directory.
+ */
+function inlineFxSidecar(html: string, dir: string): string {
+  const ref = /<script src="\/(assets\/fx-[0-9a-f]{8}\.js)" defer><\/script>/.exec(html)
+  if (!ref) return html
+  const sidecar = readFileSync(join(dir, ref[1]!), 'utf8')
+  const json = sidecar.slice(sidecar.indexOf('=') + 1).replaceAll('</', '<\\/')
+  return html.replace(ref[0], `<script type="application/json" id="guano-fx">${json}</script>`)
+}
+
 export async function mcpSession(
   projectName = 'T',
   /** what the server would report back from the export — `route-size` reads it */
@@ -132,7 +148,7 @@ export async function mcpSession(
       try {
         await exportSite(stored(), dir)
         const out = readFileSync(join(dir, 'index.html'), 'utf8')
-        return out.slice(out.indexOf('<body'))
+        return inlineFxSidecar(out.slice(out.indexOf('<body')), dir)
       } finally {
         rmSync(dir, { recursive: true, force: true })
       }
@@ -169,7 +185,9 @@ export async function mcpSession(
           for (const name of readdirSync(join(dir, rel))) {
             const next = rel ? `${rel}/${name}` : name
             if (statSync(join(dir, next)).isDirectory()) walk(next)
-            else if (next.endsWith('.html')) out[next] = readFileSync(join(dir, next), 'utf8')
+            else if (next.endsWith('.html')) {
+              out[next] = inlineFxSidecar(readFileSync(join(dir, next), 'utf8'), dir)
+            }
           }
         }
         walk('')

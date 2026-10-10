@@ -2812,7 +2812,10 @@ async function handleStatic(req, res) {
   // including /assets/* (style.css, script.js, media). A private site asks
   // for its password first.
   if (await siteGateHandled(req, res, path)) return
-  return await serveSiteDir(req, res, SITE)
+  // a password-protected site's pages must not sit in a shared cache, even
+  // though a revalidation would hit the gate again
+  const gate = await siteGate()
+  return await serveSiteDir(req, res, SITE, { private: !!(gate.enabled && gate.hash) })
 }
 
 /**
@@ -2821,7 +2824,47 @@ async function handleStatic(req, res) {
  * preview server, which differ only in which directory they point at (and the
  * preview's noindex header).
  */
-async function serveSiteDir(req, res, root) {
+/**
+ * How long a visitor's browser may keep a published file. The server method IS
+ * the host for a `server` publish, so these headers are the site's only caching
+ * story; a zip/github export is served elsewhere and gets the host's own.
+ *
+ * Two tiers, decided by whether the URL can ever change meaning:
+ *
+ * - `assets/media/<sha>…` and `assets/fx-<hash>.js` are CONTENT-ADDRESSED — the
+ *   hash is of the bytes, so those URLs are immutable by construction and can
+ *   be cached for a year without revalidating. Between them that is the media
+ *   (the biggest files a site ships) and the per-route effects manifest.
+ * - everything else (`assets/script.js`, `style.css`, the HTML) keeps its name
+ *   across a republish, so it must be revalidated or a publish would not be
+ *   visible. `no-cache` means "ask every time", and the ETag turns that ask
+ *   into a 304 of a couple of hundred bytes instead of the whole file.
+ *
+ * Before this the published site sent no cache headers at all: no
+ * `cache-control`, no `etag`, nothing to revalidate against — so every
+ * navigation re-downloaded script.js (24 KB), motion.js (17 KB), style.css
+ * (32 KB) and every image on the page.
+ *
+ * The PREVIEW server is `no-store`: it renders drafts, and a stale draft in a
+ * shared cache is worse than a slow one.
+ */
+function cacheHeaders(target, data, preview, isPrivate = false) {
+  if (preview) return { 'cache-control': 'no-store' }
+  const immutable =
+    /[/\\]assets[/\\]media[/\\]/.test(target) ||
+    /[/\\]assets[/\\]fx-[0-9a-f]{8}\.js$/.test(target)
+  const scope = isPrivate ? 'private' : 'public'
+  return {
+    'cache-control': immutable
+      ? `${scope}, max-age=31536000, immutable`
+      : isPrivate
+        ? 'private, no-cache'
+        : 'no-cache',
+    etag: `"${createHash('sha256').update(data).digest('hex').slice(0, 24)}"`,
+  }
+}
+
+async function serveSiteDir(req, res, root, { private: isPrivate = false } = {}) {
   const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
   const NOSNIFF = { 'x-content-type-options': 'nosniff' }
   const preview = root === PREVIEW
@@ -2842,7 +2885,15 @@ async function serveSiteDir(req, res, root) {
       : join(root, path, 'index.html')
   try {
     const data = await readFile(target)
-    send(res, 200, data, MIME[extname(target)] ?? 'application/octet-stream', headersFor(target))
+    const type = MIME[extname(target)] ?? 'application/octet-stream'
+    const cache = cacheHeaders(target, data, preview, isPrivate)
+    // a 304 is the whole point of the ETag: without answering the conditional
+    // request the header costs a hash and buys nothing
+    if (cache.etag && req.headers['if-none-match'] === cache.etag) {
+      res.writeHead(304, { ...headersFor(target), ...cache })
+      return res.end()
+    }
+    send(res, 200, data, type, { ...headersFor(target), ...cache })
   } catch {
     try {
       send(res, 404, await readFile(join(root, '404.html')), MIME['.html'], headersFor('x.html'))

@@ -1432,6 +1432,7 @@ var RESERVED_DATA_ATTRS = /* @__PURE__ */ new Set([
 	"data-form-success",
 	"data-form-error",
 	"data-form-fallback",
+	"data-fx",
 	"data-int",
 	"data-anim",
 	"data-tgt",
@@ -6658,11 +6659,14 @@ var TRIGGERS = [
 	"load",
 	"appear",
 	"scrub",
+	"mouse",
 	"hover",
 	"click",
 	"scrolled",
 	"change"
 ];
+var MOUSE_AXES = ["x", "y"];
+var MOUSE_AREAS = ["element", "page"];
 var APPEAR_MODES = [
 	"once",
 	"replay",
@@ -6809,6 +6813,7 @@ function validateBinding(binding, ctx) {
 	if (binding.delay !== void 0) {
 		if (typeof binding.delay !== "number" || !isFinite(binding.delay) || binding.delay < 0 || Math.floor(binding.delay) !== binding.delay) return fail$1("delay must be a whole number of milliseconds (0 or more)");
 		if (binding.trigger === "scrub") return fail$1("delay does not apply to a 'scrub' binding — it follows the scroll, nothing fires it");
+		if (binding.trigger === "mouse") return fail$1("delay does not apply to a 'mouse' binding — it follows the pointer, nothing fires it");
 	}
 	if (binding.scrub !== void 0) {
 		if (typeof binding.scrub !== "object" || binding.scrub === null) return fail$1("scrub must be an object with start/end");
@@ -6818,6 +6823,14 @@ function validateBinding(binding, ctx) {
 		}
 		const smooth = binding.scrub.smooth;
 		if (smooth !== void 0 && (typeof smooth !== "number" || !isFinite(smooth) || smooth < 0 || smooth > 3)) return fail$1("scrub.smooth must be a number of seconds between 0 and 3");
+	}
+	if (binding.mouse !== void 0) {
+		if (typeof binding.mouse !== "object" || binding.mouse === null) return fail$1("mouse must be an object with axis/area/smooth");
+		if (binding.trigger !== "mouse") return fail$1("mouse only applies to the 'mouse' trigger");
+		const { axis, area, smooth } = binding.mouse;
+		if (axis !== void 0 && MOUSE_AXES.indexOf(axis) === -1) return fail$1(`mouse.axis must be one of: ${MOUSE_AXES.join(", ")}`);
+		if (area !== void 0 && MOUSE_AREAS.indexOf(area) === -1) return fail$1(`mouse.area must be one of: ${MOUSE_AREAS.join(", ")}`);
+		if (smooth !== void 0 && (typeof smooth !== "number" || !isFinite(smooth) || smooth < 0 || smooth > 3)) return fail$1("mouse.smooth must be a number of seconds between 0 and 3");
 	}
 	return { ok: true };
 }

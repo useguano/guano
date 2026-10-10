@@ -1,64 +1,102 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronRight, Plus, Zap } from 'lucide-vue-next'
+import { ChevronRight, Plus, Trash2, Zap } from 'lucide-vue-next'
 import GroupPopover from '@/components/popover/GroupPopover.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import { usePanel, focusWhenPanelVisible } from '@/composables/usePanel'
 import { useElement } from '@/composables/useElement'
 import { useElementEffects } from '@/composables/useElementEffects'
-import { useEffects } from '@/composables/useEffects'
+import type { EffectPair } from '@/composables/useEffects'
+import { useAnimation } from '@/composables/useAnimation'
 import { useInteraction } from '@/composables/useInteraction'
+import { useMotion } from '@/composables/useMotion'
 import { useShortcut } from '@/composables/useShortcut'
 import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
-import { triggerOrder, triggerSentence, uiTrigger } from '@/lib/effectTriggers'
+import { UI_TRIGGERS, triggerOrder, triggerSentence, uiTrigger } from '@/lib/effectTriggers'
 
 const { highlightElement, isMultiSelect } = useElement()
-const { pickingFor } = useInteraction()
-const { nameOf } = useEffects()
-const { target, canEdit, elementLabel, sections, availableTriggers, createActionFor } =
-  useElementEffects()
+const interactions = useInteraction()
+const animations = useAnimation()
+const motion = useMotion()
+const { pickingFor } = interactions
+const { target, canEdit, elementLabel, actions, createActionFor } = useElementEffects()
 const {
   open: drawerOpen,
   view: drawerView,
   trigger: drawerTrigger,
+  action: drawerAction,
   openTrigger,
-  effectCreated,
   toggleDrawer,
+  closeDrawer,
 } = useEffectsDrawer()
 
 useShortcut('Escape', { onDown: () => (pickingFor.value = null) })
 
-const rows = computed(() => {
-  const list = sections.value.map((s) => ({
-    trigger: s.trigger,
-    sentence: s.sentence,
-    effect: s.rows[0] ? nameOf(s.rows[0]) : '',
+type Row = {
+  key: string
+  trigger: string
+  sentence: string
+  effect: string
+  pair: EffectPair | null
+}
+
+const rows = computed<Row[]>(() => {
+  const list: Row[] = actions.value.map((a) => ({
+    key: a.key,
+    trigger: a.trigger,
+    sentence: a.sentence,
+    effect: a.name,
+    pair: a.pair,
   }))
   const pending = drawerOpen.value ? drawerTrigger.value : null
   if (pending && !list.some((r) => r.trigger === pending)) {
-    list.push({ trigger: pending, sentence: triggerSentence(pending), effect: '' })
+    list.push({
+      key: '',
+      trigger: pending,
+      sentence: triggerSentence(pending),
+      effect: '',
+      pair: null,
+    })
   }
   return list.sort((a, b) => triggerOrder(a.trigger) - triggerOrder(b.trigger))
 })
 
-const totalActions = computed(() => sections.value.reduce((n, s) => n + s.rows.length, 0))
+// the one place an action is taken off the element: the index lists them, so it
+// is where one is removed. The drawer edits the effect and nothing else.
+function removeRow(row: Row) {
+  const owner = target.value
+  if (!owner || !row.pair) return
+  const { animation, interaction } = row.pair
+  if (animation) {
+    motion.stop(animation, animation.targetId ?? owner.id)
+    animations.removeBinding(owner, animation.id)
+  }
+  if (interaction) interactions.removeBinding(owner, interaction.id)
+  highlightElement(null)
+  // the drawer holds the trigger open, and `rows` re-lists an open trigger as a
+  // PENDING row — so a removal that left the drawer up put the row straight
+  // back, reading as a delete that deleted nothing. Compared by trigger, never
+  // by row identity: `rows` has already recomputed by the time this runs.
+  if (drawerOpen.value && drawerTrigger.value === row.trigger) closeDrawer()
+}
 
-const current = computed(() =>
-  drawerOpen.value && drawerView.value === 'trigger' ? drawerTrigger.value : null,
-)
+const totalActions = computed(() => actions.value.length)
+
+const openRow = computed(() => {
+  if (!drawerOpen.value || drawerView.value !== 'trigger' || !drawerTrigger.value) return null
+  const here = rows.value.filter((r) => r.trigger === drawerTrigger.value)
+  return here.find((r) => r.key === drawerAction.value) ?? here[0] ?? null
+})
 
 const addingTrigger = ref(false)
 
 function addTrigger(trigger: string) {
   addingTrigger.value = false
-  const effect = createActionFor(trigger)
-  openTrigger(trigger)
-  if (effect) effectCreated(effect.id)
+  const made = createActionFor(trigger)
+  openTrigger(trigger, made?.key || null)
 }
 
-const offered = computed(() =>
-  availableTriggers.value.filter((t) => !rows.value.some((r) => r.trigger === t.key)),
-)
+const offered = UI_TRIGGERS
 
 watch(
   () => target.value?.id,
@@ -105,7 +143,6 @@ onBeforeUnmount(() => highlightElement(null))
         variant="outline"
         size="xs"
         :icon="Plus"
-        :disabled="!offered.length"
         @click="addingTrigger = !addingTrigger"
       >
         Trigger
@@ -129,29 +166,43 @@ onBeforeUnmount(() => highlightElement(null))
     </div>
 
     <GroupPopover v-if="rows.length">
-      <button
+      <div
         v-for="row in rows"
-        :key="row.trigger"
-        type="button"
-        data-trigger-row
-        class="flex h-8 items-center gap-2 rounded-xl border px-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent"
-        :class="
-          current === row.trigger
-            ? 'border-accent bg-accent/5'
-            : 'border-input hover:border-accent'
-        "
-        @click="openTrigger(row.trigger)"
+        :key="row.key || row.trigger"
+        data-trigger-item
+        class="flex items-center gap-1"
       >
-        <component
-          :is="uiTrigger(row.trigger)?.icon ?? Zap"
-          class="size-3.5 shrink-0 text-muted-foreground"
-        />
-        <span class="min-w-0 flex-1 truncate text-xs font-medium">{{ row.sentence }}</span>
-        <span class="max-w-24 shrink-0 truncate text-[10px] text-muted-foreground">
-          {{ row.effect || 'empty' }}
-        </span>
-        <ChevronRight class="size-3 shrink-0 text-muted-foreground" />
-      </button>
+        <button
+          type="button"
+          data-trigger-row
+          :aria-current="openRow === row ? 'true' : undefined"
+          class="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-xl border px-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent"
+          :class="openRow === row ? 'border-accent bg-accent/5' : 'border-input hover:border-accent'"
+          @click="openTrigger(row.trigger, row.key || null)"
+        >
+          <component
+            :is="uiTrigger(row.trigger)?.icon ?? Zap"
+            class="size-3.5 shrink-0 text-muted-foreground"
+          />
+          <span class="min-w-0 flex-1 truncate text-xs font-medium">{{ row.sentence }}</span>
+          <span class="max-w-24 shrink-0 truncate text-[10px] text-muted-foreground">
+            {{ row.effect || 'empty' }}
+          </span>
+          <ChevronRight class="size-3 shrink-0 text-muted-foreground" />
+        </button>
+
+        <button
+          v-if="row.pair"
+          v-tooltip="{ text: 'Remove', side: 'left' }"
+          type="button"
+          data-trigger-remove
+          aria-label="Remove"
+          class="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:text-danger focus-visible:ring-2 focus-visible:ring-accent"
+          @click="removeRow(row)"
+        >
+          <Trash2 class="size-3" />
+        </button>
+      </div>
     </GroupPopover>
 
     <GroupPopover v-else>

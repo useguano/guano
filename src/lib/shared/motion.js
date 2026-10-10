@@ -576,6 +576,28 @@ export function primeFirstFrameValues(entries) {
     const compiled = entry && entry.compiled
     if (!compiled || !compiled.tracks) continue
     const delay = typeof entry.delay === 'number' && entry.delay > 0 ? entry.delay : 0
+    // A mouse follow has no pre-play `from` to hold: its resting frame is the
+    // MIDDLE of the timeline (MOUSE_REST), which is why it is sampled rather
+    // than read off the tracks. Baking `from` instead shipped the element
+    // shoved to one end of its travel until the first pointer move.
+    if (entry.mid) {
+      const sampled = sampleValues(compiled, compiled.duration * MOUSE_REST)
+      for (const track of compiled.tracks) {
+        const meta = MOTION_PROPS[track.prop]
+        if (!meta || meta.kind === 'text') continue
+        const start = delay + track.start
+        if (earliest[track.prop] !== undefined && earliest[track.prop] < start) continue
+        const value = sampled[track.prop]
+        if (value === undefined) continue
+        earliest[track.prop] = start
+        // the same rule the non-entrance branch below applies: a value that is
+        // the property's own default states nothing the stylesheet is not
+        // already rendering, and inline it could only shadow a class
+        if (meta.kind !== 'color' && value && value.n === meta.def) delete values[track.prop]
+        else values[track.prop] = value
+      }
+      continue
+    }
     for (const track of compiled.tracks) {
       if (track.from === undefined || track.from === null) continue
       const start = delay + track.start
@@ -641,7 +663,10 @@ export const MOTION_CSS_PROPS = [
   'clipPath',
 ]
 
-const TRIGGERS = ['load', 'appear', 'scrub', 'hover', 'click', 'scrolled', 'change']
+const TRIGGERS = ['load', 'appear', 'scrub', 'mouse', 'hover', 'click', 'scrolled', 'change']
+
+export const MOUSE_AXES = ['x', 'y']
+export const MOUSE_AREAS = ['element', 'page']
 
 export const APPEAR_MODES = ['once', 'replay', 'reverse']
 const SELECTOR_RE = /^[\w\s.#>~*:+\-[\]="',()]{1,120}$/
@@ -866,6 +891,7 @@ export function validateBinding(binding, ctx) {
       return fail('delay must be a whole number of milliseconds (0 or more)')
     }
     if (binding.trigger === 'scrub') return fail("delay does not apply to a 'scrub' binding — it follows the scroll, nothing fires it")
+    if (binding.trigger === 'mouse') return fail("delay does not apply to a 'mouse' binding — it follows the pointer, nothing fires it")
   }
   if (binding.scrub !== undefined) {
     if (typeof binding.scrub !== 'object' || binding.scrub === null) {
@@ -882,10 +908,72 @@ export function validateBinding(binding, ctx) {
       return fail('scrub.smooth must be a number of seconds between 0 and 3')
     }
   }
+  if (binding.mouse !== undefined) {
+    if (typeof binding.mouse !== 'object' || binding.mouse === null) {
+      return fail('mouse must be an object with axis/area/smooth')
+    }
+    if (binding.trigger !== 'mouse') {
+      return fail("mouse only applies to the 'mouse' trigger")
+    }
+    const { axis, area, smooth } = binding.mouse
+    if (axis !== undefined && MOUSE_AXES.indexOf(axis) === -1) {
+      return fail(`mouse.axis must be one of: ${MOUSE_AXES.join(', ')}`)
+    }
+    if (area !== undefined && MOUSE_AREAS.indexOf(area) === -1) {
+      return fail(`mouse.area must be one of: ${MOUSE_AREAS.join(', ')}`)
+    }
+    if (smooth !== undefined && (typeof smooth !== 'number' || !isFinite(smooth) || smooth < 0 || smooth > 3)) {
+      return fail('mouse.smooth must be a number of seconds between 0 and 3')
+    }
+  }
   return { ok: true }
 }
 
 export const SCRUB_DEFAULTS = { start: 1, end: 0.25 }
+
+export const MOUSE_DEFAULTS = { axis: 'x', area: 'element', smooth: 0.12 }
+
+/**
+ * Where a mouse-follow sits before the pointer has moved: the MIDDLE of its
+ * timeline, not the track's `from`. A follow is authored -n → n, so the middle
+ * is the element's natural place; every driver holds a fresh binding here and
+ * eases away from it, and `primeFirstFrameValues` bakes the same frame.
+ */
+export const MOUSE_REST = 0.5
+
+/**
+ * The pointer's position along one axis, as 0..1 across a box. 0.5 is the
+ * centre, which is what makes "follow the mouse" a track from -n to n: the
+ * element sits at its authored middle until the pointer moves off centre.
+ * Returns null when there is no box to measure (a zero-sized element), so a
+ * caller leaves the play where it is rather than snapping it to one edge.
+ * @param {{x: number, y: number}} point viewport coordinates
+ * @param {{left: number, top: number, width: number, height: number}} box
+ * @param {'x'|'y'|undefined} axis
+ * @returns {number|null}
+ */
+export function mouseProgressRaw(point, box, axis) {
+  const onY = (axis || MOUSE_DEFAULTS.axis) === 'y'
+  const span = onY ? box.height : box.width
+  if (!span) return null
+  const offset = (onY ? point.y - box.top : point.x - box.left) / span
+  return offset < 0 ? 0 : offset > 1 ? 1 : offset
+}
+
+/**
+ * How far a smoothed value moves toward its target in `dt` seconds. Shared by
+ * the scrub loop and the pointer loop so the two feel the same.
+ * @param {number} prev
+ * @param {number} next
+ * @param {number} dt seconds
+ * @param {number} smooth seconds of catch-up
+ * @returns {number}
+ */
+export function approach(prev, next, dt, smooth) {
+  if (!(smooth > 0)) return next
+  const eased = prev + (next - prev) * (1 - Math.exp(-dt / smooth))
+  return Math.abs(next - eased) > 0.001 ? eased : next
+}
 
 export const APPEAR_AT_DEFAULT = 0
 

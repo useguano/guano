@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml, PREVIEW_TOKEN } from './fixtures/mcpSession'
+import { motionTriggers } from './fixtures/fxWire'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
 // comes from something that cost the Cocoapp session real calls: a response too
@@ -1325,11 +1326,78 @@ test.describe('a count needs no `to`, and a binding may wait', () => {
 
     // and on the wire as `d`, only where set
     const html = await s.html()
-    const metas = [...html.matchAll(/data-anim="([^"]*)"/g)]
-      .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-      .flat() as { d?: number }[]
+    const metas = motionTriggers(html)
     expect(metas.filter((m) => m.d === 600)).toHaveLength(1)
     expect(metas.filter((m) => !('d' in m))).toHaveLength(1)
+  })
+
+  test('a mouse follow binds by axis, and refuses what cannot drive it', async () => {
+    const s = await mcpSession()
+    const made = await s.call('create_animations', {
+      items: [
+        {
+          name: 'Lean',
+          steps: [
+            { tracks: [{ prop: 'x', from: -30, to: 30 }], duration: 400, easing: 'linear' },
+          ],
+        },
+      ],
+    })
+    const animationId = made.created[0].id as string
+    const home = await s.home()
+    const written = await s.call('set_page_html', {
+      pageId: home.id,
+      version: home.version,
+      html: pageHtml('<div data-ref="stage"><div data-ref="card">card</div></div>'),
+    })
+
+    const r = await s.call('edit_elements', {
+      pageId: home.id,
+      version: written.version,
+      edits: [
+        // the shape the guide teaches: bind on the box the pointer is measured
+        // across, aim at the thing that moves
+        {
+          ref: 'stage',
+          bindAnimations: [
+            { animationId, trigger: 'mouse', targetRef: 'card', mouse: { axis: 'x' } },
+            { animationId, trigger: 'mouse', targetRef: 'card', mouse: { axis: 'y', area: 'page' } },
+          ],
+        },
+        // nothing fires a follow, so there is no moment to wait after…
+        { ref: 'card', bindAnimations: [{ animationId, trigger: 'mouse', delay: 300 }] },
+        // …and no second direction to aim
+        { ref: 'card', bindAnimations: [{ animationId, trigger: 'mouse', action: 'on' }] },
+        // the options belong to this trigger alone
+        { ref: 'card', bindAnimations: [{ animationId, trigger: 'hover', mouse: { axis: 'x' } }] },
+        { ref: 'card', bindAnimations: [{ animationId, trigger: 'mouse', mouse: { axis: 'z' } }] },
+      ],
+    })
+    expect(r.failed).toBe(4)
+    const why = JSON.stringify(r.failures)
+    expect(why).toMatch(/delay does not apply to a 'mouse'/)
+    expect(why).toMatch(/action is only meaningful on a click trigger/)
+    expect(why).toMatch(/mouse only applies to the 'mouse' trigger/)
+    expect(why).toMatch(/mouse\.axis must be one of: x, y/)
+
+    // stored, and read back through the same tool an agent verifies with
+    const read = await s.call('get_page', {
+      pageId: home.id,
+      elements: 'own',
+      includeInteractions: true,
+    })
+    const rows = JSON.stringify(read.elements)
+    expect(rows).toContain('"mouse":{"axis":"x"}')
+    expect(rows).toContain('"mouse":{"axis":"y","area":"page"}')
+
+    // and on the wire, where the runtime reads it
+    const html = await s.html()
+    const metas = motionTriggers(html)
+    const follows = metas.filter((m) => m.t === 'mouse')
+    expect(follows).toHaveLength(2)
+    expect(follows.map((m) => m.o?.mo)).toEqual(
+      expect.arrayContaining([{ axis: 'x' }, { axis: 'y', area: 'page' }]),
+    )
   })
 })
 

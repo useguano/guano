@@ -2,14 +2,12 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ChevronRight, Copy, Plus, Settings2, Trash2 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
-import InputUI from '@/components/ui/InputUI.vue'
-import SelectUI from '@/components/ui/SelectUI.vue'
-import ValueFieldUI from '@/components/ui/ValueFieldUI.vue'
+import StepSettingsPopover from '@/components/editor/effects/StepSettingsPopover.vue'
 import TrackSettingsPopover from '@/components/editor/effects/TrackSettingsPopover.vue'
 import { useAnimation } from '@/composables/useAnimation'
 import { useMotion } from '@/composables/useMotion'
 import { usePopover } from '@/composables/usePopover'
-import { compileAnimation, EASING_NAMES, MOTION_PROPS } from '@/lib/motion'
+import { compileAnimation, MOTION_PROPS } from '@/lib/motion'
 import {
   addTrack,
   duplicateTrack,
@@ -40,8 +38,6 @@ const headLeft = computed(() => {
   return `calc(${LANE_LEFT} + (100% - ${LANE_INSET}) * ${at})`
 })
 
-const EASING_OPTIONS = EASING_NAMES.map((e) => ({ label: e, value: e }))
-
 const compiled = computed(() => (animation.value ? compileAnimation(animation.value) : null))
 
 const liveSpan = computed(() => Math.max(compiled.value?.duration ?? 0, 400))
@@ -53,12 +49,16 @@ const pct = (ms: number) => (span.value <= 0 ? 0 : (ms / span.value) * 100)
 
 const TICK_STEPS = [50, 100, 200, 250, 500, 1000, 2000, 5000]
 const tickStep = computed(() => TICK_STEPS.find((s) => span.value / s <= 8) ?? 10000)
+// a lane reads as a grid: ticks down its width, and one hairline along its
+// bottom edge so a bar can be followed back to the row it belongs to
+const LANE_RULE = 'linear-gradient(to top, var(--color-input) 0 1px, transparent 1px)'
 const gridStyle = computed(() => {
   const every = pct(tickStep.value)
-  if (every <= 0) return {}
-  return {
-    backgroundImage: `repeating-linear-gradient(to right, var(--color-input) 0 1px, transparent 1px ${every}%)`,
-  }
+  const ticks =
+    every > 0
+      ? `repeating-linear-gradient(to right, var(--color-input) 0 1px, transparent 1px ${every}%)`
+      : ''
+  return { backgroundImage: [LANE_RULE, ticks].filter(Boolean).join(', ') }
 })
 
 const ticks = computed(() => {
@@ -78,8 +78,6 @@ watch(
     if (selectedStep.value >= n) selectedStep.value = Math.max(0, n - 1)
   },
 )
-
-const step = computed<AnimationStep | null>(() => animation.value?.steps[selectedStep.value] ?? null)
 
 const spans = computed(() => {
   const map = new Map<number, { start: number; duration: number; stagger: number; easing: string }>()
@@ -209,6 +207,24 @@ function removeStep(index: number) {
   const steps = animation.value?.steps
   if (steps && steps.length > 1) steps.splice(index, 1)
 }
+function openStepSettings(event: MouseEvent, index: number) {
+  const target = animation.value?.steps[index]
+  if (!target) return
+  selectedStep.value = index
+  openPopover({
+    id: `motion-step-${target.id}`,
+    component: StepSettingsPopover,
+    props: { step: target, index },
+    anchor: event.currentTarget as HTMLElement,
+    placement: 'bottom-start',
+    closeOnOutside: true,
+    width: 'w-64',
+    header: false,
+    scroll: false,
+    title: () => `Step ${index + 1}`,
+  })
+}
+
 function openTrackSettings(event: MouseEvent, row: TrackRow) {
   selectedStep.value = row.stepIndex
   openPopover({
@@ -223,11 +239,6 @@ function openTrackSettings(event: MouseEvent, row: TrackRow) {
     scroll: false,
     title: () => MOTION_PROPS[row.track.prop].label,
   })
-}
-
-function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0) {
-  const n = parseFloat(text)
-  obj[key] = (text.trim() === '' ? fallback : isFinite(n) ? n : fallback) as T[K]
 }
 </script>
 
@@ -249,7 +260,7 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
       </div>
     </header>
 
-    <div class="flex flex-col gap-1 border-b border-input px-2 pb-2">
+    <div class="flex flex-col gap-1 px-2 pb-2">
       <template v-for="group in groups" :key="group.step.id">
         <div :class="ROW_GRID">
           <div
@@ -288,6 +299,14 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
                 @click.stop="duplicateStep(group.index)"
               >
                 <Copy class="size-3" />
+              </button>
+              <button
+                v-tooltip="{ text: 'Step settings', side: 'left' }"
+                type="button"
+                class="flex size-4 items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground"
+                @click.stop="openStepSettings($event, group.index)"
+              >
+                <Settings2 class="size-3" />
               </button>
             </span>
           </div>
@@ -407,93 +426,6 @@ function setNum<T, K extends keyof T>(obj: T, key: K, text: string, fallback = 0
     >
       <span class="absolute -top-1 -left-[3px] size-[7px] rounded-full bg-accent-foreground" />
     </div>
-    </div>
-
-    <div v-if="step" class="grid grid-cols-5 gap-x-2 gap-y-1.5 p-2">
-      <label class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">Duration</span>
-        <ValueFieldUI
-          unit="ms"
-          :model-value="String(step.duration)"
-          @commit="(t) => setNum(step!, 'duration', t, 400)"
-        />
-      </label>
-
-      <label class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">Easing</span>
-        <SelectUI
-          :options="EASING_OPTIONS"
-          :model-value="step.easing"
-          @update:model-value="(v) => v && (step!.easing = v)"
-        />
-      </label>
-
-      <label class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">
-          {{ selectedStep > 0 ? 'Offset' : 'Delay' }}
-        </span>
-        <ValueFieldUI
-          v-tooltip="selectedStep > 0 ? 'Negative overlaps the step before' : 'Before this step runs'"
-          unit="ms"
-          :model-value="String(step.offset ?? 0)"
-          :allow-negative="selectedStep > 0"
-          @commit="
-            (t) => (t.trim() === '' || t === '0' ? (step!.offset = undefined) : setNum(step!, 'offset', t))
-          "
-        />
-      </label>
-
-      <label class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">Stagger</span>
-        <ValueFieldUI
-          v-tooltip="'Per child'"
-          unit="ms"
-          :model-value="String(step.stagger ?? 0)"
-          @commit="
-            (t) => (t.trim() === '' || t === '0' ? (step!.stagger = undefined) : setNum(step!, 'stagger', t))
-          "
-        />
-      </label>
-
-      <div class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">Repeat</span>
-        <div class="flex min-w-0 items-center gap-1">
-          <ValueFieldUI
-            v-tooltip="'Extra plays after the first — −1 repeats forever'"
-            full
-            :model-value="String(step.repeat ?? 0)"
-            allow-negative
-            @commit="
-              (t) => (t.trim() === '' || t === '0' ? (step!.repeat = undefined) : setNum(step!, 'repeat', t))
-            "
-          />
-          <ButtonUI
-            :variant="step.yoyo ? 'outline' : 'ghost'"
-            size="xs"
-            class="shrink-0"
-            :class="step.yoyo ? '' : 'text-muted-foreground opacity-60'"
-            tooltip="Play each repeat back and forth"
-            :aria-pressed="!!step.yoyo"
-            @click="step!.yoyo = step!.yoyo ? undefined : true"
-          >
-            Yoyo
-          </ButtonUI>
-        </div>
-      </div>
-
-      <label v-if="step.stagger" class="col-span-2 flex min-w-0 flex-col gap-0.5">
-        <span class="text-[10px] text-muted-foreground">Cascade</span>
-        <InputUI
-          :model-value="step.staggerSelector ?? ''"
-          placeholder="direct children"
-          class="font-mono"
-          @update:model-value="(v) => (step!.staggerSelector = v.trim() || undefined)"
-        />
-      </label>
-
-      <p v-if="step.stagger" class="col-span-5 text-[10px] text-muted-foreground">
-        Staggered properties move the children; the step's other properties still move this element.
-      </p>
     </div>
 
     <p v-if="animationError(animation)" class="px-2.5 pb-2 text-[10px] text-danger">

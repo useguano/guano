@@ -101,7 +101,7 @@ export interface AnimationBinding {
   id: string
   animationId: string
 
-  trigger: 'load' | 'appear' | 'scrub' | 'hover' | 'click' | 'scrolled' | 'change'
+  trigger: 'load' | 'appear' | 'scrub' | 'mouse' | 'hover' | 'click' | 'scrolled' | 'change'
 
   targetId: string | null
 
@@ -113,6 +113,8 @@ export interface AnimationBinding {
   appearAt?: number
 
   scrub?: { start?: number; end?: number; smooth?: number }
+
+  mouse?: { axis?: 'x' | 'y'; area?: 'element' | 'page'; smooth?: number }
 
   breakpoints?: string[]
 

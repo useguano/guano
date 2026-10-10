@@ -1,4 +1,4 @@
-import { ChevronsDown, Eye, MousePointer2, MousePointerClick, MoveVertical, ToggleLeft, Zap } from 'lucide-vue-next'
+import { ChevronsDown, Eye, Move3d, MousePointer2, MousePointerClick, MoveVertical, ToggleLeft, Zap } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 export type EffectKind = 'interaction' | 'animation'
@@ -51,6 +51,15 @@ export const UI_TRIGGERS: UiTrigger[] = [
     icon: ChevronsDown,
     kinds: ['animation'],
     hint: 'Progress follows the scroll position, both ways.',
+  },
+  {
+    key: 'mouse',
+    label: 'Mouse move',
+    sentence: 'While the mouse moves',
+    word: 'Mouse',
+    icon: Move3d,
+    kinds: ['animation'],
+    hint: 'Progress follows the pointer across one axis, both ways.',
   },
   {
     key: 'scrolled',

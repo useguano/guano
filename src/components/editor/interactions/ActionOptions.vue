@@ -16,7 +16,7 @@ import { useAnimation } from '@/composables/useAnimation'
 import { type EffectPair } from '@/composables/useEffects'
 import { useSettings } from '@/composables/useSettings'
 import { ACTION_VERBS, isDiscreteTrigger } from '@/lib/effectTriggers'
-import { SCRUB_DEFAULTS } from '@/lib/motion'
+import { MOUSE_AREAS, MOUSE_AXES, MOUSE_DEFAULTS, SCRUB_DEFAULTS } from '@/lib/motion'
 import type { AnimationBinding, ElementNode } from '@/types/editor'
 
 const props = defineProps<{ pair: EffectPair; owner: ElementNode }>()
@@ -51,6 +51,15 @@ const error = computed(() => {
 })
 
 const isDiscrete = computed(() => isDiscreteTrigger(primary.value.trigger))
+
+const mouseAxis = computed(() => anim.value?.mouse?.axis ?? MOUSE_DEFAULTS.axis)
+const mouseArea = computed(() => anim.value?.mouse?.area ?? MOUSE_DEFAULTS.area)
+
+function setMouse(patch: Partial<NonNullable<AnimationBinding['mouse']>>) {
+  const binding = anim.value
+  if (!binding) return
+  binding.mouse = { axis: mouseAxis.value, area: mouseArea.value, ...binding.mouse, ...patch }
+}
 
 function setAction(value: string | undefined) {
   const next = !value || value === 'toggle' ? undefined : (value as 'on' | 'off')
@@ -151,7 +160,7 @@ function toggleBreakpoint(id: string) {
         </div>
       </RowUI>
 
-      <RowUI v-if="anim && anim.trigger !== 'scrub'" label="Delay">
+      <RowUI v-if="anim && anim.trigger !== 'scrub' && anim.trigger !== 'mouse'" label="Delay">
         <InputUI
           inputmode="numeric"
           unit="ms"
@@ -238,6 +247,43 @@ function toggleBreakpoint(id: string) {
               @commit="(t) => (anim!.scrub = { ...anim!.scrub, end: parseFloat(t) || 0 })"
             />
             <span class="text-[10px] text-muted-foreground">× viewport</span>
+          </RowUI>
+        </template>
+        <template v-if="anim.trigger === 'mouse'">
+          <RowUI label="Axis">
+            <div class="flex flex-1 justify-end gap-1">
+              <ButtonUI
+                v-for="axis in MOUSE_AXES"
+                :key="axis"
+                :variant="mouseAxis === axis ? 'outline' : 'ghost'"
+                size="xs"
+                :class="mouseAxis === axis ? '' : 'text-muted-foreground opacity-60'"
+                @click="setMouse({ axis })"
+              >
+                {{ axis === 'x' ? 'Horizontal' : 'Vertical' }}
+              </ButtonUI>
+            </div>
+          </RowUI>
+          <RowUI label="Across">
+            <div class="flex flex-1 justify-end gap-1">
+              <ButtonUI
+                v-for="area in MOUSE_AREAS"
+                :key="area"
+                :variant="mouseArea === area ? 'outline' : 'ghost'"
+                size="xs"
+                :class="mouseArea === area ? '' : 'text-muted-foreground opacity-60'"
+                @click="setMouse({ area })"
+              >
+                {{ area === 'element' ? 'This element' : 'Whole page' }}
+              </ButtonUI>
+            </div>
+          </RowUI>
+          <RowUI label="Catch-up">
+            <ValueFieldUI
+              :model-value="String(anim.mouse?.smooth ?? MOUSE_DEFAULTS.smooth)"
+              @commit="(t) => setMouse({ smooth: Math.max(0, Math.min(3, parseFloat(t) || 0)) })"
+            />
+            <span class="text-[10px] text-muted-foreground">s</span>
           </RowUI>
         </template>
       </template>

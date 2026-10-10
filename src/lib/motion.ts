@@ -38,8 +38,14 @@ import {
   motionBreakpointId,
   scrubProgress as scrubProgressJs,
   scrubProgressRaw as scrubProgressRawJs,
+  mouseProgressRaw as mouseProgressRawJs,
+  approach as approachJs,
   MOTION_CSS_PROPS,
   SCRUB_DEFAULTS,
+  MOUSE_DEFAULTS as MOUSE_DEFAULTS_RAW,
+  MOUSE_AXES as MOUSE_AXES_RAW,
+  MOUSE_AREAS as MOUSE_AREAS_RAW,
+  MOUSE_REST,
   APPEAR_AT_DEFAULT,
   APPEAR_MODES,
   effectiveAppearMode as effectiveAppearModeRaw,
@@ -162,6 +168,21 @@ export const scrubProgressRaw = scrubProgressRawJs as (
   vh: number,
   scrub?: AnimationBinding['scrub'],
 ) => number
+export const mouseProgressRaw = mouseProgressRawJs as (
+  point: { x: number; y: number },
+  box: { left: number; top: number; width: number; height: number },
+  axis?: 'x' | 'y',
+) => number | null
+type MouseOpts = NonNullable<AnimationBinding['mouse']>
+export const MOUSE_AXES = MOUSE_AXES_RAW as NonNullable<MouseOpts['axis']>[]
+export const MOUSE_AREAS = MOUSE_AREAS_RAW as NonNullable<MouseOpts['area']>[]
+export const MOUSE_DEFAULTS = MOUSE_DEFAULTS_RAW as Required<MouseOpts>
+export const approach = approachJs as (
+  prev: number,
+  next: number,
+  dt: number,
+  smooth: number,
+) => number
 
 export const sampleValues = sampleValuesRaw as (
   compiled: CompiledAnimation,
@@ -185,10 +206,10 @@ export const splitByStagger = splitByStaggerRaw as (c: CompiledAnimation) => Sta
 export const initialStyle = initialStyleRaw as (c: CompiledAnimation) => MotionStyle
 
 export const primeFirstFrame = primeFirstFrameRaw as (
-  entries: { compiled: CompiledAnimation; delay?: number; entrance?: boolean }[],
+  entries: { compiled: CompiledAnimation; delay?: number; entrance?: boolean; mid?: boolean }[],
 ) => MotionStyle
 export const primeFirstFrameValues = primeFirstFrameValuesRaw as (
-  entries: { compiled: CompiledAnimation; delay?: number; entrance?: boolean }[],
+  entries: { compiled: CompiledAnimation; delay?: number; entrance?: boolean; mid?: boolean }[],
 ) => MotionValues
 export const bindingDelay = bindingDelayRaw as (b: { delay?: number } | null | undefined) => number
 export const foldReverseTime = foldReverseTimeRaw as (c: CompiledAnimation, t: number) => number
@@ -224,6 +245,7 @@ export {
   motionBreakpointId,
   MOTION_CSS_PROPS,
   SCRUB_DEFAULTS,
+  MOUSE_REST,
   APPEAR_AT_DEFAULT,
   APPEAR_MODES,
   TRANSITION_PRESET_IDS,

@@ -48,7 +48,7 @@ function pairUp() {
 </script>
 
 <template>
-  <div v-if="effect" data-effect-body class="flex flex-col">
+  <div v-if="effect" data-effect-body class="flex min-h-full flex-col">
     <div v-if="nameRow" class="flex h-9 shrink-0 items-center border-b border-input px-2.5">
       <EffectNameField :kind="kind" :id="id" />
     </div>
@@ -57,7 +57,7 @@ function pairUp() {
     <template v-else>
       <StyleEffectEditor v-if="kind === 'interaction'" :id="id" />
       <TimelineEditor v-else :id="id" />
-      <div class="border-t border-input px-2.5 py-2">
+      <div class="sticky bottom-0 mt-auto border-t border-input bg-background px-2.5 py-2">
         <ButtonUI variant="ghost" size="xs" :icon="Plus" class="text-muted-foreground" @click="pairUp()">
           {{ kind === 'interaction' ? 'Motion' : 'Classes' }}
         </ButtonUI>

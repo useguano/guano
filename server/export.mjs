@@ -3,10 +3,13 @@
 // no Vue; rendering semantics mirror src/components/site/PublicRenderer.vue
 // (the SPA dev preview), which is the source of truth for behavior.
 
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { withStagingDir } from './util.mjs'
+
+const sha256Hex = (text) => createHash('sha256').update(text).digest('hex')
 import { compile, optimize } from '@tailwindcss/node'
 // Element registry shared verbatim with the client (src/lib/elements.ts
 // re-exports this same module) — one source of truth, no drift.
@@ -79,6 +82,14 @@ import {
   SLIDER_NEXT_SVG,
   SLIDER_DOTS_CLASSES,
 } from '../src/lib/shared/slider.js'
+import {
+  FX_ATTR,
+  FX_GLOBAL,
+  fxSidecar,
+  FX_KIND,
+  createInternTable,
+  stripTimeline,
+} from '../src/lib/shared/fxWire.js'
 import { SAFE_HREF, SAFE_SRC } from '../src/lib/shared/urls.js'
 import {
   collectFormFields,
@@ -692,7 +703,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
         )
   const scopedKey = (id, ownerId, targetId) => {
     const scope = scopeFor(ownerId, targetId)
-    return scope ? `${id}@${scope}` : id
+    return ctx.intern(FX_KIND.binding, scope ? `${id}@${scope}` : id)
   }
   // exclusive groups key on the component instance ONLY, never the repeat: "one
   // accordion open at a time" has to hold across a collection-list's items
@@ -705,9 +716,17 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
    * the node the binding is DECLARED on, which the entry scope reads. */
   const stateKeyFor = (i, ownerId) => {
     const targetId = i.targetId ?? ownerId
-    return interactionStateKey(i.interactionId, targetId, scopeFor(ownerId, targetId))
+    return ctx.intern(
+      FX_KIND.state,
+      interactionStateKey(i.interactionId, targetId, scopeFor(ownerId, targetId)),
+    )
   }
 
+  // ONE attribute for all four roles. They were four escaped-JSON attributes
+  // per element (2,700 `&quot;` on one real page, and the same payload once per
+  // component instance); now the element carries an index and the manifest
+  // carries the payload once.
+  const fxEntry = {}
   const triggers = (mapping ? mapping.master.interactions : node.interactions) ?? []
   if (triggers.length) {
     const list = triggers.map((i) => {
@@ -721,16 +740,16 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // can span a page trigger and a master trigger — which is what makes the
       // "opening resets to step 1" recipe work across the component boundary
       if (i.group) {
-        meta.g = interactionGroupKey(
-          i.group,
-          isChannelTarget(i.targetId) ? undefined : instanceScope,
+        meta.g = ctx.intern(
+          FX_KIND.group,
+          interactionGroupKey(i.group, isChannelTarget(i.targetId) ? undefined : instanceScope),
         )
       }
       if (i.once) meta.o = i.once
       if (i.trigger === 'scrolled') meta.at = i.scrollAt ?? DEFAULT_SCROLL_AT
       return meta
     })
-    attrs.push(`data-int="${escapeHtml(JSON.stringify(list))}"`)
+    fxEntry.c = list
   }
   // --- channels: the listener side ---
   // The element DECLARES a channel and every binding in the project aimed at
@@ -754,7 +773,10 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
   // keys by its own scope, a channel binding by nothing at all
   const driven = targets.map(({ i, ownerId }) => ({ i, key: stateKeyFor(i, ownerId) }))
   for (const { binding } of channelDrivers?.interactions ?? []) {
-    driven.push({ i: binding, key: interactionStateKey(binding.interactionId, channelTarget) })
+    driven.push({
+      i: binding,
+      key: ctx.intern(FX_KIND.state, interactionStateKey(binding.interactionId, channelTarget)),
+    })
   }
   if (driven.length) {
     // several bindings can drive one effect on this node — dedupe to the
@@ -774,7 +796,12 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // silently suppress a desktop open button's classes.
       if (i.breakpoints) {
         if (!ctx.fxbpAll.has(key)) {
-          ctx.fxbp[key] = [...new Set([...(ctx.fxbp[key] ?? []), ...i.breakpoints])]
+          ctx.fxbp[key] = [
+            ...new Set([
+              ...(ctx.fxbp[key] ?? []),
+              ...i.breakpoints.map((id) => ctx.intern(FX_KIND.breakpoint, id)),
+            ]),
+          ]
         }
       } else {
         ctx.fxbpAll.add(key)
@@ -789,7 +816,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // it is recorded per state key whichever binding declares it
       if (ctx.anim.get(i.interactionId)?.modal) ctx.fxModal[key] = 1
     }
-    attrs.push(`data-tgt="${escapeHtml(targetKeys.join(' '))}"`)
+    fxEntry.t = targetKeys
   }
 
   // --- animations: same trigger/target split, tween engine instead of classes ---
@@ -800,9 +827,9 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       const animation = ctx.animLib.get(b.animationId)
       if (!animation) continue // library entry deleted — skip rather than emit a dangling key
       const key = scopedKey(b.id, selfId, b.targetId ?? selfId)
-      ctx.animUsed[b.animationId] = animation
-      if (b.breakpoints) ctx.animBp[key] = b.breakpoints
-      const meta = { k: key, t: b.trigger, a: b.animationId }
+      ctx.animUsed[ctx.intern(FX_KIND.animation, b.animationId)] = stripTimeline(animation)
+      if (b.breakpoints) ctx.animBp[key] = b.breakpoints.map((id) => ctx.intern(FX_KIND.breakpoint, id))
+      const meta = { k: key, t: b.trigger, a: ctx.intern(FX_KIND.animation, b.animationId) }
       // A CLICK play is shared per (animation, target), so an open button, a
       // close button and an overlay drive ONE timeline — the same model the
       // class engine's state key gives `data-int`. `k` stays the per-binding
@@ -811,7 +838,10 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // animationStateKey for why hover is excluded).
       if (b.trigger === 'click') {
         const animTargetId = b.targetId ?? selfId
-        meta.s = animationStateKey(b.animationId, animTargetId, scopeFor(selfId, animTargetId))
+        meta.s = ctx.intern(
+          FX_KIND.play,
+          animationStateKey(b.animationId, animTargetId, scopeFor(selfId, animTargetId)),
+        )
         if (b.action && b.action !== 'toggle') meta.ac = b.action
       }
       // the site default resolves HERE, not in the browser: the runtime reads an
@@ -821,11 +851,14 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
         b.trigger === 'appear' ? effectiveAppearMode(b.appearMode, ctx.appearDefault) : undefined
       const carriesMode = mode === 'replay' || mode === 'reverse'
       // only carry options the runtime actually needs, so the payload stays small
-      if (carriesMode || b.scrub || b.appearAt) {
+      if (carriesMode || b.scrub || b.appearAt || (b.trigger === 'mouse' && b.mouse)) {
         meta.o = {}
         if (carriesMode) meta.o.m = mode
         if (b.appearAt) meta.o.at = b.appearAt
         if (b.scrub) meta.o.s = b.scrub
+        // a mouse binding carries only what differs from MOUSE_DEFAULTS; the
+        // runtime reads an absent `mo` as "x across this element"
+        if (b.trigger === 'mouse' && b.mouse) meta.o.mo = b.mouse
       }
       // the scroll threshold rides beside the options rather than inside them:
       // `o` is read for appear/scrub, and a flat key keeps the hot path simple
@@ -836,7 +869,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       if (delay) meta.d = delay
       list.push(meta)
     }
-    if (list.length) attrs.push(`data-anim="${escapeHtml(JSON.stringify(list))}"`)
+    if (list.length) fxEntry.m = list
   }
   const animTargets = mapping
     ? scopedAnimTargets(mapping.root, mapping.master.id)
@@ -852,7 +885,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
   }))
   for (const { binding } of channelDrivers?.animations ?? []) {
     if (binding.trigger !== 'click') continue
-    animDriven.push({ b: binding, key: binding.id, bake: false })
+    animDriven.push({ b: binding, key: ctx.intern(FX_KIND.binding, binding.id), bake: false })
   }
   const firstFrame = {}
   if (animDriven.length) {
@@ -861,8 +894,8 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     for (const { b, key, bake } of animDriven) {
       const animation = ctx.animLib.get(b.animationId)
       if (!animation) continue
-      ctx.animUsed[b.animationId] = animation
-      if (b.breakpoints) ctx.animBp[key] = b.breakpoints
+      ctx.animUsed[ctx.intern(FX_KIND.animation, b.animationId)] = stripTimeline(animation)
+      if (b.breakpoints) ctx.animBp[key] = b.breakpoints.map((id) => ctx.intern(FX_KIND.breakpoint, id))
       keys.push(key)
       // the pre-play state, baked in so a timeline never paints its final frame
       // before the deferred runtime boots. EVERY trigger, not just the
@@ -884,6 +917,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
           compiled: splitByStagger(compileAnimation(animation)).element,
           delay: bindingDelay(b),
           entrance: b.trigger === 'load' || b.trigger === 'appear',
+          mid: b.trigger === 'mouse',
         })
       }
     }
@@ -894,7 +928,11 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     // with both states painted at once. The runtime primes with the same
     // helper, so the two cannot disagree.
     if (toPrime.length) Object.assign(firstFrame, primeFirstFrame(toPrime))
-    if (keys.length) attrs.push(`data-atgt="${escapeHtml(keys.join(' '))}"`)
+    if (keys.length) fxEntry.a = keys
+  }
+
+  if (Object.keys(fxEntry).length) {
+    attrs.push(`${FX_ATTR}="${ctx.els.push(fxEntry) - 1}"`)
   }
 
   // one style attribute: the background's inline style plus the pre-play
@@ -1404,7 +1442,7 @@ function interpolateEntry(str, entry, locale, defaultLocale) {
   })
 }
 
-function renderPage(route, project, media, channels) {
+function renderPage(route, project, media, channels, fxAssets = new Map()) {
   const { page, locale, scope, outPath } = route
   const ctx = {
     project,
@@ -1423,6 +1461,17 @@ function renderPage(route, project, media, channels) {
     // node id → its enclosing entry scope, which decides whether a binding's
     // state key carries the entry part (see attrsFor)
     scopeRoots: routeScopeRoots(page, project),
+    // every key that reaches the artifact goes through here: a route-local
+    // short id per uuid, so the trigger side and the listener side agree
+    // without either carrying 36 characters of identity it does not need
+    intern: createInternTable(),
+    // sidecar name → body, collected across the whole export so two routes
+    // with identical effects reference one content-addressed file
+    fxAssets,
+    // one entry per element that triggers or receives an effect, addressed by
+    // its `data-fx` index — the manifest the runtimes read instead of parsing
+    // escaped JSON off four attributes per element
+    els: [],
     // animation id → the saved timeline, for emitting only what's used
     animLib: new Map((project.animations ?? []).map((a) => [a.id, a])),
     // animation id → timeline, populated as bindings are emitted
@@ -1503,49 +1552,59 @@ function renderPage(route, project, media, channels) {
   if (transition) {
     siteFx.t = {}
     if (transition.exit) {
-      ctx.animUsed[transition.exit.id] = transition.exit
-      siteFx.t.x = transition.exit.id
+      siteFx.t.x = ctx.intern(FX_KIND.animation, transition.exit.id)
+      ctx.animUsed[siteFx.t.x] = stripTimeline(transition.exit)
     }
     if (transition.enter) {
-      ctx.animUsed[transition.enter.id] = transition.enter
-      siteFx.t.e = transition.enter.id
+      siteFx.t.e = ctx.intern(FX_KIND.animation, transition.enter.id)
+      ctx.animUsed[siteFx.t.e] = stripTimeline(transition.enter)
     }
   }
   const scrollLerp = resolveScrollLerp(siteMotion)
   if (scrollLerp !== null) siteFx.s = { l: scrollLerp }
   const hasSiteFx = Object.keys(siteFx).length > 0
-  const jsonTag = (id, data) =>
-    `<script type="application/json" id="${id}">${JSON.stringify(data).replaceAll('</', '<\\/')}</script>`
-  const fxTag = hasInteractions ? jsonTag('int-fx', ctx.fx) : ''
-  const rmTag = Object.keys(ctx.fxrm).length ? jsonTag('int-fxrm', ctx.fxrm) : ''
   const hasAnimations = Object.keys(ctx.animUsed).length > 0
-  // breakpoint-scoped bindings (either system) need the width→breakpoint map
+  // breakpoint-scoped bindings (either engine) need the width→breakpoint map,
+  // and it has to carry EVERY breakpoint in order — the runtime picks the
+  // current one by walking them, not by looking up a scoped id
   const hasBpScope = Object.keys(ctx.fxbp).length > 0 || Object.keys(ctx.animBp).length > 0
-  const bpTag = hasBpScope
-    ? jsonTag('int-bp', (project.breakpoints ?? []).map((b) => ({ id: b.id, w: b.width })))
-    : ''
-  const fxbpTag = Object.keys(ctx.fxbp).length ? jsonTag('int-fxbp', ctx.fxbp) : ''
-  const modalTag = Object.keys(ctx.fxModal).length
-    ? jsonTag('int-modal', Object.keys(ctx.fxModal))
-    : ''
-  // only the timelines this route actually plays — an unused library entry
-  // never reaches the wire
-  // smooth scroll alone carries no timelines, and still needs the runtime
-  const animTag =
-    hasAnimations || hasSiteFx
-      ? (hasAnimations
-          ? jsonTag('anim-lib', ctx.animUsed) +
-            (Object.keys(ctx.animBp).length ? jsonTag('anim-bp', ctx.animBp) : '')
-          : '') +
-        (hasSiteFx ? jsonTag('site-fx', siteFx) : '') +
-        '<script src="/assets/motion.js" defer></script>'
-      : ''
+
+  // ONE manifest, replacing seven islands. Top-level names are spelled out
+  // because each appears once; see src/lib/shared/fxWire.js for the format.
+  const manifest = {}
+  if (ctx.els.length) manifest.els = ctx.els
+  if (hasInteractions) manifest.fx = ctx.fx
+  if (Object.keys(ctx.fxrm).length) manifest.rm = ctx.fxrm
+  if (Object.keys(ctx.fxbp).length) manifest.fxbp = ctx.fxbp
+  if (Object.keys(ctx.fxModal).length) manifest.modal = Object.keys(ctx.fxModal)
+  if (hasAnimations) manifest.lib = ctx.animUsed
+  if (Object.keys(ctx.animBp).length) manifest.animbp = ctx.animBp
+  if (hasBpScope) {
+    manifest.bp = (project.breakpoints ?? []).map((b) => ({
+      id: ctx.intern(FX_KIND.breakpoint, b.id),
+      w: b.width,
+    }))
+  }
+  if (hasSiteFx) manifest.site = siteFx
+
+  // The manifest ships as a SIDECAR, not inline: `assets/fx-<hash>.js` loaded
+  // with `defer` ahead of the runtimes. See src/lib/shared/fxWire.js for why a
+  // deferred script and not a fetch. `fxAssets` is the export-wide dedupe —
+  // two routes with identical effects reference one file.
+  let fxTag = ''
+  if (Object.keys(manifest).length) {
+    const { name, body } = fxSidecar(manifest, sha256Hex)
+    ctx.fxAssets.set(name, body)
+    fxTag = `<script src="/${name}" defer></script>`
+  }
+  // smooth scroll alone carries no timelines and still needs the tween runtime
+  const motionTag = hasAnimations || hasSiteFx ? '<script src="/assets/motion.js" defer></script>' : ''
   // the slider runtime ships only on routes that actually carry one
   const sliderTag = ctx.sliderIds.size ? '<script src="/assets/slider.js" defer></script>' : ''
   const tail =
-    (needsRuntime || hasAnimations ? `${fxTag}${rmTag}${bpTag}${fxbpTag}${modalTag}` : '') +
+    fxTag +
     (needsRuntime ? '<script src="/assets/script.js" defer></script>' : '') +
-    animTag +
+    motionTag +
     sliderTag
   // per-locale seo overrides (page + project) apply on non-default routes,
   // falling back field-by-field to the base values
@@ -1882,6 +1941,7 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
     // Built once, outside the route loop, and read by every listener.
     const channels = buildChannelIndex(project)
     const written = new Set()
+    const fxAssets = new Map()
     // render before writing: whether any route plays an animation decides
     // whether the tween runtime ships at all
     let usesMotion = false
@@ -1891,7 +1951,7 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
     for (const route of routes) {
       if (written.has(route.outPath)) continue // page paths win over entry collisions
       written.add(route.outPath)
-      const { html, forms, route: routePath } = renderPage(route, project, media, channels)
+      const { html, forms, route: routePath } = renderPage(route, project, media, channels, fxAssets)
       if (!usesMotion && html.includes('/assets/motion.js')) usesMotion = true
       if (!usesSlider && html.includes('/assets/slider.js')) usesSlider = true
       collectManifest(manifest, forms, routePath, route)
@@ -1913,6 +1973,7 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
       }
       await write('assets/slider.js', sliderRuntime)
     }
+    for (const [name, body] of fxAssets) await write(name, body)
     for (const [outPath, html] of rendered) await write(outPath, html)
 
     return { routes: written.size, bytes, forms: manifest }

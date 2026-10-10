@@ -12,33 +12,42 @@
 // what an open button did, and the to-classes were applied twice. That is what
 // made modals unbuildable.
 //
-// Each [data-tgt] element's class list is fully recomputed from its captured
-// base + the toClasses of every fired state targeting it (never token
-// add/remove — shared tokens would clobber).
+// Each element with a `t` list in the manifest has its class list fully
+// recomputed from its captured base + the toClasses of every fired state
+// targeting it (never token add/remove — shared tokens would clobber).
+//
+// ONE manifest and ONE attribute: the per-route sidecar `assets/fx-<hash>.js`
+// carries everything seven inline islands used to, and `data-fx` is an index
+// into its `els`, replacing the escaped JSON that `data-int`/`data-tgt` carried
+// per element. Every key in it is a route-local short id. The format is defined
+// in src/lib/shared/fxWire.js — this file is served raw and imports nothing, so
+// it repeats the global's name.
+//
+// The sidecar is a DEFERRED script emitted ahead of this one, so by the time
+// this runs the global is set; a `fetch` would have made it serial.
 ;(function () {
   // ---------- interactions ----------
-  var fxEl = document.getElementById('int-fx')
-  if (!fxEl) return
+  var man = window.__guanoFx
+  if (!man) return
+  var els = man.els || []
+  var fx = man.fx
+  if (!fx) return
 
-  var fx = JSON.parse(fxEl.textContent || '{}')
   var fired = new Set()
   var noanim = /[?&]noanim\b/.test(location.search)
 
   // breakpoint-scoped interactions: width→breakpoint map + per-state scope.
   // Absent when nothing is scoped, so gating is a no-op then.
-  var bpEl = document.getElementById('int-bp')
-  var bps = bpEl ? JSON.parse(bpEl.textContent || '[]') : []
+  var bps = (man.bp || []).slice()
   bps.sort(function (a, b) {
     return a.w - b.w
   })
-  var fxbpEl = document.getElementById('int-fxbp')
-  var fxbp = fxbpEl ? JSON.parse(fxbpEl.textContent || '{}') : {}
+  var fxbp = man.fxbp || {}
 
   // state key → base classes to REMOVE from the target while fired
   // (same-property conflicts precomputed at export: hidden+flex etc. —
   // without this the cascade picks an arbitrary winner and toggles break)
-  var rmEl = document.getElementById('int-fxrm')
-  var fxrm = rmEl ? JSON.parse(rmEl.textContent || '{}') : {}
+  var fxrm = man.rm || {}
 
   // state keys whose effect is a MODAL: while one is on, page scroll is locked,
   // focus is moved into the target and trapped there, and aria-modal is set.
@@ -46,13 +55,17 @@
   // nothing until opened, centres itself against the `fixed inset-0 flex`
   // classes every existing overlay is made of, and would need the exclusive
   // group / closeOn model all over again.
-  var modalEl = document.getElementById('int-modal')
   var modalKeys = {}
-  if (modalEl) {
-    JSON.parse(modalEl.textContent || '[]').forEach(function (k) {
-      modalKeys[k] = 1
-    })
-  }
+  ;(man.modal || []).forEach(function (k) {
+    modalKeys[k] = 1
+  })
+
+  // every element the manifest has anything to say about, resolved once
+  var entries = []
+  document.querySelectorAll('[data-fx]').forEach(function (el) {
+    var entry = els[+el.getAttribute('data-fx')]
+    if (entry) entries.push({ el: el, fx: entry })
+  })
 
   // current breakpoint id for the viewport (mirrors breakpointIdForWidth in
   // src/lib/responsive.ts): tightest bp still covering this width, else widest
@@ -79,11 +92,12 @@
     return el.getAttribute('class') || ''
   }
   var targets = []
-  document.querySelectorAll('[data-tgt]').forEach(function (el) {
+  entries.forEach(function (e) {
+    if (!e.fx.t) return
     targets.push({
-      el: el,
-      base: classOf(el).split(/\s+/).filter(Boolean),
-      keys: el.getAttribute('data-tgt').split(' '),
+      el: e.el,
+      base: classOf(e.el).split(/\s+/).filter(Boolean),
+      keys: e.fx.t,
     })
   })
 
@@ -414,7 +428,7 @@
     entries.forEach(function (entry) {
       if (!entry.isIntersecting) return
       appear.unobserve(entry.target)
-      JSON.parse(entry.target.getAttribute('data-int')).forEach(function (i) {
+      ;(els[+entry.target.getAttribute('data-fx')].c || []).forEach(function (i) {
         if (i.t === 'appear') set(i.s, true) // fire once, never unfires
       })
     })
@@ -428,11 +442,11 @@
   // Options have to be known for ALL bindings before any of them fires, or a
   // `closeOn`/`group`/`once` declared on one trigger would be invisible to the
   // effect when a different trigger opens it.
-  document.querySelectorAll('[data-int]').forEach(function (el) {
-    JSON.parse(el.getAttribute('data-int')).forEach(function (i) {
-      addInside(i.s, el)
+  entries.forEach(function (e) {
+    ;(e.fx.c || []).forEach(function (i) {
+      addInside(i.s, e.el)
       collectOptions(i)
-      triggers.push({ el: el, i: i })
+      triggers.push({ el: e.el, i: i })
     })
   })
 
@@ -511,7 +525,8 @@
 // ---------- forms ----------
 //
 // Its own IIFE: the interactions block above returns early when a page has no
-// `#int-fx`, and a page can carry a form with no interactions at all.
+// `#guano-fx` manifest (or none with an `fx` table), and a page can carry a
+// form with no interactions at all.
 //
 // PROGRESSIVE ENHANCEMENT is the point. The markup already posts natively, so
 // a visitor without JS gets a real submission and a 303 back to the site with

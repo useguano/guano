@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { manifest, motionTriggers, wiredById } from './fixtures/fxWire'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 // server modules under test — plain ESM, safe to import into the spec runner
@@ -118,14 +119,13 @@ function fixtureWithoutAnimations(motion: unknown) {
   return project
 }
 
-const animMetas = (html: string) =>
-  [...html.matchAll(/data-anim="([^"]*)"/g)]
-    .map((m) => JSON.parse(m[1]!.replaceAll('&quot;', '"').replaceAll('&amp;', '&')))
-    .flat()
+const animMetas = (html: string) => motionTriggers(html, SITE)
 
-const jsonTag = (html: string, id: string) => {
-  const found = new RegExp(`id="${id}"[^>]*>([^<]*)<`).exec(html)
-  return found ? JSON.parse(found[1]!) : null
+/** the manifest slice that used to be its own island */
+const jsonTag = (html: string, id: 'anim-lib' | 'site-fx' | 'anim-bp' | 'int-bp') => {
+  const man = manifest(html, SITE)
+  const slice = { 'anim-lib': man.lib, 'site-fx': man.site, 'anim-bp': man.animbp, 'int-bp': man.bp }[id]
+  return slice ?? null
 }
 
 test.describe('site-wide motion', () => {
@@ -136,8 +136,9 @@ test.describe('site-wide motion', () => {
 
     // inherited 'replay' travels; an explicit 'once' says nothing, because an
     // absent mode is already what the runtime plays once
-    expect(metas.find((m) => m.k === 'p1-b1').o.m).toBe('replay')
-    expect(metas.find((m) => m.k === 'p1-b2').o).toBeUndefined()
+    expect(metas).toHaveLength(2)
+    expect(wiredById(html, 'inherit', SITE)!.m![0]!.o!.m).toBe('replay')
+    expect(wiredById(html, 'once', SITE)!.m![0]!.o).toBeUndefined()
   })
 
   test('an inherited "once" emits no options at all', async () => {
@@ -151,9 +152,13 @@ test.describe('site-wide motion', () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
 
     const fx = jsonTag(html, 'site-fx')
-    expect(fx.t).toEqual({ x: '__t-exit', e: '__t-enter' })
     const lib = jsonTag(html, 'anim-lib')
-    expect(Object.keys(lib)).toEqual(expect.arrayContaining(['__t-exit', '__t-enter']))
+    // both halves are named, and each names a timeline that actually ships —
+    // the keys are interned, so this is the relationship rather than the id
+    expect(fx.t.x).toBeTruthy()
+    expect(fx.t.e).toBeTruthy()
+    expect(fx.t.x).not.toBe(fx.t.e)
+    expect(Object.keys(lib)).toEqual(expect.arrayContaining([fx.t.x, fx.t.e]))
 
     // the no-flash guard, and its self-release for a runtime that never arrives
     expect(html).toContain('html.gt-enter body{opacity:0}')
@@ -662,12 +667,13 @@ test.describe('several entrances on one element, and a delayed binding', () => {
 
   test('the delay rides on the wire as `d`, and only when set', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
-    const metas = animMetas(html) as { k: string; d?: number }[]
-    const byBinding = new Map(metas.map((m) => [m.k, m]))
-    expect(byBinding.get('b-close')?.d).toBe(3000)
-    expect(byBinding.get('b-late')?.d).toBe(1500)
-    expect(byBinding.get('b-open')).toBeDefined()
-    expect('d' in byBinding.get('b-open')!).toBe(false)
+    // #both declares open then close (delayed); #late is the delayed entrance
+    const both = wiredById(html, 'both', SITE)!.m!
+    expect(both).toHaveLength(2)
+    expect(both[1]!.d).toBe(3000)
+    expect(wiredById(html, 'late', SITE)!.m![0]!.d).toBe(1500)
+    // an undelayed binding carries no key at all
+    expect('d' in both[0]!).toBe(false)
   })
 
   test('the runtime holds the first frame through the wait, then plays', async ({ page }) => {

@@ -7,12 +7,15 @@ const props = withDefaults(
   defineProps<{
     tokens: string[]
     prerequisites?: boolean
+    /** open the suggestion list upward — for a field pinned to the bottom of a
+     *  scrolling pane, where a list dropping down stretches the pane instead */
+    dropUp?: boolean
 
     inherited?: string[]
 
     removableInherited?: string[]
   }>(),
-  { prerequisites: true, inherited: () => [], removableInherited: () => [] },
+  { prerequisites: true, dropUp: false, inherited: () => [], removableInherited: () => [] },
 )
 
 function isInherited(token: string): boolean {
@@ -182,7 +185,8 @@ function onKeydown(e: KeyboardEvent) {
 
     <div
       v-if="open"
-      class="absolute top-full left-0 z-20 mt-1 max-h-44 w-full overflow-y-auto rounded-md border border-input bg-background p-1 shadow-md"
+      class="absolute left-0 z-20 max-h-44 w-full overflow-y-auto rounded-md border border-input bg-background p-1 shadow-md"
+      :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
     >
       <button
         v-for="(suggestion, i) in suggestions"

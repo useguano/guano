@@ -981,7 +981,7 @@ any `data-*` or `aria-*` name, plus: `target`, `rel`, `download`, `title`, `role
 already manages (`id`, `class`, `style`, `src`, `href`) and anything executable (`on*`)
 is refused, and the refusal names what it dropped. A handful of `data-*` names are
 reserved too, because they are the channel between the exporter and its own published
-runtime: `data-form*`, `data-int`, `data-anim`, `data-tgt`, `data-atgt`, `data-slider`,
+runtime: `data-form*`, `data-fx`, `data-slider`,
 `data-sl-*`, `data-node-id`, `data-id`, `data-ref`, `data-type`, `data-source`. Setting
 one would shadow the renderer's own value (HTML resolves a duplicate attribute to the
 first), so they are refused by name. Use `form`, `bindInteractions`, `bindAnimations`,
@@ -1963,9 +1963,10 @@ bindAnimations: [
 
 | trigger | when it plays | options |
 |---|---|---|
-| `load` | as soon as the page renders | `delay` (ms), like every trigger but `scrub` |
+| `load` | as soon as the page renders | `delay` (ms), like every trigger but `scrub`/`mouse` |
 | `appear` | the element scrolls into view | `appearMode`: omit = inherit the site default (`settings.motion.appearMode`, itself `once`); `once` = first entry only; `replay` = every entry; `reverse` = plays in, rewinds out. `appearAt`: the viewport fraction the top must cross first (0.8 ≈ "top 80%"); omit = first visible pixel |
 | `scrub` | progress follows scroll position | `scrub: {start, end, smooth?}` — viewport fractions the element's top travels between (default `{start: 1, end: 0.25}`); `smooth` (seconds, 0–3) makes the play LAG scroll with an exponential catch-up — per-tween scroll smoothing |
+| `mouse` | progress follows the pointer, both ways | `mouse: {axis, area, smooth?}` — `axis`: `x` (default) or `y`; `area`: `element` (default — the box the BINDING sits on) or `page` (the viewport); `smooth` (seconds, 0–3, default 0.12) is the catch-up lag that makes it read as a follow rather than a jump |
 | `hover` | pointer enters (rewinds on leave) | — |
 | `click` | plays it, or rewinds one already running | `action`: `toggle` (default) · `on` always plays · `off` always rewinds |
 | `scrolled` | the page is scrolled past a threshold (rewinds above it) | `scrollAt`: px, default 50 |
@@ -1982,8 +1983,8 @@ is. That is what makes an animated panel work: bind `{trigger: "click", targetRe
 button and the overlay, all naming the same animation and the same target. `off`
 rewinds the timeline it finds, so the exit is the entrance played backwards; a
 separate exit timeline is not needed. `action` is refused on every other trigger —
-`hover` rewinds on leave by itself, and `load`/`appear`/`scrub` have no second
-direction to force.
+`hover` rewinds on leave by itself, and `load`/`appear`/`scrub`/`mouse` have no
+second direction to force.
 
 A fade-up on a heading, end to end:
 
@@ -2036,8 +2037,47 @@ give it `easing: "linear"` so progress tracks scroll evenly.
   per tween, with the page's native scrollbar untouched (no hijacking). The canvas
   preview tracks scroll 1:1; smoothing shows on the published site.
 
-**The two engines take the same triggers**, with one exception: only a timeline can
-`scrub`, because a scrub is continuous progress and a class is on or off. So `load` is
+### Mouse follow
+
+`{trigger: "mouse"}` maps the pointer's position along ONE axis to the timeline's
+progress — Webflow's "Mouse move". Three rules make it work:
+
+1. **The binding sits on the box the pointer is measured across, and aims at what
+   moves.** `area: "element"` means the element carrying the binding, so put it on
+   the section or card and use `targetId`/`targetRef` for the thing that drifts. One
+   trigger can then drive several children off one pointer. `area: "page"` measures
+   the viewport instead, for something that follows the cursor anywhere on the route.
+2. **A follow rests at the MIDDLE of its timeline, not at `from`** — so author the
+   track symmetrically, `from: -30, to: 30`, and the element sits at 0 until the
+   pointer moves. (This is the one trigger whose resting frame is not its `from`;
+   the exporter bakes that middle frame, which for a symmetric track is the
+   property's own default and so emits nothing at all.)
+3. **One binding is one axis.** A timeline carries a single progress, so a 2D follow
+   is TWO bindings on the same trigger — `{axis: "x"}` moving `x` and `{axis: "y"}`
+   moving `y` — and the runtime composes them into one `transform`. Two bindings on
+   one element tweening DIFFERENT properties is the supported shape; two tweening the
+   same one fight.
+
+A card that leans toward the cursor:
+
+```
+create_animations {items: [
+  {name: "Lean x", steps: [{tracks: [{prop: "rotate", from: -6, to: 6}], duration: 400, easing: "linear"}]},
+  {name: "Lean y", steps: [{tracks: [{prop: "y", from: -12, to: 12}], duration: 400, easing: "linear"}]}
+]}
+bind_interaction {pageId, ref: "hero", bindAnimations: [
+  {animationId: "<lean-x>", trigger: "mouse", targetRef: "hero-card", mouse: {axis: "x"}},
+  {animationId: "<lean-y>", trigger: "mouse", targetRef: "hero-card", mouse: {axis: "y"}}
+]}
+```
+
+`delay` and `action` are refused: nothing fires a follow and it has no second
+direction. It stands down entirely on a coarse pointer (touch), under
+`prefers-reduced-motion` and on `?noanim`, where the element keeps its baked middle.
+
+**The two engines take the same triggers**, with two exceptions: only a timeline can
+`scrub` or follow the `mouse`, because both are continuous progress and a class is on
+or off. So `load` is
 available to a class change (a state the page simply starts in, no timeline needed),
 and `scrolled` and `change` are available to a timeline (a header that shrinks by
 tweening, a field that slides in when a radio is picked). Pick the engine by what the

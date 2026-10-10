@@ -7,8 +7,9 @@ const props = withDefaults(
   defineProps<{
     modelValue: string
     prerequisites?: boolean
+    dropUp?: boolean
   }>(),
-  { prerequisites: true },
+  { prerequisites: true, dropUp: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -27,6 +28,7 @@ defineExpose({ focus: () => input.value?.focus() })
     ref="input"
     :tokens="tokens"
     :prerequisites="prerequisites"
+    :drop-up="dropUp"
     @commit="setTokens"
     @remove="removeToken"
   />

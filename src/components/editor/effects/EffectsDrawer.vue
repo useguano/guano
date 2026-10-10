@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { X, Zap } from 'lucide-vue-next'
+import { onBeforeUnmount, onMounted } from 'vue'
+import { X } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import EffectBody from '@/components/editor/effects/EffectBody.vue'
 import EffectLibrary from '@/components/editor/effects/EffectLibrary.vue'
@@ -11,20 +11,10 @@ import { useInteraction } from '@/composables/useInteraction'
 import { useModal } from '@/composables/useModal'
 import { usePopover } from '@/composables/usePopover'
 import { isEditable } from '@/composables/useShortcut'
-import { triggerOrder, triggerSentence, uiTrigger } from '@/lib/effectTriggers'
 
-const { open, selected, trigger, view, openTrigger, closeDrawer } = useEffectsDrawer()
+const { open, selected, trigger, view, closeDrawer } = useEffectsDrawer()
 const interactions = useInteraction()
-const { canEdit, elementLabel, sections } = useElementEffects()
-
-const triggerRows = computed(() => {
-  if (!canEdit.value) return []
-  const list = sections.value.map((s) => ({ trigger: s.trigger, count: s.rows.length }))
-  if (trigger.value && !list.some((r) => r.trigger === trigger.value)) {
-    list.push({ trigger: trigger.value, count: 0 })
-  }
-  return list.sort((a, b) => triggerOrder(a.trigger) - triggerOrder(b.trigger))
-})
+const { canEdit } = useElementEffects()
 
 function onKeydownCapture(e: KeyboardEvent) {
   if (e.key !== 'Escape' || !open.value) return
@@ -46,36 +36,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydownCapture, tr
     class="flex h-72 min-h-0 shrink-0 border-t border-input bg-background"
   >
     <aside class="flex w-52 shrink-0 flex-col border-r border-input">
-      <div v-if="triggerRows.length" class="flex shrink-0 flex-col border-b border-input">
-        <p
-          class="flex h-9 shrink-0 items-center gap-1 px-3 section-label"
-        >
-          <span class="shrink-0">Element</span>
-          <span class="min-w-0 truncate normal-case tracking-normal">· {{ elementLabel }}</span>
-        </p>
-        <div class="flex flex-col px-1 pb-1.5">
-          <button
-            v-for="row in triggerRows"
-            :key="row.trigger"
-            type="button"
-            data-drawer-trigger
-            :aria-current="view === 'trigger' && trigger === row.trigger ? 'true' : undefined"
-            class="flex h-7 items-center gap-1.5 rounded-lg px-2 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            :class="
-              view === 'trigger' && trigger === row.trigger ? 'bg-accent/30' : 'hover:bg-accent/15'
-            "
-            @click="openTrigger(row.trigger)"
-          >
-            <component
-              :is="uiTrigger(row.trigger)?.icon ?? Zap"
-              class="size-3.5 shrink-0 text-muted-foreground"
-            />
-            <span class="min-w-0 flex-1 truncate">{{ triggerSentence(row.trigger) }}</span>
-            <span v-if="!row.count" class="shrink-0 text-[10px] text-muted-foreground">empty</span>
-          </button>
-        </div>
-      </div>
-
       <EffectLibrary class="min-h-0 flex-1" />
     </aside>
 
@@ -108,7 +68,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydownCapture, tr
       <div class="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <EffectBody v-if="selected" :kind="selected.kind" :id="selected.id" />
       </div>
-
     </div>
   </section>
 </template>

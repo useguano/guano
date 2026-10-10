@@ -11,6 +11,10 @@ import {
   reducedMotion,
   sampleValues,
   scrubProgressRaw,
+  mouseProgressRaw,
+  approach,
+  MOUSE_DEFAULTS,
+  MOUSE_REST,
   splitByStagger,
   type CompiledAnimation,
   type MotionStyle,
@@ -52,6 +56,8 @@ function playEnd(play: PlayState): number {
 }
 
 const plays = ref(new Map<string, PlayState>())
+const MOUSE_CENTRE = MOUSE_REST
+const mouseSmoothed = new Map<string, number>()
 const tick = ref(0)
 
 const compiledCache = new Map<
@@ -237,6 +243,28 @@ export function useMotion() {
     return scrubProgressRaw(top, viewportHeight, binding.scrub)
   }
 
+  function mouseProgressFor(
+    binding: AnimationBinding,
+    point: { x: number; y: number },
+    box: { left: number; top: number; width: number; height: number },
+    dt: number,
+    key: string,
+  ): { value: number; settled: boolean } | null {
+    const raw = mouseProgressRaw(point, box, binding.mouse?.axis)
+    if (raw === null) return null
+    const smooth =
+      typeof binding.mouse?.smooth === 'number' ? binding.mouse.smooth : MOUSE_DEFAULTS.smooth
+    if (!(smooth > 0)) return { value: raw, settled: true }
+    const prev = mouseSmoothed.get(key) ?? MOUSE_CENTRE
+    const next = approach(prev, raw, dt, smooth)
+    mouseSmoothed.set(key, next)
+    return { value: next, settled: next === raw }
+  }
+
+  function restMouseProgress(key: string) {
+    mouseSmoothed.set(key, MOUSE_CENTRE)
+  }
+
   function inScope(play: PlayState, scope?: MotionScope): boolean {
     const own = play.scope
     return scope instanceof Set ? scope.has(own) : own === scope
@@ -298,6 +326,7 @@ export function useMotion() {
         compiled: compiledFor(animation).split.element,
         delay: bindingDelay(binding),
         entrance: binding.trigger === 'load' || binding.trigger === 'appear',
+        mid: binding.trigger === 'mouse',
       })),
     )
     return Object.keys(values).length ? values : undefined
@@ -355,6 +384,9 @@ export function useMotion() {
     clickAction,
     scrubTo,
     scrubProgressFor,
+    mouseProgressFor,
+    restMouseProgress,
+    MOUSE_CENTRE,
     styleForNode,
     valuesForNode,
     restValuesFor,

@@ -6,7 +6,6 @@ import { useComponents } from './useComponents'
 import { isDrivenState, useInteraction, type Driver } from './useInteraction'
 import type { DrawerKind } from './useEffectsDrawer'
 import {
-  UI_TRIGGERS,
   triggerAllows,
   triggerOrder,
   triggerSentence,
@@ -24,10 +23,13 @@ export interface StateRow {
   driverOwnerIds: string[]
 }
 
-export interface TriggerSection {
+export interface ActionRow {
+  key: string
   trigger: string
   sentence: string
-  rows: EffectPair[]
+  name: string
+  pair: EffectPair
+  ref: { kind: DrawerKind; id: string }
 }
 
 export function rowId(pair: EffectPair): string {
@@ -47,7 +49,7 @@ export function useElementEffects() {
   const effects = useEffects()
   const { driversFor, animationFor } = interactions
   const { animDriversFor, animationFor: timelineFor } = animations
-  const { pairsFor, effectForHalf } = effects
+  const { pairsFor, effectForHalf, nameOf } = effects
   const { editTarget } = useComponents()
 
   const target = editTarget
@@ -122,42 +124,46 @@ export function useElementEffects() {
     return out
   })
 
-  const sections = computed<TriggerSection[]>(() => {
+  const actions = computed<ActionRow[]>(() => {
     const n = canEdit.value ? target.value : null
     if (!n) return []
-    const byTrigger = new Map<string, EffectPair[]>()
-    for (const pair of pairsFor(n, n.id)) {
-      const trigger = (pair.interaction ?? pair.animation)!.trigger
-      const list = byTrigger.get(trigger) ?? []
-      list.push(pair)
-      byTrigger.set(trigger, list)
-    }
-    return [...byTrigger.entries()]
-      .map(([trigger, rows]) => ({ trigger, rows, sentence: triggerSentence(trigger) }))
+    return pairsFor(n, n.id)
+      .map((pair) => {
+        const trigger = (pair.interaction ?? pair.animation)!.trigger
+        return {
+          key: rowId(pair),
+          trigger,
+          sentence: triggerSentence(trigger),
+          name: nameOf(pair),
+          pair,
+          ref: drawerRefOf(pair),
+        }
+      })
       .sort((a, b) => triggerOrder(a.trigger) - triggerOrder(b.trigger))
   })
 
-  const availableTriggers = computed(() =>
-    UI_TRIGGERS.filter((t) => !sections.value.some((s) => s.trigger === t.key)),
-  )
-
-  function createActionFor(trigger: string): Effect | null {
+  function createActionFor(trigger: string): { effect: Effect; key: string } | null {
     const owner = canEdit.value ? target.value : null
     if (!owner) return null
     const classHalf = interactions.createInteraction()
     const effect = effects.wrap('interaction', classHalf.id, classHalf.name)
     effects.addHalf(effect, 'animation')
     const has = effects.halfIds(effect)
+    let key = ''
     if (has.interactionId && triggerAllows(trigger, 'interaction')) {
       const binding = interactions.applyTo(owner, has.interactionId)
       binding.trigger = trigger as InteractionBinding['trigger']
+      key = binding.id
     }
     if (has.animationId && triggerAllows(trigger, 'animation')) {
       const binding = animations.applyTo(owner, has.animationId)
-      if (binding) binding.trigger = trigger as AnimationBinding['trigger']
+      if (binding) {
+        binding.trigger = trigger as AnimationBinding['trigger']
+        if (!key) key = binding.id
+      }
     }
-    return effect
+    return { effect, key }
   }
 
-  return { target, canEdit, elementLabel, states, sections, availableTriggers, createActionFor }
+  return { target, canEdit, elementLabel, states, actions, createActionFor }
 }

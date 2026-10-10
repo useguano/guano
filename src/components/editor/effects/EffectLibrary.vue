@@ -7,21 +7,22 @@ import { useAnimation } from '@/composables/useAnimation'
 import { useEffects, type LibraryItem } from '@/composables/useEffects'
 import { useModal } from '@/composables/useModal'
 import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
-import { useElementEffects, drawerRefOf } from '@/composables/useElementEffects'
+import { useElementEffects } from '@/composables/useElementEffects'
 
 const interactions = useInteraction()
 const animations = useAnimation()
 const effects = useEffects()
 const { confirm } = useModal()
-const { selected, trigger, view, openEffect } = useEffectsDrawer()
-const { sections } = useElementEffects()
+const { selected, trigger, action, view, openEffect } = useEffectsDrawer()
+const { actions } = useElementEffects()
 
 const items = effects.libraryItems
 
 const editingIds = computed(() => {
   if (view.value !== 'trigger' || !trigger.value) return new Set<string>()
-  const rows = sections.value.find((s) => s.trigger === trigger.value)?.rows ?? []
-  return new Set(rows.map((pair) => drawerRefOf(pair).id))
+  const here = actions.value.filter((a) => a.trigger === trigger.value)
+  const row = here.find((a) => a.key === action.value) ?? here[0]
+  return new Set(row ? [row.ref.id] : [])
 })
 
 const isOpen = (item: LibraryItem) => selected.value?.id === item.id || editingIds.value.has(item.id)

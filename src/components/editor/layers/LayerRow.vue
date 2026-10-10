@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 import { computed, nextTick, ref, watch } from 'vue'
-import { ChevronRight, Eye, EyeOff, Palette, Paperclip, Zap } from 'lucide-vue-next'
+import { ChevronRight, Eye, EyeOff, Zap } from 'lucide-vue-next'
 import { elementIcon } from '@/lib/elementIcons'
 import { isComponentType } from '@/lib/components'
 import { useElement } from '@/composables/useElement'
@@ -69,19 +69,13 @@ const secondary = computed(() =>
   props.node.slot ? 'slot' : label.value === props.node.type ? '' : props.node.type,
 )
 
-const badges = computed(() => {
+const wired = computed(() => {
   const n = props.node
   const master = masterFor(n.id)?.master
-  const styled = !!(n.classes?.trim() || master?.classes?.trim())
-  const wired = !!(n.interactions?.length || n.animations?.length || master?.interactions?.length)
-  const owns = !!(
-    n.content || n.src || n.svg || n.slider || master?.content || master?.src || master?.svg
+  return !!(
+    n.interactions?.length || n.animations?.length ||
+    master?.interactions?.length || master?.animations?.length
   )
-  return [
-    styled && { key: 'style', icon: Palette, title: 'Styled — open Style' },
-    wired && { key: 'interactions', icon: Zap, title: 'Interactive — open Interactions' },
-    owns && { key: 'data', icon: Paperclip, title: 'Has content — open Data' },
-  ].filter(Boolean) as { key: string; icon: typeof Palette; title: string }[]
 })
 
 function onClick(e: MouseEvent) {
@@ -209,14 +203,14 @@ function commitRef() {
           <component :is="hidden ? EyeOff : Eye" class="size-3" />
         </button>
         <button
-          v-for="badge in badges"
-          :key="badge.key"
-          v-tooltip="{ text: badge.title, side: 'left' }"
+          v-if="wired"
           type="button"
+          data-layer-wired
+          aria-label="Has interactions"
           class="flex size-4 items-center justify-center rounded outline-none hover:text-foreground"
-          @click.stop="(selectElement(node.id), togglePanel(badge.key))"
+          @click.stop="(selectElement(node.id), togglePanel('interactions'))"
         >
-          <component :is="badge.icon" class="size-3" />
+          <Zap class="size-3" />
         </button>
       </span>
     </div>

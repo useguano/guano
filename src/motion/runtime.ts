@@ -11,6 +11,10 @@ import {
   motionBreakpointId,
   appearRootMargin,
   scrubProgressRaw,
+  mouseProgressRaw,
+  approach,
+  MOUSE_DEFAULTS,
+  MOUSE_REST,
   MOTION_CSS_PROPS,
   TRANSITION_DEFAULTS,
   type CompiledAnimation,
@@ -20,13 +24,14 @@ import {
   type StaggerSplit,
 } from '@/lib/motion'
 import { createLerpScroller, wheelDeltaPx, insideNestedScroller } from '@/lib/shared/scroll.js'
+import { FX_ATTR, FX_GLOBAL } from '@/lib/shared/fxWire.js'
 
 interface BindingMeta {
   k: string
 
   s?: string
   ac?: 'on' | 'off'
-  t: 'load' | 'appear' | 'scrub' | 'hover' | 'click' | 'scrolled' | 'change'
+  t: 'load' | 'appear' | 'scrub' | 'mouse' | 'hover' | 'click' | 'scrolled' | 'change'
   at2?: number
 
   d?: number
@@ -35,6 +40,7 @@ interface BindingMeta {
     m?: 'replay' | 'reverse'
     at?: number
     s?: { start?: number; end?: number; smooth?: number }
+    mo?: { axis?: 'x' | 'y'; area?: 'element' | 'page'; smooth?: number }
   }
 }
 
@@ -56,26 +62,40 @@ interface Play {
   to?: SampleOptions['to']
 }
 
-const json = <T,>(id: string, fallback: T): T => {
-  const el = document.getElementById(id)
-  if (!el) return fallback
-  try {
-    return JSON.parse(el.textContent || '') as T
-  } catch {
-    return fallback
-  }
-}
-
 interface SiteFx {
   t?: { x?: string; e?: string }
   s?: { l: number }
 }
 
-const lib = json<Record<string, { id: string; name: string; steps: unknown[] }>>('anim-lib', {})
-const siteFx = json<SiteFx | null>('site-fx', null)
+interface FxEntry {
+  c?: unknown[]
+  m?: BindingMeta[]
+  t?: string[]
+  a?: string[]
+}
+
+interface FxManifest {
+  els?: FxEntry[]
+  lib?: Record<string, { steps: unknown[] }>
+  animbp?: Record<string, string[]>
+  bp?: { id: string; w: number }[]
+  site?: SiteFx
+}
+
+// the sidecar is a deferred script that ran before this one (document order),
+// so the global is already set — see src/lib/shared/fxWire.js
+const manifest = ((window as unknown as Record<string, FxManifest>)[FX_GLOBAL] ??
+  {}) as FxManifest
+
+const lib = manifest.lib ?? {}
+const siteFx = manifest.site ?? null
 if (Object.keys(lib).length || siteFx) {
-  const bpScope = json<Record<string, string[]>>('anim-bp', {})
-  const bps = json<{ id: string; w: number }[]>('int-bp', [])
+  const els = manifest.els ?? []
+  const bpScope = manifest.animbp ?? {}
+  const bps = manifest.bp ?? []
+  /** the bindings this element triggers, from the manifest rather than an
+   *  escaped JSON attribute */
+  const metasOf = (el: Element): BindingMeta[] => els[+(el.getAttribute(FX_ATTR) || -1)]?.m ?? []
 
   const compiled: Record<string, Compiled> = {}
   const splits: Record<string, Split> = {}
@@ -99,8 +119,9 @@ if (Object.keys(lib).length || siteFx) {
   }
 
   const targets = new Map<string, HTMLElement[]>()
-  document.querySelectorAll<HTMLElement>('[data-atgt]').forEach((el) => {
-    for (const key of (el.getAttribute('data-atgt') || '').split(' ').filter(Boolean)) {
+  const wired = Array.from(document.querySelectorAll<HTMLElement>(`[${FX_ATTR}]`))
+  wired.forEach((el) => {
+    for (const key of els[+(el.getAttribute(FX_ATTR) || -1)]?.a ?? []) {
       const list = targets.get(key) || []
       list.push(el)
       targets.set(key, list)
@@ -376,6 +397,7 @@ if (Object.keys(lib).length || siteFx) {
   }
 
   const scrubs: { meta: BindingMeta; el: HTMLElement }[] = []
+  const mice: { meta: BindingMeta; el: HTMLElement }[] = []
   const appearOnce = new Set<string>()
   const appearing: { meta: BindingMeta; el: HTMLElement }[] = []
   const observers = new Map<number, IntersectionObserver>()
@@ -391,8 +413,7 @@ if (Object.keys(lib).length || siteFx) {
 
   function onAppear(entries: IntersectionObserverEntry[]) {
     for (const entry of entries) {
-      const list = JSON.parse(entry.target.getAttribute('data-anim') || '[]') as BindingMeta[]
-      for (const meta of list) {
+      for (const meta of metasOf(entry.target)) {
         if (meta.t !== 'appear') continue
         if (entry.isIntersecting) {
           const mode = meta.o && meta.o.m
@@ -408,9 +429,8 @@ if (Object.keys(lib).length || siteFx) {
 
   const scrolled: BindingMeta[] = []
 
-  document.querySelectorAll<HTMLElement>('[data-anim]').forEach((el) => {
-    const list = JSON.parse(el.getAttribute('data-anim') || '[]') as BindingMeta[]
-    for (const meta of list) {
+  wired.forEach((el) => {
+    for (const meta of metasOf(el)) {
       if (meta.t === 'load') {
         start(meta, false, hiddenAtBoot)
       } else if (meta.t === 'appear') {
@@ -418,6 +438,8 @@ if (Object.keys(lib).length || siteFx) {
         observerFor((meta.o && meta.o.at) || 0).observe(el)
       } else if (meta.t === 'scrub') {
         scrubs.push({ meta, el })
+      } else if (meta.t === 'mouse') {
+        mice.push({ meta, el })
       } else if (meta.t === 'scrolled') {
         scrolled.push(meta)
       } else if (meta.t === 'change') {
@@ -467,18 +489,12 @@ if (Object.keys(lib).length || siteFx) {
     // value the element holds until that timeline runs, so a hover tweening
     // opacity 0 → 1 sits at 0 until the pointer arrives. Anything that already
     // started during setup is skipped below rather than filtered here.
-    const toPrime = Array.from(document.querySelectorAll<HTMLElement>('[data-anim]')).flatMap(
-      (el) =>
-        (JSON.parse(el.getAttribute('data-anim') || '[]') as BindingMeta[]).map((meta) => ({
-          meta,
-          el,
-        })),
-    )
+    const toPrime = wired.flatMap((el) => metasOf(el).map((meta) => ({ meta, el })))
     const perElement = new Map<
       HTMLElement,
       {
-        el: { compiled: Compiled; delay: number; entrance: boolean }[]
-        kids: { split: Split; delay: number; entrance: boolean }[]
+        el: { compiled: Compiled; delay: number; entrance: boolean; mid: boolean }[]
+        kids: { split: Split; delay: number; entrance: boolean; mid: boolean }[]
       }
     >()
     for (const { meta } of toPrime) {
@@ -495,8 +511,9 @@ if (Object.keys(lib).length || siteFx) {
         let box = perElement.get(el)
         if (!box) perElement.set(el, (box = { el: [], kids: [] }))
         const entrance = meta.t === 'load' || meta.t === 'appear'
-        box.el.push({ compiled: split.element, delay: meta.d || 0, entrance })
-        if (split.hasStagger) box.kids.push({ split, delay: meta.d || 0, entrance })
+        const mid = meta.t === 'mouse'
+        box.el.push({ compiled: split.element, delay: meta.d || 0, entrance, mid })
+        if (split.hasStagger) box.kids.push({ split, delay: meta.d || 0, entrance, mid })
       })
     }
     perElement.forEach((box, el) => {
@@ -505,8 +522,8 @@ if (Object.keys(lib).length || siteFx) {
         applyStyle(el, first)
         primedFrames.set(el, first)
       }
-      for (const { split, delay, entrance } of box.kids) {
-        const firstChild = primeFirstFrame([{ compiled: split.staggered, delay, entrance }])
+      for (const { split, delay, entrance, mid } of box.kids) {
+        const firstChild = primeFirstFrame([{ compiled: split.staggered, delay, entrance, mid }])
         if (Object.keys(firstChild).length) {
           staggerTargets(el, split.selector).forEach((kid) => {
             applyStyle(kid, firstChild)
@@ -514,6 +531,32 @@ if (Object.keys(lib).length || siteFx) {
           })
         }
       }
+    })
+  }
+
+  const coarsePointer =
+    typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
+
+  function holdAt(meta: BindingMeta, p: number) {
+    const c = compiled[meta.a]!
+    const split = splits[meta.a]!
+    const clamped = p < 0 ? 0 : p > 1 ? 1 : p
+    const nodes = targets.get(meta.k) || []
+    nodes.forEach((node, index) => {
+      const total = playTotal(node, c, split)
+      const play: Play = {
+        el: node,
+        compiled: c,
+        split,
+        time: clamped * total,
+        direction: 1,
+        running: false,
+        wait: 0,
+        total,
+        to: countTo(node, split.element),
+      }
+      plays.set(playKey(meta.k, index), play)
+      write(play)
     })
   }
 
@@ -550,29 +593,7 @@ if (Object.keys(lib).length || siteFx) {
           return { entry, raw, dist: raw < 0 ? -raw : raw > 1 ? raw - 1 : 0 }
         })
         .sort((a, b) => b.dist - a.dist)
-      for (const { entry, raw } of frame_) {
-        const { meta } = entry
-        const c = compiled[meta.a]!
-        const split = splits[meta.a]!
-        const p = raw < 0 ? 0 : raw > 1 ? 1 : raw
-        const nodes = targets.get(meta.k) || []
-        nodes.forEach((node, index) => {
-          const total = playTotal(node, c, split)
-          const play: Play = {
-            el: node,
-            compiled: c,
-            split,
-            time: p * total,
-            direction: 1,
-            running: false,
-            wait: 0,
-            total,
-            to: countTo(node, split.element),
-          }
-          plays.set(playKey(meta.k, index), play)
-          write(play)
-        })
-      }
+      for (const { entry, raw } of frame_) holdAt(entry.meta, raw)
       if (unsettled && !pending) {
         pending = true
         requestAnimationFrame(updateScrub)
@@ -590,9 +611,81 @@ if (Object.keys(lib).length || siteFx) {
     driveScrub = updateScrub
   }
 
+
+  // --- mouse follow: continuous progress like scrub, driven by the pointer ---
+  // The REST position is 0.5, not the track's `from`: a follow is authored as
+  // -n → n, so the middle is where the element sits before the pointer has
+  // moved. Priming (above) left it at `from`, i.e. shifted hard to one side,
+  // so each binding is held at the centre here and eases away from there.
+  if (mice.length && !still && !coarsePointer) {
+    const CENTRE = MOUSE_REST
+    let pending = false
+    let lastT = 0
+    let px = 0
+    let py = 0
+    let seen = false
+    const smoothed = new Map<BindingMeta, number>()
+
+    const schedule = () => {
+      if (pending) return
+      pending = true
+      requestAnimationFrame(updateMouse)
+    }
+
+    function updateMouse(now?: number) {
+      pending = false
+      if (!seen) return
+      const t = typeof now === 'number' ? now : performance.now()
+      const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 1 / 60
+      lastT = t
+      let unsettled = false
+      const vw = document.documentElement.clientWidth || window.innerWidth
+      const vh = window.innerHeight
+      for (const { meta, el } of mice) {
+        if (!allowed(meta.k) || !compiled[meta.a] || !splits[meta.a]) continue
+        const opts = (meta.o && meta.o.mo) || {}
+        const box =
+          opts.area === 'page'
+            ? { left: 0, top: 0, width: vw, height: vh }
+            : el.getBoundingClientRect()
+        const raw = mouseProgressRaw({ x: px, y: py }, box, opts.axis)
+        if (raw === null) continue
+        const smooth = typeof opts.smooth === 'number' ? opts.smooth : MOUSE_DEFAULTS.smooth
+        let p = raw
+        if (smooth > 0) {
+          const prev = smoothed.has(meta) ? smoothed.get(meta)! : CENTRE
+          p = approach(prev, raw, dt, smooth)
+          if (p !== raw) unsettled = true
+        }
+        smoothed.set(meta, p)
+        holdAt(meta, p)
+      }
+      if (unsettled) schedule()
+    }
+
+    for (const { meta } of mice) {
+      if (!allowed(meta.k) || !compiled[meta.a] || !splits[meta.a]) continue
+      smoothed.set(meta, CENTRE)
+      holdAt(meta, CENTRE)
+    }
+
+    window.addEventListener(
+      'pointermove',
+      (event: PointerEvent) => {
+        px = event.clientX
+        py = event.clientY
+        seen = true
+        schedule()
+      },
+      { passive: true },
+    )
+    // the element's box moves under a still pointer, so both of these change
+    // progress for an `element`-area binding
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+  }
+
   const scrollFx = siteFx && siteFx.s
-  const coarsePointer =
-    typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
   if (scrollFx && !still && !coarsePointer) {
     const scroller = createLerpScroller({
       get: () => window.scrollY,

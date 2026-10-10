@@ -213,6 +213,7 @@ test.describe('the renderer owns its own data-* attributes', () => {
           ref: 'contact',
           attributes: {
             'data-form': 'x',
+            'data-fx': 'x',
             'data-int': 'x',
             'data-tgt': 'x',
             'data-slider': 'x',
@@ -224,12 +225,21 @@ test.describe('the renderer owns its own data-* attributes', () => {
       ],
     })
     const said = JSON.stringify(r)
-    for (const name of ['data-form', 'data-int', 'data-tgt', 'data-slider', 'data-node-id']) {
+    for (const name of [
+      'data-form',
+      'data-fx',
+      'data-int',
+      'data-tgt',
+      'data-slider',
+      'data-node-id',
+    ]) {
       expect(said).toContain(name)
     }
     const html = await s.html()
     expect(html).toContain('data-status="waiting"')
     expect(html).not.toContain('data-int="x"')
+    // the live one matters most: data-fx is the index into the effects manifest
+    expect(html).not.toContain('data-fx="x"')
   })
 
   test('an externalAction is re-validated at export', async () => {

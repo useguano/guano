@@ -87,6 +87,63 @@ const scrubBindings = computed(() => {
   return list
 })
 
+const mouseBindings = computed(() => {
+  const list: {
+    ownerId: string
+    targetId: string
+    binding: import('@/types/editor').AnimationBinding
+  }[] = []
+  walkNodes(activePage.value.elements, (node) => {
+    for (const binding of node.animations ?? []) {
+      if (binding.trigger === 'mouse') {
+        list.push({ ownerId: node.id, targetId: binding.targetId ?? node.id, binding })
+      }
+    }
+  })
+  return list
+})
+
+let mouseFrame: number | null = null
+let mouseLast = 0
+let pointer: { x: number; y: number } | null = null
+
+function updateMouse(now: number) {
+  mouseFrame = null
+  const root = scrollEl.value
+  if (!root || !pointer || !mouseBindings.value.length) return
+  const dt = mouseLast ? Math.min((now - mouseLast) / 1000, 0.1) : 1 / 60
+  mouseLast = now
+  let unsettled = false
+  const pane = root.getBoundingClientRect()
+  for (const { ownerId, targetId, binding } of mouseBindings.value) {
+    const animation = animationFor(binding.animationId)
+    if (!animation) continue
+    const el = root.querySelector(`[data-node-id="${ownerId}"]`)
+    if (!el) continue
+    const box = binding.mouse?.area === 'page' ? pane : el.getBoundingClientRect()
+    const step = motion.mouseProgressFor(binding, pointer, box, dt, `${binding.id}:${targetId}`)
+    if (!step) continue
+    if (!step.settled) unsettled = true
+    motion.scrubTo(binding, animation, targetId, step.value)
+  }
+  if (unsettled && mouseFrame === null) mouseFrame = requestAnimationFrame(updateMouse)
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (!mouseBindings.value.length) return
+  pointer = { x: event.clientX, y: event.clientY }
+  if (mouseFrame === null) mouseFrame = requestAnimationFrame(updateMouse)
+}
+
+function restMouse() {
+  for (const { targetId, binding } of mouseBindings.value) {
+    const animation = animationFor(binding.animationId)
+    if (!animation) continue
+    motion.restMouseProgress(`${binding.id}:${targetId}`)
+    motion.scrubTo(binding, animation, targetId, motion.MOUSE_CENTRE)
+  }
+}
+
 let scrubFrame: number | null = null
 function updateScrub() {
   scrubFrame = null
@@ -154,17 +211,26 @@ watch(
 onMounted(() => {
   scrollEl.value?.addEventListener('scroll', onScroll, { passive: true })
   scrollEl.value?.addEventListener('wheel', onWheel, { passive: false })
-  void nextTick(updateScrub)
+  scrollEl.value?.addEventListener('pointermove', onPointerMove, { passive: true })
+  void nextTick(() => {
+    updateScrub()
+    restMouse()
+  })
 })
 onBeforeUnmount(() => {
   closeMenu()
   window.removeEventListener('keydown', onMenuKeydown, true)
   scrollEl.value?.removeEventListener('scroll', onScroll)
   scrollEl.value?.removeEventListener('wheel', onWheel)
+  scrollEl.value?.removeEventListener('pointermove', onPointerMove)
+  if (mouseFrame !== null) cancelAnimationFrame(mouseFrame)
   if (scrubFrame !== null) cancelAnimationFrame(scrubFrame)
   if (smoothFrame !== null) cancelAnimationFrame(smoothFrame)
 })
-watch(() => activePage.value.id, () => void nextTick(updateScrub))
+watch(() => activePage.value.id, () => void nextTick(() => {
+  updateScrub()
+  restMouse()
+}))
 
 watch(focusTick, async () => {
   await nextTick()

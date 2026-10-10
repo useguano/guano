@@ -3,7 +3,7 @@ import { loadFixture } from './fixtures/project'
 
 // The Interactions panel and the effects drawer. Seven paths, each chosen
 // because it protects against SILENT data loss or a lie that type-checking
-// can't see: a cancelled create leaving a half-discarded effect behind; an edit
+// can't see: a create that does not survive the drawer closing; an edit
 // to a shared effect not reaching the elements that use it; a dismissal written
 // to two bindings when the runtime folds them into one; a timeline that two
 // buttons cannot agree on; an effect that needs both engines arriving as half of
@@ -61,11 +61,19 @@ async function addTrigger(page: Page, label: RegExp) {
   await expect(actionRows(page)).toHaveCount(1)
 }
 
-/** a trigger opens on Motion, so reaching the class half is a Type pick */
+/** both halves are on screen at once — the timeline, then the class strip
+ *  under it — so reaching the class field is nothing but waiting for it */
 async function pickClasses(page: Page) {
-  await triggerView(page).getByRole('button', { name: 'Classes', exact: true }).click()
   await expect(triggerView(page).getByPlaceholder('Add class')).toBeVisible()
 }
+
+/** every class any effect on the published route applies. The effects manifest
+ *  is a sidecar file now, so this reads its global rather than the page source */
+const publishedEffectClasses = (page: Page) =>
+  page.evaluate(() => {
+    const man = (window as unknown as { __guanoFx?: { fx?: Record<string, string> } }).__guanoFx
+    return Object.values(man?.fx ?? {}).join(' ')
+  })
 
 const drawer = (page: Page) => page.locator('[data-effects-drawer]')
 /** the drawer's trigger view — where an element's action lives */
@@ -88,7 +96,7 @@ async function publish(page: Page) {
   await expect(page.getByText('Published!')).toBeVisible({ timeout: 60_000 })
 }
 
-test('adding a trigger makes its effect, and Cancel discards it completely', async ({ page }) => {
+test('adding a trigger makes its effect, and closing the drawer keeps it', async ({ page }) => {
   await openEditor(page)
   await openPanel(page)
 
@@ -108,26 +116,25 @@ test('adding a trigger makes its effect, and Cancel discards it completely', asy
     'empty',
   )
 
-  // give it a class, so a half-discard would leave a visible trace
+  // every edit is live: there is nothing to confirm, so closing the drawer is
+  // not a discard. A class typed here is on the element the moment it is typed.
   await pickClasses(page)
   const marker = 'outline-dashed'
   await drawer(page).getByPlaceholder('Add class').fill(marker)
   await page.keyboard.press('Enter')
 
-  await drawer(page).getByRole('button', { name: 'Cancel' }).click()
-
-  // Cancel closes the drawer, and the cascading delete took the binding with
-  // it: the trigger is gone from the panel. A delete that removed the library
-  // entry but orphaned the binding would leave the row behind.
+  await page.keyboard.press('Escape')
   await expect(drawer(page)).toBeHidden()
-  await expect(page.locator('[data-trigger-row]')).toHaveCount(0)
-  await page.keyboard.press('ControlOrMeta+Shift+e')
-  await expect(libraryRows(page)).toHaveCount(effectsBefore)
 
-  // and the discarded class never reaches the published site
+  // the trigger is still on the element and the effect still in the library
+  await expect(page.locator('[data-trigger-row]').filter({ hasText: 'On click' })).toHaveCount(1)
+  await page.keyboard.press('ControlOrMeta+Shift+e')
+  await expect(libraryRows(page)).toHaveCount(effectsBefore + 1)
+
+  // …and the class ships
   await publish(page)
   await page.goto('/')
-  expect(await page.content()).not.toContain(marker)
+  expect(await publishedEffectClasses(page)).toContain(marker)
 })
 
 test("a trigger's effect is edited in place, and Remove takes it off the element", async ({
@@ -137,12 +144,8 @@ test("a trigger's effect is edited in place, and Remove takes it off the element
   await openPanel(page)
 
   await addTrigger(page, /^Hover/)
-  // the trigger view has no header of its own: which trigger is open is the
-  // highlighted row in the drawer's index, and which effect is the highlighted
-  // library row beside it
-  await expect(drawer(page).locator('[data-drawer-trigger][aria-current="true"]')).toHaveText(
-    /On hover/,
-  )
+  // the trigger view has no header of its own: which effect is open is the
+  // highlighted library row beside it
   await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
 
   // the SHARED effect is right there beside the options — nothing to open
@@ -150,27 +153,94 @@ test("a trigger's effect is edited in place, and Remove takes it off the element
   const marker = 'ring-offset-4'
   await triggerView(page).getByPlaceholder('Add class').fill(marker)
   await page.keyboard.press('Enter')
-  await drawer(page).getByRole('button', { name: 'Apply' }).click()
+  await page.keyboard.press('Escape')
   await expect(drawer(page)).toBeHidden()
 
   await publish(page)
   await page.goto('/')
-  expect(await page.content()).toContain(marker)
+  expect(await publishedEffectClasses(page)).toContain(marker)
 
-  // Remove takes the action off THIS element…
+  // Remove takes the action off THIS element, from the index that lists it —
+  // the drawer edits the effect and never unbinds one
   await page.goto('/admin/')
   await openPanel(page)
-  await page.locator('[data-trigger-row]').filter({ hasText: 'On hover' }).click()
-  await triggerView(page).getByRole('button', { name: 'Remove', exact: true }).click()
-  // …which closes the drawer and takes the trigger out of the panel
-  await expect(drawer(page)).toBeHidden()
+  await page
+    .locator('[data-trigger-item]')
+    .filter({ hasText: 'On hover' })
+    .locator('[data-trigger-remove]')
+    .click()
   await expect(page.locator('[data-trigger-row]')).toHaveCount(0)
 
   // …so the class it carried no longer ships, while the effect stays in the
   // library for the next element
   await publish(page)
   await page.goto('/')
-  expect(await page.content()).not.toContain(marker)
+  expect(await publishedEffectClasses(page)).not.toContain(marker)
+})
+
+test('one trigger holds one effect, and the same trigger can be added again', async ({
+  page,
+}) => {
+  await openEditor(page)
+  await openPanel(page)
+
+  // a trigger's view edits ONE effect. Two motions under one "On hover" used to
+  // stack in that view, so one Remove took both off and the view drove the
+  // first one only — a project could reach it (an agent's write, a component
+  // master), and this fixture's own FeatureCard did.
+  await addTrigger(page, /^Hover/)
+
+  // the same trigger is offered again rather than greyed out
+  await addTrigger(page, /^Hover/)
+
+  const hoverRows = page.locator('[data-trigger-row]').filter({ hasText: 'On hover' })
+  await expect(hoverRows).toHaveCount(2)
+  // …and the open view still carries exactly one action and one effect
+  await expect(actionRows(page)).toHaveCount(1)
+  await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
+
+  // each row opens its own effect: the names differ, so the library highlight moves
+  const second = await drawer(page).locator('[data-effect-row][data-open]').textContent()
+  await hoverRows.first().click()
+  await expect(drawer(page).locator('[data-effect-row][data-open]')).toHaveCount(1)
+  expect(await drawer(page).locator('[data-effect-row][data-open]').textContent()).not.toBe(second)
+
+  // a row's Remove takes off THAT row, not the whole trigger
+  await page
+    .locator('[data-trigger-item]')
+    .filter({ hasText: 'On hover' })
+    .first()
+    .locator('[data-trigger-remove]')
+    .click()
+  await expect(page.locator('[data-trigger-row]').filter({ hasText: 'On hover' })).toHaveCount(1)
+})
+
+test('a mouse follow is offered, binds as motion only, and carries its axis', async ({
+  page,
+}) => {
+  await openEditor(page)
+  await openPanel(page)
+
+  await addTrigger(page, /^Mouse move/)
+  // continuous progress, so the class engine is not on offer at all — the class
+  // strip a hover carries under its timeline is not rendered here
+  await expect(triggerView(page).getByPlaceholder('Add class')).toBeHidden()
+  // nothing fires it, so the binding has no Delay either (the step's own offset,
+  // in its settings popover, is a different field that keeps its name)
+  await expect(actionRows(page).getByText('Delay')).toBeHidden()
+
+  // the options that DO belong to it
+  await expect(triggerView(page).getByRole('button', { name: 'Horizontal' })).toBeVisible()
+  await triggerView(page).getByRole('button', { name: 'Vertical' }).click()
+  await triggerView(page).getByRole('button', { name: 'Whole page' }).click()
+  await page.keyboard.press('Escape')
+  await expect(drawer(page)).toBeHidden()
+
+  // and the pick is what the binding stores, which is what the runtime reads
+  await expect(page.locator('[data-trigger-row]').filter({ hasText: 'While the mouse moves' })).toHaveCount(1)
+  await page.locator('[data-trigger-row]').filter({ hasText: 'While the mouse moves' }).click()
+  await expect(triggerView(page).getByRole('button', { name: 'Vertical' })).toHaveClass(/border/)
+  await expect(triggerView(page).getByRole('button', { name: 'Whole page' })).toHaveClass(/border/)
 })
 
 test('the drawer opens with ⌘⇧E and Escape closes it without closing the panel', async ({
@@ -198,7 +268,7 @@ test('a click is aimed with a verb, never an engine', async ({ page }) => {
   await openPanel(page)
 
   await addTrigger(page, /^Click/)
-  await drawer(page).getByRole('button', { name: 'Apply' }).click()
+  await page.keyboard.press('Escape')
   await page.locator('[data-trigger-row]').filter({ hasText: 'On click' }).click()
 
   // the direction lives in the action's options
@@ -209,10 +279,13 @@ test('a click is aimed with a verb, never an engine', async ({ page }) => {
   await page.goto('/')
 
   // both halves of the one effect landed on the body, aimed the same way
-  const landed = await page.evaluate(() => ({
-    classes: JSON.parse(document.body.getAttribute('data-int') || '[]'),
-    motion: JSON.parse(document.body.getAttribute('data-anim') || '[]'),
-  }))
+  const landed = await page.evaluate(() => {
+    const man = (window as unknown as {
+      __guanoFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
+    }).__guanoFx ?? {}
+    const entry = man.els?.[Number(document.body.getAttribute('data-fx'))] ?? {}
+    return { classes: entry.c ?? [], motion: entry.m ?? [] }
+  })
   expect(landed.classes).toHaveLength(1)
   expect(landed.motion).toHaveLength(1)
   expect(landed.classes[0].a).toBe('on')
@@ -228,13 +301,12 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // class swap expresses the slide — but that split is ours, not the author's,
   // so nothing is chosen between.
   await addTrigger(page, /^Click/)
-  // the trigger view shows one half at a time: it opens on motion, and the
-  // class half is one Type pick away
+  // both halves are on screen: the timeline, with the class strip under it
   await expect(drawer(page).locator('[data-effect-half="animation"]')).toBeVisible()
   await pickClasses(page)
   await drawer(page).getByPlaceholder('Add class').fill('flex')
   await page.keyboard.press('Enter')
-  await drawer(page).getByRole('button', { name: 'Apply' }).click()
+  await page.keyboard.press('Escape')
   await page.locator('[data-trigger-row]').filter({ hasText: 'On click' }).click()
 
   // ONE action, not two: the pair is recognised from the bindings themselves
@@ -252,10 +324,13 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
 
   // both halves landed on the body, agreeing on when and where — a pair whose
   // halves fired at different moments would simply be broken
-  const landed = await page.evaluate(() => ({
-    classes: JSON.parse(document.body.getAttribute('data-int') || '[]'),
-    motion: JSON.parse(document.body.getAttribute('data-anim') || '[]'),
-  }))
+  const landed = await page.evaluate(() => {
+    const man = (window as unknown as {
+      __guanoFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
+    }).__guanoFx ?? {}
+    const entry = man.els?.[Number(document.body.getAttribute('data-fx'))] ?? {}
+    return { classes: entry.c ?? [], motion: entry.m ?? [] }
+  })
   expect(landed.classes).toHaveLength(1)
   expect(landed.motion).toHaveLength(1)
   expect(landed.classes[0].t).toBe('click')
@@ -283,8 +358,9 @@ test('an effect that predates the pairing can still gain the other engine', asyn
 
   // and the four fixture elements already using it gained the timeline too —
   // a half that applied only to the next placement would be the silent no-op
-  const moved = await page.evaluate(
-    () => document.querySelectorAll('[data-anim]').length,
-  )
+  const moved = await page.evaluate(() => {
+    const man = (window as unknown as { __guanoFx?: { els?: { m?: unknown[] }[] } }).__guanoFx ?? {}
+    return (man.els ?? []).filter((e) => e.m?.length).length
+  })
   expect(moved).toBeGreaterThan(0)
 })
