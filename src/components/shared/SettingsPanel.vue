@@ -42,8 +42,7 @@ import {
   type Integration,
   type IntegrationField,
 } from '@/lib/integrations'
-import type { CustomFont, ElementNode, StructuredDataType } from '@/types/editor'
-import { walkNodes } from '@/lib/tree'
+import type { CustomFont, StructuredDataType } from '@/types/editor'
 import { SCHEMA_TYPES, customSchemaError } from '@/lib/shared/structuredData.js'
 import UsersSettings from '@/components/shared/UsersSettings.vue'
 import MediaPickerControl from '@/components/editor/content/MediaPickerControl.vue'
@@ -65,7 +64,7 @@ import { apiJson } from '@/lib/api'
 const FormSubmissionsModal = defineAsyncComponent(() => import('@/components/editor/forms/FormSubmissionsModal.vue'))
 const PublishDialog = defineAsyncComponent(() => import('@/components/shared/PublishDialog.vue'))
 
-const { project, renameProject } = useProject()
+const { project, renameProject, hasEnabledForm } = useProject()
 const {
   settings, addToken, removeToken, smoothScroll,
   customFonts, addFont, removeFont,
@@ -632,16 +631,6 @@ async function saveGhToken() {
     ghSaving.value = false
   }
 }
-
-const hasEnabledForm = computed(() => {
-  let found = false
-  const look = (nodes: ElementNode[]) => walkNodes(nodes, (n) => {
-    if (n.form?.enabled) found = true
-  })
-  for (const page of project.value.pages) look(page.elements)
-  for (const def of project.value.components) look([def.root])
-  return found
-})
 
 const needsApiOrigin = computed(
   () => settings.value.publishing.method !== 'server' && hasEnabledForm.value,

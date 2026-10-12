@@ -1,7 +1,8 @@
 import { computed, effectScope, ref, watch } from 'vue'
 import { createProject } from '@/lib/factories'
 import { breakpointVariant, breakpointIdForWidth } from '@/lib/responsive'
-import type { Breakpoint } from '@/types/editor'
+import { walkNodes } from '@/lib/tree'
+import type { Breakpoint, ElementNode } from '@/types/editor'
 import { uid } from '@/lib/shared/ids.js'
 
 const project = ref(createProject('Untitled project'))
@@ -32,6 +33,17 @@ function nameFor(width: number): string {
 
 export function useProject() {
   const breakpoints = computed(() => project.value.breakpoints)
+
+  const hasEnabledForm = computed(() => {
+    let found = false
+    const look = (nodes: ElementNode[]) =>
+      walkNodes(nodes, (n) => {
+        if (n.form?.enabled) found = true
+      })
+    for (const page of project.value.pages) look(page.elements)
+    for (const def of project.value.components) look([def.root])
+    return found
+  })
 
   const baseBreakpoint = computed<Breakpoint | undefined>(() =>
     breakpoints.value.reduce<Breakpoint | undefined>((w, b) => (!w || b.width > w.width ? b : w), undefined),
@@ -93,6 +105,7 @@ export function useProject() {
   return {
     project,
     projectVersion,
+    hasEnabledForm,
     breakpoints,
     baseBreakpoint,
     activeBreakpoint,

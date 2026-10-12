@@ -243,6 +243,19 @@ instance: `npm run connect` (`--main` / `--publish` answer the questions,
 `--print` emits the snippet for any other MCP client). Details and the manual
 setup for other clients are in `packages/guano/README.md`.
 
+### Several sites on one machine
+
+Each site needs its **own port**, or whichever one starts first answers for
+both — and the other's token is then refused with a 401 that looks exactly
+like a revoked token. `npm create @useguano` picks a free port per project and
+writes it to `.env`; a server with no `PORT` set otherwise reclaims whatever
+port it used last. `guano connect` writes **one `mcpServers` entry per
+project** (`guano-<slug>`), so connecting a second site never disconnects the
+first, and it records which project the entry belongs to — if another instance
+is holding the port, `guano mcp` says which project answered instead of
+failing silently. Run `npm run connect` again in a project whose port has
+changed.
+
 ## Backup
 
 Everything lives in the data dir (default `server/data/`): `store/` (projects,
@@ -258,7 +271,7 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `4174` | server port |
+| `PORT` | remembered, else `4174` | server port. Without it the port this data dir last landed on is preferred over the default, so two sites on one machine keep their own addresses. `npm create @useguano` writes a free one into `.env` |
 | `GUANO_DATA_DIR` | `server/data` | data location — absolute path; set this on any real deploy (`SB_DATA_DIR` still works, deprecated) |
 | `COOKIE_SECURE` | `1` (Secure on) | session cookie `Secure` flag; set `0` only for plain-HTTP LAN/dev setups (localhost works with the default) |
 | `TRUST_PROXY` | unset | set `1` **only behind a reverse proxy** — rate limiting then keys on the last `X-Forwarded-For` hop instead of the socket address |
@@ -268,6 +281,8 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 | `SNAPSHOT_MAX_BYTES` | 512 MiB | refuses a snapshot above this — the zip is built in memory |
 | `PORT_STRICT` | unset | `1` refuses to walk to the next free port when `PORT` is busy. Worth setting on a real deploy: a silent walk means everything addressing the default port reaches something else |
 | `GUANO_PREVIEW_PORT` | `PORT + 1` | the preview site's port |
+| `GUANO_URL` | `http://localhost:4174` | `guano mcp` / `guano connect`: which instance to talk to |
+| `GUANO_INSTANCE` | unset | `guano mcp`: the project this client entry was connected to. Written by `guano connect`; a mismatch against the server's own id is refused by name rather than failing with a 401 |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. `warn` drops the per-request access line and keeps the warnings |
 | `LOG_JSON` | unset | `1` emits one JSON object per line, for a log shipper |
 | `SHUTDOWN_GRACE_MS` | `0` | how long to keep answering health checks as draining before the socket closes. Set it behind a load balancer so traffic moves off first |

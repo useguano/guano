@@ -57,6 +57,7 @@ import {
   readAgentPolicy,
   writeAgentPolicy,
 } from './agent-policy.mjs'
+import { ensureInstance, updateInstance } from './instance.mjs'
 import {
   createIntegration,
   deleteIntegration,
@@ -135,7 +136,8 @@ import {
   sessionUser,
   setUserRole,
   updateUser,
-  setCommentsSeenAt,
+  SEEN_FIELDS,
+  setSeenAt,
   isBuildRole,
   userProfile,
   verifyLogin,
@@ -191,7 +193,14 @@ const APP_VERSION = (() => {
   return 'unknown'
 })()
 
-const PORT = Number(process.env.PORT) || 4174
+// An explicit PORT is a contract. Without one the preference is the port this
+// data dir last landed on (boot() reads it from instance.json) and only then
+// the 4174 default — so a second project keeps the address it had instead of
+// trading 4174 back and forth with the first one depending on boot order.
+const PORT_ENV = Number(process.env.PORT) || 0
+let PORT = PORT_ENV || 4174
+/** this data dir's identity, filled in by boot() before the socket opens */
+let instance = null
 const TOKEN = process.env.PUBLISH_TOKEN || ''
 const MAX_BODY = 10 * 1024 * 1024
 // Credentials are small. The 10 MB cap belongs to a project blob; applying it
@@ -399,7 +408,11 @@ const handleFormPost = createFormsHandler({
   clientIp,
   limits: formLimits,
   cors: publicCors,
-  store: (id, record) => submissionStore.append(id, record),
+  store: async (id, record) => {
+    const result = await submissionStore.append(id, record)
+    if (result?.ok) broadcastFormEvent()
+    return result
+  },
   countSpam: (id) => submissionStore.countSpam(id),
   deliver: (id, entry, record) => deliverer.deliver(id, entry, record),
 })
@@ -532,10 +545,17 @@ async function handleAuth(req, res, path) {
     // switch. Not a secret — the refusals state it anyway — and WRITING the
     // policy stays admin + session cookie (handleAgentPolicy).
     const policy = isAgentRequest(req) ? { agentPolicy: await readAgentPolicy() } : null
+    // The human-readable half of the identity, authed-only: `guano mcp` turns a
+    // mismatch into "this entry was connected to <name>, but <other> answered".
     return send(
       res,
       200,
-      JSON.stringify({ ...userProfile(user), serverVersion: APP_VERSION, ...policy }),
+      JSON.stringify({
+        ...userProfile(user),
+        serverVersion: APP_VERSION,
+        instance: { id: instance?.id ?? null, name: instance?.name ?? '' },
+        ...policy,
+      }),
     )
   }
   if (path === '/api/auth/setup' && req.method === 'POST') {
@@ -600,7 +620,13 @@ async function handleAuth(req, res, path) {
     }
     await rm(nonceFile, { force: true })
     if (typeof nonce !== 'string' || nonce.length < 32 || !stored || !timingSafeEqualStr(stored, nonce)) {
-      return fail(res, 403, 'nonce mismatch — run `guano connect` from the instance machine')
+      return fail(
+        res,
+        403,
+        `nonce mismatch — this server reads its data dir at ${DATA_DIR}, so \`guano connect\` ` +
+          'must write the nonce THERE. Run it on this machine with ' +
+          `GUANO_DATA_DIR=${DATA_DIR}, or against the instance that owns the dir it did write.`,
+      )
     }
     // with no admin yet this mints a PENDING token, bound at setup
     const minted = await bootstrapConnectToken(typeof name === 'string' ? name : '')
@@ -612,12 +638,17 @@ async function handleAuth(req, res, path) {
     const agentPolicy = Object.keys(patch).length ? await writeAgentPolicy(patch) : await readAgentPolicy()
     return send(res, 200, JSON.stringify({ ...minted, agentPolicy }))
   }
-  if (path === '/api/auth/comments-seen' && req.method === 'POST') {
+  if (
+    (path === '/api/auth/comments-seen' || path === '/api/auth/forms-seen') &&
+    req.method === 'POST'
+  ) {
     // Session only: this is a human saying "I have read them". An agent token
     // marking comments seen would put out the dot the human is waiting on,
-    // and an injected agent would do it on purpose.
+    // and an injected agent would do it on purpose. Form submissions are the
+    // same promise about other people's messages.
     const user = sessionUser(req)
     if (!user) return fail(res, 401, 'unauthorized')
+    const kind = path === '/api/auth/forms-seen' ? 'forms' : 'comments'
     const body = await readBody(req, MAX_AUTH_BODY)
     let at
     try {
@@ -626,8 +657,9 @@ async function handleAuth(req, res, path) {
       return fail(res, 400, 'invalid request')
     }
     if (typeof at !== 'number' || !Number.isFinite(at)) return fail(res, 400, 'invalid timestamp')
-    const updated = await setCommentsSeenAt(user.id, at)
-    return send(res, 200, JSON.stringify({ commentsSeenAt: updated?.commentsSeenAt ?? 0 }))
+    const updated = await setSeenAt(user.id, kind, at)
+    const field = SEEN_FIELDS[kind]
+    return send(res, 200, JSON.stringify({ [field]: updated?.[field] ?? 0 }))
   }
   if (path === '/api/auth/update' && req.method === 'POST') {
     const user = sessionUser(req)
@@ -985,6 +1017,14 @@ async function ensureProjectSeeded(name) {
     // same broadcast the store PUT sends, so an editor that happens to be open
     // hydrates the new project instead of sitting on an empty one
     broadcastStoreEvent(MAIN_PROJECT_KEY, 'human')
+    // Keep the identity's name current, so /api/auth/me can report it without
+    // parsing the whole project blob per request (it is read at boot, and this
+    // is the one moment in a fresh instance's life that fills it in).
+    try {
+      instance = await updateInstance({ name: project.name ?? '' })
+    } catch {
+      /* best-effort: a nameless identity costs a nicer message, nothing more */
+    }
     return true
   })()
   try {
@@ -1084,6 +1124,22 @@ function broadcastStoreEvent(key, source) {
 }
 
 /**
+ * A visitor just submitted a form.
+ *
+ * Carries NO detail — not the form id, and certainly not a field — because the
+ * editor only needs to know it should re-read the role-gated list. And it goes
+ * only to build-role feeds: reading submissions is admin/editor, so telling a
+ * contributor that leads are arriving discloses something they may not read.
+ */
+function broadcastFormEvent() {
+  if (!eventClients.size) return
+  const payload = `data: ${JSON.stringify({ type: 'form-submission', ts: Date.now() })}\n\n`
+  for (const client of eventClients) {
+    if (isBuildRole(client.guanoUserRole)) client.write(payload)
+  }
+}
+
+/**
  * GET /api/health — the one unauthenticated /api route.
  *
  * An orchestrator probe carries no credential, so requiring one would make the
@@ -1131,6 +1187,10 @@ async function handleHealth(res) {
       migrated: bootState.migrated,
       port,
       previewPort,
+      // Opaque and stable: it names WHICH project is answering this port
+      // without disclosing a path, a name or anything derived from a secret,
+      // which is what keeps this route safe to leave unauthenticated.
+      instance: instance?.id ?? null,
       checks,
     }),
     'application/json',
@@ -1171,6 +1231,7 @@ function handleEvents(req, res) {
     return fail(res, 429, 'too many open change feeds — close another editor tab')
   }
   res.guanoUserId = user.id
+  res.guanoUserRole = user.role
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache',
@@ -1952,12 +2013,16 @@ async function handleForms(req, res, path, query) {
         onSite: !!entry,
         routes: entry?.routes ?? [],
         fields: (entry?.fields ?? []).map((f) => ({ name: f.name, kind: f.kind })),
-        ...(await submissionStore.summary(id)),
+        ...(await submissionStore.summary(id, user.formsSeenAt ?? 0)),
         delivery: deliverer.statusFor(id),
       })
     }
     rows.sort((a, b) => b.latestAt - a.latestAt)
-    return send(res, 200, JSON.stringify({ forms: rows }))
+    // The unseen total comes from the CALLER's own stamp on their user record,
+    // never a timestamp in the request: a client that could name the cutoff
+    // could also light or clear another reader's dot.
+    const newTotal = rows.reduce((n, r) => n + (r.newCount ?? 0), 0)
+    return send(res, 200, JSON.stringify({ forms: rows, newTotal }))
   }
 
   const segments = rest.split('/')
@@ -3082,7 +3147,7 @@ const PORT_EXPLICIT = Boolean(process.env.PORT)
 const PORT_STRICT = process.env.PORT_STRICT === '1' || process.env.PORT_STRICT === 'true'
 const PORT_TRIES = PORT_EXPLICIT || PORT_STRICT ? 1 : 10
 const BOOT_TIMEOUT_MS = Number(process.env.BOOT_TIMEOUT_MS) || 60_000
-let port = PORT
+let port = 0
 
 /**
  * Everything that must finish before the socket accepts a single request.
@@ -3105,6 +3170,12 @@ async function boot() {
   } catch (err) {
     log.warn('could not restrict data dir permissions:', err.message)
   }
+  // Identity before the socket: /api/health reports the id, and `guano mcp`
+  // compares it against the one baked into its client config, so a client that
+  // reached the WRONG project on a shared port is told which project answered
+  // instead of being handed a bare 401.
+  instance = await ensureInstance()
+  if (!PORT_ENV && instance.port) PORT = instance.port
   await sweepDataDir()
   await migrateStoreDir()
   bootState.migrated = true
@@ -3281,23 +3352,47 @@ async function main() {
     log.warn(`preview server unavailable (${err.message}) — /api/preview will still export`)
     previewPort = 0
   })
-  previewServer.listen(PREVIEW_PORT || port + 1, () => {
-    previewPort = previewServer.address().port
+  // Awaited, so the recorded previewPort is the one it actually got rather
+  // than the 0 the callback has not yet replaced. Either outcome settles it —
+  // the error handler above has already logged and zeroed it.
+  await new Promise((done) => {
+    previewServer.once('error', () => done())
+    previewServer.listen(PREVIEW_PORT || port + 1, () => {
+      previewPort = previewServer.address().port
+      done()
+    })
   })
 
   installShutdown({ servers: [server, previewServer], beforeClose: closeEventClients })
+
+  // Remember the address BEFORE the banner, because the port this project owns
+  // is the one it actually got — recording the one it asked for would remember
+  // a number that was already taken — and because the banner names the project
+  // from this record. Best-effort: a read-only data dir must never keep the
+  // server from serving.
+  try {
+    instance = await updateInstance({
+      port,
+      previewPort: previewPort || null,
+      name: (await currentProjectName()) || instance?.name || '',
+    })
+  } catch (err) {
+    log.warn(`could not record this instance's port: ${err.message}`)
+  }
   printBanner()
 }
 
 function printBanner() {
   const base = `http://localhost:${port}`
+  const label = instance?.name ? `${instance.name} ` : ''
   log.banner(`
-  guano is running${TOKEN ? ' (publish token required)' : ''}
+  guano is running${label ? ` — ${instance.name}` : ''}${TOKEN ? ' (publish token required)' : ''}
 
   ➜ editor:  ${base}/admin
   ➜ site:    ${base}/
   ➜ preview: http://localhost:${PREVIEW_PORT || port + 1}/
   ➜ data:    ${DATA_DIR}
+  ➜ project: ${label}${instance?.id ? `(${instance.id.slice(0, 8)})` : ''}
 ${
   needsSetup()
     ? `\n  first run — open ${base}/admin to create your admin account${
@@ -3307,17 +3402,27 @@ ${
 }`)
   // Last thing printed, because it is the thing that will waste your day.
   if (port !== PORT) {
+    const wasOurs = instance?.port === PORT
     log.banner(`  ⚠  PORT ${PORT} WAS BUSY — THIS SERVER IS ON ${port}
 
      Another process is still listening on ${PORT}, and everything that
-     addresses guano by its default port goes THERE, not here:
-       · the Vite dev proxy (vite.config.ts targets localhost:${PORT})
-       · the MCP server (GUANO_URL defaults to http://localhost:${PORT})
+     addresses guano by that port goes THERE, not here:
+       · the Vite dev proxy (vite.config.ts targets localhost:4174)
        · any browser tab already open on :${PORT}
+       · any MCP client whose GUANO_URL says :${PORT}
      If that process is an older guano, it publishes and previews with the
      export code cached in its heap: every write reports success and the
      HTML on disk is built by a different day's code.
-
+${
+  wasOurs
+    ? `
+     :${PORT} is THIS project's remembered port, so an MCP client connected
+     earlier is now pointed at the other instance — which answers its token
+     with a 401. Re-run \`guano connect\` here (quit Claude Desktop first) to
+     re-point it at :${port}.
+`
+    : ''
+}
      Stop it and restart here, or set PORT_STRICT=1 to refuse to walk:
        lsof -nP -iTCP:${PORT} -sTCP:LISTEN
 `)

@@ -1,6 +1,6 @@
 import { request as pwRequest, type APIRequestContext } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 // A server of one's own.
@@ -75,6 +75,53 @@ export async function boot(
     await new Promise((r) => setTimeout(r, 125))
   }
   throw new Error(`server never became healthy:\n${output}`)
+}
+
+/**
+ * A server with NO explicit PORT, so it exercises the real default-and-walk
+ * path — which is the only way to test that a project remembers the port it
+ * landed on. The port is discovered from the identity file the server writes
+ * after it listens, since the test cannot know it in advance.
+ *
+ * `dataDir` is taken rather than derived: these tests restart a server on the
+ * SAME dir to prove the memory survives, so the caller owns its lifetime.
+ */
+export async function bootUnpinned(dataDir: string) {
+  let output = ''
+  const proc = spawn(process.execPath, ['server/index.mjs'], {
+    cwd: REPO,
+    env: { ...process.env, GUANO_DATA_DIR: dataDir, LOG_LEVEL: 'info', PORT: '', PORT_STRICT: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  proc.stdout?.on('data', (c) => (output += String(c)))
+  proc.stderr?.on('data', (c) => (output += String(c)))
+
+  const instance: Instance = {
+    proc,
+    port: 0,
+    dataDir,
+    out: () => output,
+    stop: () => {
+      if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL')
+    },
+  }
+  instances.push(instance)
+
+  const file = join(dataDir, 'instance.json')
+  for (let i = 0; i < 160; i++) {
+    if (proc.exitCode !== null) throw new Error(`server exited early:\n${output}`)
+    try {
+      const rec = JSON.parse(readFileSync(file, 'utf8'))
+      if (rec.port) {
+        const api = await pwRequest.newContext({ baseURL: `http://localhost:${rec.port}` })
+        if ((await api.get('/api/health')).ok()) return { ...instance, port: rec.port, api }
+      }
+    } catch {
+      /* not written yet */
+    }
+    await new Promise((r) => setTimeout(r, 125))
+  }
+  throw new Error(`server never recorded a port:\n${output}`)
 }
 
 /** resolves with the exit code once the process is gone */

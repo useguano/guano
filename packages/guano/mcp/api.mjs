@@ -5,6 +5,12 @@
 
 const BASE = (process.env.GUANO_URL || 'http://localhost:4174').replace(/\/+$/, '')
 const TOKEN = process.env.GUANO_TOKEN || ''
+// Which project this entry was connected to, written by `guano connect`. A
+// token is minted into ONE data dir, so when several projects share a default
+// port the instance that answers may not be the one that issued the token —
+// and the 401 it returns is indistinguishable from a revoked token. Comparing
+// this against /api/health turns that into a message naming both projects.
+const INSTANCE = process.env.GUANO_INSTANCE || ''
 
 class ApiError extends Error {
   constructor(status, message, detail) {
@@ -13,6 +19,12 @@ class ApiError extends Error {
     // the server's JSON body, when it sent one — carries retryAfterSeconds on a
     // 429 so a caller can wait the exact cooldown instead of guessing
     if (detail?.retryAfterSeconds !== undefined) this.retryAfterSeconds = detail.retryAfterSeconds
+    // ...and needsSetup on a 401, which is a 401 for a completely different
+    // reason: the instance has no admin account yet, so a token minted by
+    // `guano connect` is PENDING until the first admin is created and binds it.
+    // Without this it reads as "the token is dead", and the advice that follows
+    // ("run guano connect again") is the one thing that does not help.
+    if (detail?.needsSetup) this.needsSetup = true
   }
 }
 
@@ -37,6 +49,17 @@ async function req(method, path, body, extraHeaders) {
     throw new ApiError(res.status, msg, detail)
   }
   return res
+}
+
+/** the unauthenticated identity probe — never throws on a 401/404, because an
+ *  older instance has no `instance` field and must still be usable */
+export async function health() {
+  try {
+    const res = await fetch(`${BASE}/api/health`)
+    return await res.json()
+  } catch {
+    return null
+  }
 }
 
 /** the authenticated user, or throws (bad URL / token / role) */
@@ -150,4 +173,4 @@ export async function mediaUpload({ name, folderId, mime, bytes }) {
   return res.json()
 }
 
-export { ApiError, BASE, TOKEN }
+export { ApiError, BASE, TOKEN, INSTANCE }

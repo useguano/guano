@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, watch } from 'vue'
 import {
-  Component, Files, Image, Settings, UserRound, LogOut,
+  Component, Files, Image, Inbox, Settings, UserRound, LogOut,
 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import MainLogo from '@/assets/MainLogo.vue'
 import { useMediaLibrary } from '@/composables/useMediaLibrary'
+import { useProject } from '@/composables/useProject'
+import { useFormAlerts } from '@/composables/useFormAlerts'
 import { useModal } from '@/composables/useModal'
 import { useAuth } from '@/composables/useAuth'
 import { useViewMode } from '@/composables/useViewMode'
@@ -15,10 +17,20 @@ const SettingsPanel = defineAsyncComponent(() => import('@/components/shared/Set
 const { openLibrary } = useMediaLibrary()
 const { openModal } = useModal()
 const { canBuild, logout } = useAuth()
+const { hasEnabledForm } = useProject()
+const { hasNew, newCount, refresh: refreshFormAlerts, openSubmissions } = useFormAlerts()
 const {
   isBuild, canvas, column, showComponents, pagesOpen,
   togglePages, toggleComponents, showApp,
 } = useViewMode()
+
+watch(
+  [canBuild, hasEnabledForm],
+  ([may, has]) => {
+    if (may && has) void refreshFormAlerts()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -64,6 +76,19 @@ const {
       class="w-7 text-muted-foreground"
       @click="openLibrary()"
     />
+    <div v-if="canBuild && hasEnabledForm" class="relative flex">
+      <ButtonUI
+        variant="ghost"
+        :icon="Inbox"
+        :aria-label="hasNew ? `Form submissions, ${newCount} new` : 'Form submissions'"
+        class="w-7 text-muted-foreground"
+        @click="openSubmissions"
+      />
+      <span
+        v-if="hasNew"
+        class="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-success ring-2 ring-background"
+      />
+    </div>
     <ButtonUI
       variant="ghost"
       :icon="Settings"

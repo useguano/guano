@@ -13,6 +13,7 @@
 // The server binds the token to the first admin at /admin setup, and the
 // setup form shows the permissions instead of asking them again.
 import { spawnSync } from 'node:child_process'
+import { createServer } from 'node:net'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
@@ -80,6 +81,38 @@ if ((await readdir(target)).length) {
   process.exit(1)
 }
 
+/**
+ * A free port for THIS project, written into .env as an explicit PORT.
+ *
+ * Every project used to default to 4174, so a second one on the same machine
+ * lost the race and walked to the next free port — which left its MCP entry,
+ * the Vite proxy and any open tab addressing the FIRST project's socket, where
+ * its own token is unknown and the 401 reads as "the token is dead". An
+ * explicit port is a contract the server honours instead of walking, and
+ * putting it in a file the user can read makes "which port is this site on" a
+ * question with an answer.
+ *
+ * 4174 is still preferred, so a first project looks exactly as documented.
+ */
+async function pickPort(first = 4174, tries = 40) {
+  // A site needs its own port AND the preview port above it, so step by two.
+  for (let port = first; port < first + tries * 2; port += 2) {
+    if ((await free(port)) && (await free(port + 1))) return port
+  }
+  return first
+}
+
+function free(port) {
+  return new Promise((resolve) => {
+    const probe = createServer()
+    probe.once('error', () => resolve(false))
+    probe.once('listening', () => probe.close(() => resolve(true)))
+    probe.listen(port, '0.0.0.0')
+  })
+}
+
+const port = await pickPort()
+
 const files = {
   'package.json':
     JSON.stringify(
@@ -107,7 +140,16 @@ const files = {
 export default {}
 `,
 
-  '.env.example': `# PORT=4174
+  // A real .env, not just the example: the port is this project's identity on
+  // the machine, and leaving it to the 4174 default is what makes two projects
+  // fight over one address.
+  '.env': `# This project's own port. Keep it — two Guano sites on one machine
+# must not share one, or whichever starts first answers for both and the
+# other's MCP token is refused with a 401.
+PORT=${port}
+`,
+
+  '.env.example': `PORT=${port}
 # GUANO_DATA_DIR=./data     # users, media, drafts, the published site — back this up
 # COOKIE_SECURE=1           # set 0 only for plain-HTTP LAN setups
 # PUBLISH_TOKEN=            # optional: token for CI publishes
@@ -128,8 +170,11 @@ A [Guano](https://www.npmjs.com/package/@useguano/guano) site.
 npm run dev
 \`\`\`
 
-Open http://localhost:4174/admin, create the first account, then build your
-site. Your published site is served at http://localhost:4174/.
+Open http://localhost:${port}/admin, create the first account, then build your
+site. Your published site is served at http://localhost:${port}/.
+
+This project runs on port ${port} (set in \`.env\`). Each Guano site on a
+machine needs its own, so two of them never answer for one address.
 
 If you said yes to Claude Desktop when scaffolding, it is already connected:
 the agent token is bound to the admin account you create, and the permissions

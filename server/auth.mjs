@@ -119,8 +119,10 @@ export const userProfile = (u) =>
         email: u.email,
         role: u.role,
         // per-user UI state, not project data: when they last looked at the
-        // comments panel, which is what the rail's unseen dot is derived from
+        // comments panel and at the form submissions, which is what the rails'
+        // unseen dots are derived from
         commentsSeenAt: u.commentsSeenAt ?? 0,
+        formsSeenAt: u.formsSeenAt ?? 0,
       }
     : null
 export const listUsers = () => loadUsers().map(userProfile)
@@ -294,16 +296,21 @@ export async function updateUser(id, { name, email, password }) {
   return user
 }
 
-/** stamp when this user last looked at the comments panel. Monotonic — a
- * second tab with a stale clock must not drag the stamp backwards and light
- * the dot again — and clamped to now, so a client cannot mark the future
- * seen and hide every comment written from here on. */
-export async function setCommentsSeenAt(id, at) {
+/** the per-user "last looked at" stamps, by what was looked at */
+export const SEEN_FIELDS = { comments: 'commentsSeenAt', forms: 'formsSeenAt' }
+
+/** stamp when this user last looked at the comments panel, or at the form
+ * submissions. Monotonic — a second tab with a stale clock must not drag the
+ * stamp backwards and light the dot again — and clamped to now, so a client
+ * cannot mark the future seen and hide everything written from here on. */
+export async function setSeenAt(id, kind, at) {
+  const field = SEEN_FIELDS[kind]
+  if (!field) return null
   const user = findUserById(id)
   if (!user) return null
   const next = Math.min(Number(at) || 0, Date.now())
-  if (next > (user.commentsSeenAt ?? 0)) {
-    user.commentsSeenAt = next
+  if (next > (user[field] ?? 0)) {
+    user[field] = next
     await persistUsers()
   }
   return user

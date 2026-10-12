@@ -27,7 +27,7 @@ defineEmits<{
       variant="icon"
       size="sm"
       :icon="X"
-      tooltip="Close"
+      aria-label="Close"
       class="w-7 text-muted-foreground"
       @click="$emit('close')"
     />

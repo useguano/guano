@@ -90,11 +90,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 })
 
+/**
+ * The wrong-project diagnosis.
+ *
+ * Several projects on one machine all default to port 4174, so GUANO_URL names
+ * an address, not a project — whichever instance booted first owns it. A token
+ * is minted into ONE data dir, so reaching the wrong instance is answered with
+ * a 401 that looks exactly like a revoked token, and because this process then
+ * exits before the MCP handshake the client can only report "not connected".
+ * That is a whole afternoon with nothing anywhere naming the cause.
+ *
+ * `guano connect` bakes GUANO_INSTANCE into the entry, so a mismatch is
+ * checkable before the token is even presented. Returns a message to die with,
+ * or null when there is nothing to object to — an older instance reports no
+ * `instance` at all and must keep working.
+ */
+async function instanceMismatch() {
+  if (!api.INSTANCE) return null
+  const h = await api.health()
+  if (!h || typeof h.instance !== 'string' || !h.instance) return null
+  if (h.instance === api.INSTANCE) return null
+  return (
+    `the server at ${api.BASE} is a DIFFERENT Guano project than this entry was ` +
+    `connected to (expected instance ${api.INSTANCE.slice(0, 8)}, got ${h.instance.slice(0, 8)}).\n` +
+    '  Another project is listening on that port, so its token would be refused.\n' +
+    '  Start the right project, or re-run `guano connect` in it to re-point this entry.'
+  )
+}
+
 // fail fast on a bad URL/token before speaking MCP
 export async function main() {
   try {
+    const wrong = await instanceMismatch()
+    if (wrong) throw new Error(wrong)
     const user = await api.whoami()
-    console.error(`guano mcp: connected to ${api.BASE} as ${user.email} (${user.role})`)
+    const label = user.instance?.name ? ` — project "${user.instance.name}"` : ''
+    console.error(`guano mcp: connected to ${api.BASE} as ${user.email} (${user.role})${label}`)
     // The tools take local paths for bulk payloads, which is a read-anything
     // primitive whenever an agent can be talked into a path — and its output
     // lands in a project that may get published. A root confines it.
@@ -106,6 +137,23 @@ export async function main() {
     }
   } catch (e) {
     console.error(`guano mcp: ${e.message}`)
+    // A 401 here is nearly always a token minted against a different data dir:
+    // the instance check above only fires for an entry carrying
+    // GUANO_INSTANCE, and one written before that existed carries none.
+    if (e?.needsSetup) {
+      console.error(
+        `guano mcp: ${api.BASE} has no admin account yet, so this token is still PENDING.\n` +
+          '  Open /admin, create the first account, and the token binds to it automatically —\n' +
+          '  there is no need to run `guano connect` again.',
+      )
+    } else if (e?.status === 401) {
+      console.error(
+        `guano mcp: the instance at ${api.BASE} does not recognise this token. It was most\n` +
+          '  likely minted by a DIFFERENT Guano project that was holding that port, or it\n' +
+          '  has been revoked. Run `guano connect` in the project you meant to edit (quit\n' +
+          '  Claude Desktop first) — it re-mints the token and re-points this entry.',
+      )
+    }
     process.exit(1)
   }
   server.oninitialized = () => {

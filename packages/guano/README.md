@@ -28,7 +28,7 @@ Your published site is at `http://localhost:4174/`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `4174` | server port |
+| `PORT` | remembered, else `4174` | server port. Without it the port this data dir last landed on is preferred, so two sites on one machine keep their own addresses |
 | `GUANO_DATA_DIR` | `./data` under `node_modules`, else `server/data` | users, media, drafts, published site — **backup = copy this dir**; on ephemeral hosts point it at a volume |
 | `COOKIE_SECURE` | `1` | session cookie `Secure` flag; set `0` only for plain-HTTP LAN setups |
 | `PUBLISH_TOKEN` | unset | when set, allows token-authenticated CI publishes |
@@ -42,6 +42,7 @@ Your published site is at `http://localhost:4174/`.
 | `SHUTDOWN_GRACE_MS` | `0` | how long to keep failing health checks before the socket closes, so a load balancer can drain first |
 | `GUANO_URL` | `http://localhost:4174` | `guano mcp` only — the running instance to connect to |
 | `GUANO_TOKEN` | unset | `guano mcp` only — an API token (see [MCP](#mcp-ai-agents)) |
+| `GUANO_INSTANCE` | unset | `guano mcp` only — which project this entry was connected to. `guano connect` writes it; a mismatch against the server's own id is refused by name instead of failing with a 401 |
 
 The admin needs a persistent Node process with a writable disk (VPS, Railway,
 Fly.io, Render…). It cannot run on Vercel/Netlify — but your published site is
@@ -130,7 +131,7 @@ then set the environment in your MCP client config:
 ```json
 {
   "mcpServers": {
-    "guano": {
+    "guano-my-site": {
       "command": "npx",
       "args": ["-y", "@useguano/guano", "mcp"],
       "env": {
@@ -143,6 +144,16 @@ then set the environment in your MCP client config:
 ```
 
 Use your deployed URL (e.g. `https://studio.example.com`) for a hosted instance.
+
+**One entry per site.** `guano connect` names it `guano-<slug>` for exactly
+this reason: a single shared key means connecting a second site overwrites the
+first one's entry, and since both would point at the same default port the
+survivor talks to whichever instance booted first — which answers its token
+with a 401. Give each site its own `PORT` and its own entry. `guano connect`
+also writes `GUANO_INSTANCE`, which lets `guano mcp` tell you that another
+project is holding the port instead of failing with "not connected"; add it by
+hand (the `instance` field of `GET /api/health`) if you write the config
+yourself.
 
 ### 3. Main vs. a draft — the agent asks you first
 

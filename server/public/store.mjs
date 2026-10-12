@@ -85,12 +85,12 @@ export function createSubmissionStore(dir) {
 
 
     /** every record for one form, newest first */
-    async read(id, { limit = 50, before = null } = {}) {
+    async read(id, { limit = 50, before = null, newerThan = null } = {}) {
       let text = ''
       try {
         text = await readFile(fileFor(id), 'utf8')
       } catch {
-        return { records: [], total: 0 }
+        return { records: [], total: 0, newer: 0 }
       }
       const rows = []
       for (const line of text.split('\n')) {
@@ -103,7 +103,11 @@ export function createSubmissionStore(dir) {
       }
       rows.reverse()
       const from = before ? rows.findIndex((r) => r.id === before) + 1 : 0
-      return { records: rows.slice(from, from + limit), total: rows.length }
+      // `newerThan` rides along because every line is already parsed here: the
+      // caller would otherwise have to read the whole file a second time just
+      // to count what arrived since someone last looked.
+      const newer = newerThan === null ? 0 : rows.filter((r) => (r.at ?? 0) > newerThan).length
+      return { records: rows.slice(from, from + limit), total: rows.length, newer }
     },
 
     /** the forms that have submissions on disk — including ones no longer on
@@ -117,11 +121,12 @@ export function createSubmissionStore(dir) {
       }
     },
 
-    async summary(id) {
-      const { records, total } = await this.read(id, { limit: 1 })
+    async summary(id, newerThan = null) {
+      const { records, total, newer } = await this.read(id, { limit: 1, newerThan })
       const s = await measure(id)
       return {
         count: total,
+        newCount: newer,
         bytes: s.bytes,
         latestAt: records[0]?.at ?? 0,
         spamDropped: spam.get(id) ?? 0,

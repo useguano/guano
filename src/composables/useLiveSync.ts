@@ -7,6 +7,7 @@ import {
 } from './usePersistence'
 import { rehydrateStore } from '@/lib/store'
 import { readStoredProject } from '@/lib/storage'
+import { useFormAlerts } from './useFormAlerts'
 
 const QUIET_MS = 10_000
 const APPLY_DEBOUNCE_MS = 250
@@ -25,6 +26,7 @@ let weSuspendedAutosave = false
 
 export function useLiveSync() {
   const { adoptRemote } = usePersistence()
+  const { refresh: refreshFormAlerts } = useFormAlerts()
 
   async function applyRemote(key: string) {
     try {
@@ -66,6 +68,10 @@ export function useLiveSync() {
       try {
         event = JSON.parse(message.data)
       } catch {
+        return
+      }
+      if (event.type === 'form-submission') {
+        void refreshFormAlerts()
         return
       }
       if (event.type !== 'store-write' || event.source !== 'agent') return

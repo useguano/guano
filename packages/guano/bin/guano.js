@@ -12,6 +12,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const [cmd, ...rest] = process.argv.slice(2)
 
+// A project's own .env, loaded from the directory the command is run in.
+//
+// The scaffolder writes PORT there, which is how two Guano sites on one
+// machine stop fighting over 4174 — and until this, nothing read the file, so
+// the setting it documented was inert. Node's own loader, so the zero-
+// dependency rule holds. A real env var always wins (loadEnvFile does not
+// overwrite), and an absent file is not an error worth reporting.
+try {
+  process.loadEnvFile(resolve(process.cwd(), '.env'))
+} catch {
+  /* no .env, or this node has no loader — env vars still work */
+}
+
 const HELP = `guano — self-hosted visual website builder
 
 Usage:

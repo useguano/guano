@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import { flushStore } from '@/lib/store'
 import { beginDeliberateNavigation } from './navigationIntent'
 
@@ -13,6 +13,7 @@ const needsSetup = ref(false)
 const presetAgentPolicy = ref<{ allowMainWrites: boolean; allowPublish: boolean } | null>(null)
 
 const commentsSeenAt = ref(0)
+const formsSeenAt = ref(0)
 let checked = false
 
 interface Profile {
@@ -21,6 +22,7 @@ interface Profile {
   name?: string
   role?: Role
   commentsSeenAt?: number
+  formsSeenAt?: number
 }
 
 export function useAuth() {
@@ -61,19 +63,23 @@ export function useAuth() {
     role.value = profile.role ?? null
     userId.value = profile.id ?? null
     commentsSeenAt.value = profile.commentsSeenAt ?? 0
+    formsSeenAt.value = profile.formsSeenAt ?? 0
     needsSetup.value = false
   }
 
-  async function markCommentsSeen() {
+  async function markSeen(stamp: Ref<number>, path: string) {
     const at = Date.now()
-    if (at <= commentsSeenAt.value) return
-    commentsSeenAt.value = at
-    await fetch('/api/auth/comments-seen', {
+    if (at <= stamp.value) return
+    stamp.value = at
+    await fetch(path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ at }),
     }).catch(() => {})
   }
+
+  const markCommentsSeen = () => markSeen(commentsSeenAt, '/api/auth/comments-seen')
+  const markFormsSeen = () => markSeen(formsSeenAt, '/api/auth/forms-seen')
 
   async function login(e: string, password: string) {
     applyProfile(await post('/api/auth/login', { email: e, password }))
@@ -133,6 +139,8 @@ export function useAuth() {
     presetAgentPolicy,
     commentsSeenAt,
     markCommentsSeen,
+    formsSeenAt,
+    markFormsSeen,
     check,
     login,
     setup,
