@@ -1123,7 +1123,7 @@ async function onImportFile(e: Event) {
                   <InputUI
                     v-model="sitePasswordInput"
                     type="password"
-                    :placeholder="savedPlaceholder(siteGate.passwordSet, 'At least 4 characters')"
+                    :placeholder="savedPlaceholder(siteGate.passwordSet, 'At least 8 characters')"
                     @keydown.enter="saveSitePassword"
                   />
                   <ButtonUI
