@@ -1,17 +1,18 @@
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { useAuth } from './useAuth'
 import { useModal } from './useModal'
+import { useFormSubmissions } from './useFormSubmissions'
 
 const FormSubmissionsModal = defineAsyncComponent(
   () => import('@/components/editor/forms/FormSubmissionsModal.vue'),
 )
 
-const newCount = ref(0)
 let inFlight: Promise<void> | null = null
 
 export function useFormAlerts() {
   const { canBuild, markFormsSeen } = useAuth()
   const { openModal } = useModal()
+  const { forms, newCount, loadForms } = useFormSubmissions()
 
   const hasNew = computed(() => newCount.value > 0)
 
@@ -21,26 +22,19 @@ export function useFormAlerts() {
       return
     }
     if (inFlight) return inFlight
-    inFlight = (async () => {
-      try {
-        const res = await fetch('/api/forms')
-        if (!res.ok) {
-          newCount.value = 0
-          return
-        }
-        const body = (await res.json()) as { newTotal?: number }
-        newCount.value = typeof body.newTotal === 'number' ? body.newTotal : 0
-      } catch {
+    inFlight = loadForms()
+      .catch(() => {
         newCount.value = 0
-      } finally {
+      })
+      .finally(() => {
         inFlight = null
-      }
-    })()
+      })
     return inFlight
   }
 
   async function openSubmissions(): Promise<void> {
     newCount.value = 0
+    for (const form of forms.value) form.newCount = 0
     await markFormsSeen()
     await openModal(FormSubmissionsModal)
     await refresh()

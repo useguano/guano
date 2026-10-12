@@ -13,6 +13,7 @@ export interface FormsConfig {
 export interface FormSummary {
   formId: string
   name: string
+  newCount: number
   onSite: boolean
   routes: string[]
   fields: { name: string; kind: string }[]
@@ -37,6 +38,7 @@ export interface Submission {
 
 const config = ref<FormsConfig>({ notifyTo: [], mailer: '', webhook: '', retentionDays: 365 })
 const forms = ref<FormSummary[]>([])
+const newCount = ref(0)
 
 export function useFormSubmissions() {
   async function loadConfig() {
@@ -52,7 +54,9 @@ export function useFormSubmissions() {
   }
 
   async function loadForms() {
-    forms.value = (await apiJson('/api/forms')).forms ?? []
+    const body = await apiJson('/api/forms')
+    forms.value = body.forms ?? []
+    newCount.value = typeof body.newTotal === 'number' ? body.newTotal : 0
   }
 
   async function loadSubmissions(formId: string, opts: { before?: string; limit?: number } = {}) {
@@ -84,6 +88,7 @@ export function useFormSubmissions() {
   return {
     config,
     forms,
+    newCount,
     loadConfig,
     saveConfig,
     loadForms,
