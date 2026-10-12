@@ -11,7 +11,12 @@ import {
   triggerSentence,
   type EffectKind,
 } from '@/lib/effectTriggers'
-import type { AnimationBinding, Effect, InteractionBinding } from '@/types/editor'
+import type {
+  AnimationBinding,
+  Effect,
+  ElementNode,
+  InteractionBinding,
+} from '@/types/editor'
 
 export interface StateRow {
   key: string
@@ -142,13 +147,9 @@ export function useElementEffects() {
       .sort((a, b) => triggerOrder(a.trigger) - triggerOrder(b.trigger))
   })
 
-  function createActionFor(trigger: string): { effect: Effect; key: string } | null {
-    const owner = canEdit.value ? target.value : null
-    if (!owner) return null
-    const classHalf = interactions.createInteraction()
-    const effect = effects.wrap('interaction', classHalf.id, classHalf.name)
-    effects.addHalf(effect, 'animation')
-    const has = effects.halfIds(effect)
+  type Halves = { interactionId?: string; animationId?: string }
+
+  function bindHalves(owner: ElementNode, trigger: string, has: Halves): string {
     let key = ''
     if (has.interactionId && triggerAllows(trigger, 'interaction')) {
       const binding = interactions.applyTo(owner, has.interactionId)
@@ -162,8 +163,62 @@ export function useElementEffects() {
         if (!key) key = binding.id
       }
     }
+    return key
+  }
+
+  function halvesOf(ref: { kind: DrawerKind; id: string }): Halves {
+    if (ref.kind === 'effect') {
+      const effect = effects.effectById(ref.id)
+      return effect ? effects.halfIds(effect) : {}
+    }
+    return ref.kind === 'interaction' ? { interactionId: ref.id } : { animationId: ref.id }
+  }
+
+  function canRunOn(trigger: string, ref: { kind: DrawerKind; id: string }): boolean {
+    const has = halvesOf(ref)
+    return Boolean(
+      (has.interactionId && triggerAllows(trigger, 'interaction')) ||
+        (has.animationId && triggerAllows(trigger, 'animation')),
+    )
+  }
+
+  function actionFor(trigger: string, ref: { kind: DrawerKind; id: string }): ActionRow | null {
+    return (
+      actions.value.find(
+        (a) => a.trigger === trigger && a.ref.kind === ref.kind && a.ref.id === ref.id,
+      ) ?? null
+    )
+  }
+
+  function createActionFor(trigger: string): { effect: Effect; key: string } | null {
+    const owner = canEdit.value ? target.value : null
+    if (!owner) return null
+    const classHalf = interactions.createInteraction()
+    const effect = effects.wrap('interaction', classHalf.id, classHalf.name)
+    effects.addHalf(effect, 'animation')
+    const key = bindHalves(owner, trigger, effects.halfIds(effect))
     return { effect, key }
   }
 
-  return { target, canEdit, elementLabel, states, actions, createActionFor }
+  function applyActionFor(
+    trigger: string,
+    ref: { kind: DrawerKind; id: string },
+  ): { key: string } | null {
+    const owner = canEdit.value ? target.value : null
+    if (!owner) return null
+    const key = bindHalves(owner, trigger, halvesOf(ref))
+    return key ? { key } : null
+  }
+
+  return {
+    target,
+    canEdit,
+    elementLabel,
+    states,
+    actions,
+    createActionFor,
+    applyActionFor,
+    canRunOn,
+    actionFor,
+  }
 }

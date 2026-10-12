@@ -82,6 +82,16 @@ const cell = (row: Submission, name: string) => {
   return value ?? ''
 }
 
+const query = ref('')
+
+const visible = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!needle) return rows.value
+  return rows.value.filter((row) =>
+    Object.values(row.values).some((v) => String(v).toLowerCase().includes(needle)),
+  )
+})
+
 const open = ref(new Set<string>())
 const isOpen = (id: string) => open.value.has(id)
 function toggle(id: string) {
@@ -161,7 +171,14 @@ const deliveryWarning = computed(() => {
 <template>
   <ModalHost size="xl" @close="emit('close')">
     <div class="flex h-full flex-col">
-      <ModalHeader title="Form submissions" class="shrink-0" @close="emit('close')" />
+      <ModalHeader
+        v-model:search="query"
+        title="Form submissions"
+        :icon="Inbox"
+        search-placeholder="Search submissions…"
+        class="shrink-0"
+        @close="emit('close')"
+      />
       <div class="flex min-h-0 flex-1">
         <div class="w-56 shrink-0 overflow-y-auto border-r border-input">
           <button
@@ -238,9 +255,9 @@ const deliveryWarning = computed(() => {
           <p v-if="error" class="shrink-0 px-3 py-2 text-[10px] text-danger">{{ error }}</p>
 
           <div class="min-h-0 flex-1 overflow-auto p-3">
-            <div v-if="rows.length" class="flex flex-col rounded-xl border border-input">
+            <div v-if="visible.length" class="flex flex-col rounded-xl border border-input">
               <div
-                v-for="row in rows"
+                v-for="row in visible"
                 :key="row.id"
                 class="border-b border-input last:border-b-0"
               >
@@ -291,7 +308,9 @@ const deliveryWarning = computed(() => {
               class="flex flex-col items-center gap-1.5 py-12 text-muted-foreground"
             >
               <Inbox class="size-6" />
-              <p class="text-xs">Nothing submitted yet.</p>
+              <p class="text-xs">
+                {{ query.trim() && rows.length ? 'No submission matches that.' : 'Nothing submitted yet.' }}
+              </p>
             </div>
             <p v-else-if="loading" class="py-4 text-xs text-muted-foreground">Loading…</p>
           </div>

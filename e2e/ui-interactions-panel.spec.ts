@@ -52,12 +52,21 @@ async function openPanel(page: Page) {
   await expect(page.getByRole('button', { name: 'Trigger', exact: true })).toBeVisible()
 }
 
-/** "+ Trigger" → the trigger's action exists at once (a new effect, bound under
- *  it) and the drawer is open on it: options and effect side by side */
+/**
+ * "+ Trigger" → the drawer opens on that trigger with NOTHING bound yet.
+ *
+ * Adding a trigger used to mint an effect on the spot, which meant every
+ * abandoned trigger left an orphan in the library. The trigger view now opens
+ * empty and offers the two real choices — a new effect, or one applied from
+ * the library — so `New effect` is the second gesture rather than an implied
+ * one. Nothing is persisted until that choice is made.
+ */
 async function addTrigger(page: Page, label: RegExp) {
   await page.getByRole('button', { name: 'Trigger', exact: true }).click()
   await page.getByRole('button', { name: label }).first().click()
   await expect(triggerView(page)).toBeVisible()
+  await expect(triggerView(page).getByText('Nothing runs on this trigger.')).toBeVisible()
+  await triggerView(page).getByRole('button', { name: 'New effect' }).click()
   await expect(actionRows(page)).toHaveCount(1)
 }
 

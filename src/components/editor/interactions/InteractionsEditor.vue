@@ -11,7 +11,7 @@ import { useAnimation } from '@/composables/useAnimation'
 import { useInteraction } from '@/composables/useInteraction'
 import { useMotion } from '@/composables/useMotion'
 import { useShortcut } from '@/composables/useShortcut'
-import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
+import { NEW_ACTION, useEffectsDrawer } from '@/composables/useEffectsDrawer'
 import { UI_TRIGGERS, triggerOrder, triggerSentence, uiTrigger } from '@/lib/effectTriggers'
 
 const { highlightElement, isMultiSelect } = useElement()
@@ -19,7 +19,7 @@ const interactions = useInteraction()
 const animations = useAnimation()
 const motion = useMotion()
 const { pickingFor } = interactions
-const { target, canEdit, elementLabel, actions, createActionFor } = useElementEffects()
+const { target, canEdit, elementLabel, actions } = useElementEffects()
 const {
   open: drawerOpen,
   view: drawerView,
@@ -49,7 +49,10 @@ const rows = computed<Row[]>(() => {
     pair: a.pair,
   }))
   const pending = drawerOpen.value ? drawerTrigger.value : null
-  if (pending && !list.some((r) => r.trigger === pending)) {
+  // while composing a NEW action the row is listed even though the trigger
+  // already has one, or the index would not show the thing being made
+  const composing = !!pending && drawerAction.value === NEW_ACTION
+  if (pending && (composing || !list.some((r) => r.trigger === pending))) {
     list.push({
       key: '',
       trigger: pending,
@@ -84,6 +87,7 @@ const totalActions = computed(() => actions.value.length)
 
 const openRow = computed(() => {
   if (!drawerOpen.value || drawerView.value !== 'trigger' || !drawerTrigger.value) return null
+  if (drawerAction.value === NEW_ACTION) return null
   const here = rows.value.filter((r) => r.trigger === drawerTrigger.value)
   return here.find((r) => r.key === drawerAction.value) ?? here[0] ?? null
 })
@@ -92,8 +96,7 @@ const addingTrigger = ref(false)
 
 function addTrigger(trigger: string) {
   addingTrigger.value = false
-  const made = createActionFor(trigger)
-  openTrigger(trigger, made?.key || null)
+  openTrigger(trigger, NEW_ACTION)
 }
 
 const offered = UI_TRIGGERS

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Play, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import ActionOptions from '@/components/editor/interactions/ActionOptions.vue'
 import EffectBody from '@/components/editor/effects/EffectBody.vue'
 import { useElementEffects } from '@/composables/useElementEffects'
 import { useEffects } from '@/composables/useEffects'
-import { useEffectsDrawer } from '@/composables/useEffectsDrawer'
+import { NEW_ACTION, useEffectsDrawer } from '@/composables/useEffectsDrawer'
 import { useAnimation } from '@/composables/useAnimation'
 import { useMotion } from '@/composables/useMotion'
 import { triggerAllows, type EffectKind } from '@/lib/effectTriggers'
@@ -17,12 +17,13 @@ const { target, canEdit, actions, createActionFor } = useElementEffects()
 const effects = useEffects()
 const animations = useAnimation()
 const motion = useMotion()
-const { action, openTrigger } = useEffectsDrawer()
+const { action, openTrigger, closeDrawer } = useEffectsDrawer()
 
 const rows = computed(() => actions.value.filter((a) => a.trigger === props.trigger))
-const row = computed(
-  () => rows.value.find((r) => r.key === action.value) ?? rows.value[0] ?? null,
-)
+const row = computed(() => {
+  if (action.value === NEW_ACTION) return null
+  return rows.value.find((r) => r.key === action.value) ?? rows.value[0] ?? null
+})
 const headEffect = computed(() => row.value?.ref ?? null)
 
 const KINDS: EffectKind[] = ['interaction', 'animation']
@@ -61,9 +62,13 @@ function addAction() {
       Select a single element to manage what it does.
     </p>
 
-    <div v-else-if="!row" class="flex items-center gap-3 p-3">
+    <div v-else-if="!row" class="flex flex-col items-start gap-2 p-3">
       <p class="text-xs text-muted-foreground">Nothing runs on this trigger.</p>
-      <ButtonUI variant="outline" size="xs" :icon="Plus" @click="addAction">Effect</ButtonUI>
+      <ButtonUI variant="outline" size="xs" :icon="Plus" @click="addAction">New effect</ButtonUI>
+      <p class="text-[10px] text-muted-foreground">
+        Or apply one from the effects library on the left — it stays one effect, shared by
+        every element using it.
+      </p>
     </div>
 
     <div
@@ -83,17 +88,13 @@ function addAction() {
         <ActionOptions :key="row.key" :pair="row.pair" :owner="target!" />
 
         <div
-          v-if="timeline"
           class="sticky bottom-0 mt-auto flex items-center gap-1.5 border-t border-input bg-background px-2.5 py-2"
         >
-          <ButtonUI
-            variant="default"
-            size="xs"
-            :icon="Play"
-            class="ml-auto"
-            @click="preview"
-          >
+          <ButtonUI v-if="timeline" variant="default" size="xs" @click="preview">
             Preview
+          </ButtonUI>
+          <ButtonUI variant="outline" size="xs" class="ml-auto" @click="closeDrawer">
+            Close
           </ButtonUI>
         </div>
       </div>
