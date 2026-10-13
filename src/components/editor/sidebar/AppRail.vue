@@ -34,7 +34,7 @@ watch(
 </script>
 
 <template>
-  <aside class="relative z-[60] flex h-full w-12 flex-col items-center gap-1 py-2 bg-background">
+  <aside class="relative z-[60] flex h-full w-12 flex-col items-center gap-1 py-4 bg-background">
 
     <ButtonUI
       v-if="canBuild"
