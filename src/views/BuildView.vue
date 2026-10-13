@@ -8,6 +8,7 @@ import SettingsEditor from '@/components/editor/sidebar/SettingsEditor.vue'
 import ContextMenu from '@/components/editor/canvas/ContextMenu.vue'
 import InsertDragChip from '@/components/editor/canvas/InsertDragChip.vue'
 import ModeToggle from '@/components/editor/canvas/ModeToggle.vue'
+import ColorModeToggle from '@/components/editor/canvas/ColorModeToggle.vue'
 import EffectsDrawer from '@/components/editor/effects/EffectsDrawer.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import { useEditorShortcuts } from '@/composables/useEditorShortcuts'
@@ -66,6 +67,11 @@ const { isBuild, visibleColumn, showComponents } = useViewMode()
             v-if="canBuild && !showComponents"
             class="absolute right-1 z-40"
             :class="isBuild ? 'bottom-1' : 'bottom-[13px]'"
+          />
+          <ColorModeToggle
+            v-if="canBuild && showComponents"
+            standalone
+            class="absolute right-1 bottom-1 z-40"
           />
         </div>
 

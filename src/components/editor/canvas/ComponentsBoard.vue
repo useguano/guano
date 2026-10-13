@@ -8,6 +8,7 @@ import { useComponentBoard, useComponentBoardSession } from '@/composables/useCo
 import type { BoardCard } from '@/composables/useComponentBoard'
 import { useElement } from '@/composables/useElement'
 import { useSettings } from '@/composables/useSettings'
+import { sitePaperStyle } from '@/lib/settings'
 import { useVariants } from '@/composables/useVariants'
 import { useThemeTokens } from '@/composables/useThemeTokens'
 import { useColorMode } from '@/composables/useColorMode'
@@ -35,6 +36,7 @@ function surfaceStyle(card: BoardCard) {
     width: isWide(card) ? `${WIDE}px` : selfSized ? undefined : `${NARROW}px`,
     fontFamily: settings.value.fonts.family || undefined,
     contain: 'layout',
+    ...sitePaperStyle(settings.value, colorMode.value),
   }
 }
 
@@ -133,7 +135,7 @@ function onBoardClick() {
                     <div
                       data-site-scope
                       data-board-card-surface
-                      class="bg-white text-black shadow-lg"
+                      class="shadow-lg"
                       :class="[
                         colorMode,
                         isWide(card) ? '' : 'p-6',
@@ -156,7 +158,7 @@ function onBoardClick() {
                 v-if="!card.def.variants?.length"
                 data-site-scope
                 data-board-card-surface
-                class="bg-white text-black shadow-lg"
+                class="shadow-lg"
                 :class="[colorMode, isWide(card) ? '' : 'p-6']"
                 :style="surfaceStyle(card)"
                 @click.stop="focusedKey = card.key"

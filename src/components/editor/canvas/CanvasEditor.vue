@@ -20,6 +20,7 @@ import { useSettings } from '@/composables/useSettings'
 import { useThemeTokens } from '@/composables/useThemeTokens'
 import type { Breakpoint } from '@/types/editor'
 import { useColorMode } from '@/composables/useColorMode'
+import { sitePaperStyle } from '@/lib/settings'
 
 void import('@tailwindcss/browser')
 
@@ -132,13 +133,14 @@ watch(focusTick, async () => {
               data-frame-drop
               data-site-scope
               :data-breakpoint-id="bp.id"
-              class="flex flex-col overflow-hidden bg-white text-black shadow-lg"
+              class="flex flex-col overflow-hidden shadow-lg"
               :class="colorMode"
               :style="{
                 width: `${bp.width}px`,
                 minHeight: `${bp.height}px`,
                 fontFamily: settings.fonts.family || undefined,
                 contain: 'layout',
+                ...sitePaperStyle(settings, colorMode),
               }"
               @click.capture="onFrameClick(bp, $event)"
             >

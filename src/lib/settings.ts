@@ -1,5 +1,5 @@
 import type { DesignToken, ProjectSettings } from '@/types/editor'
-import { TOKEN_NAME_RE, RESERVED_TOKEN_NAMES } from './shared/tokens.js'
+import { TOKEN_NAME_RE, RESERVED_TOKEN_NAMES, tokenDark } from './shared/tokens.js'
 
 export {
   TOKEN_NAME_RE,
@@ -38,6 +38,29 @@ export {
   validFonts,
   FONT_FAMILY_RE,
 } from './shared/fonts.js'
+
+/**
+ * What a canvas surface paints under the project — the `background` and
+ * `foreground` tokens, resolved for the mode being shown, with white/black
+ * when the project names no such token.
+ *
+ * Deliberately resolved in JS rather than `var(--color-background, #fff)`:
+ * useThemeTokens reasserts the EDITOR CHROME's colours as `--color-*` on
+ * :root, and custom properties inherit, so the CSS fallback could never fire —
+ * a project with no `background` token would have painted its cards and frames
+ * in the chrome's own colour.
+ */
+export function sitePaperStyle(
+  settings: ProjectSettings | undefined,
+  mode: 'light' | 'dark',
+): { backgroundColor: string; color: string } {
+  const pick = (name: string, fallback: string) => {
+    const token = (settings?.tokens ?? []).find((t) => t.name === name)
+    if (!token) return fallback
+    return (mode === 'dark' ? tokenDark(token) : null) ?? token.value ?? fallback
+  }
+  return { backgroundColor: pick('background', '#ffffff'), color: pick('foreground', '#000000') }
+}
 
 export function tokenNameError(name: string, others: DesignToken[]): string | null {
   if (!name) return 'Name required'
