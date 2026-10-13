@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue'
 import {
-  Palette, Zap, GitBranch, Sun, Moon, Paperclip,
+  Palette, Zap, GitBranch, Paperclip,
   MessageCircle, CircleCheck, CircleAlert, CircleX, Rocket, Keyboard,
 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -20,7 +20,6 @@ import { usePopover } from '@/composables/usePopover'
 import { useModal } from '@/composables/useModal'
 import { useInteraction } from '@/composables/useInteraction'
 import { isEditable } from '@/composables/useShortcut'
-import { useTheme } from '@/composables/useTheme'
 import { onBeforeUnmount, onMounted } from 'vue'
 
 interface Panel {
@@ -67,7 +66,6 @@ onMounted(() => window.addEventListener('keydown', onWindowKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 
 const { onMain } = useBranches()
-const { theme, toggleTheme } = useTheme()
 
 const RAIL_POPOVER_OFFSET = 18
 
@@ -236,13 +234,5 @@ watch(activePanel, (panel) => {
       :class="currentId === 'shortcuts' ? '!bg-accent/30 text-accent-foreground' : 'text-muted-foreground'"
       @click="toggleShortcuts"
     />
-    <ButtonUI
-      variant="ghost"
-      :icon="theme === 'light' ? Sun : Moon"
-      :aria-label="theme === 'light' ? 'Switch to dark' : 'Switch to light'"
-      class="w-7 text-muted-foreground"
-      @click="toggleTheme"
-    />
-
   </aside>
 </template>

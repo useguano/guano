@@ -25,6 +25,7 @@ import SliderUI from '@/components/ui/SliderUI.vue'
 import { useProject } from '@/composables/useProject'
 import { SCROLL_LERP_DEFAULT, SCROLL_LERP_MIN, SCROLL_LERP_MAX } from '@/lib/motion'
 import { useSettings } from '@/composables/useSettings'
+import { useTheme } from '@/composables/useTheme'
 import { useLocale } from '@/composables/useLocale'
 import { usePublish } from '@/composables/usePublish'
 import { useBranches } from '@/composables/useBranches'
@@ -515,6 +516,21 @@ const COLOR_MODE_OPTIONS = [
   { label: 'Dark', value: 'dark' },
   { label: "The visitor's system", value: 'system' },
 ]
+/**
+ * The EDITOR's own chrome, not the site's: a per-browser preference in
+ * localStorage, never project data. `COLOR_MODE_OPTIONS` above is the other
+ * one — what a visitor to the published site gets.
+ */
+const EDITOR_THEME_OPTIONS = [
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+]
+const { theme: editorTheme, setTheme } = useTheme()
+const editorThemeChoice = computed({
+  get: () => editorTheme.value,
+  set: (v: string) => setTheme(v === 'light' ? 'light' : 'dark'),
+})
+
 const colorModeDefault = computed({
   get: () => defaultColorMode(settings.value),
   set: (v: string) => {
@@ -2279,6 +2295,14 @@ async function onImportFile(e: Event) {
               </RowUI>
               <RowUI label="Email">
                 <InputUI v-model="accEmail" type="email" placeholder="you@example.com" />
+              </RowUI>
+            </SettingsGroup>
+            <SettingsGroup
+              title="Appearance"
+              description="How the editor itself looks. Remembered in this browser, not in the project."
+            >
+              <RowUI label="Theme">
+                <SelectUI v-model="editorThemeChoice" :options="EDITOR_THEME_OPTIONS" />
               </RowUI>
             </SettingsGroup>
             <SettingsGroup title="Change password" description="Leave blank to keep your current password.">
