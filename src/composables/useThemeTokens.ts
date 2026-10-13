@@ -1,6 +1,6 @@
 import { computed, effectScope, watch } from 'vue'
 import { useSettings } from './useSettings'
-import { themeBlock, isThemeValue, fontFaceBlock } from '@/lib/settings'
+import { themeBlock, modeTokensCss, isThemeValue, fontFaceBlock } from '@/lib/settings'
 import { PROSE_CSS, CUSTOM_VARIANTS } from '@/lib/shared/prose.js'
 
 const CHROME_COLOR_VARS = [
@@ -34,9 +34,12 @@ function start() {
     const scoped = tokens.map((t) => `  --color-${t.name}: ${t.value};`).join('\n')
     const root = settings.value.theme?.rootFontSize
     const rootRule = root && isThemeValue(root) ? `  font-size: ${root};\n` : ''
+    // the dark half of the palette, scoped like the light half — the chrome's
+    // own light/dark is useTheme's business and must not follow the project's
     return (
       `${CUSTOM_VARIANTS}\n${PROSE_CSS}\n${theme}\n:root {\n${reassert}\n}\n` +
-      `[data-site-scope] {\n${rootRule}${scoped}\n}`
+      `[data-site-scope] {\n${rootRule}${scoped}\n}\n` +
+      modeTokensCss({ ...settings.value, tokens }, '[data-site-scope]')
     )
   })
   const fontsUrl = computed(() => {

@@ -377,6 +377,13 @@ export function applyHtml(
           return
         }
         fillPart(target, child, owner, childPath)
+        // a nested instance written with no children means "leave its parts
+        // alone", the same as it does at the top level (fillInstance's early
+        // return). Without this, saying anything about a nested instance — its
+        // variant pick, its link — meant re-typing the whole inner component's
+        // skeleton underneath it, or taking a refusal for the one part count
+        // nobody asked about.
+        if (isComponentType(below.type) && !child.children.length) return
         if (below.slot) alignLevel(target, child.children, childPath)
         else {
           fill(
@@ -495,6 +502,24 @@ export function applyHtml(
           refuse(path, `'${attr}' binds nothing — a field binding is 'data-field'`)
           break
 
+        // a nested instance's variant pick is THIS placement's, not the
+        // component's: a <Card> on one page may hold a primary <Button> and on
+        // another a ghost one. The serializer has always printed it here (it is
+        // the node's own value), so refusing the write made it readable and
+        // unwritable — and the refusal sent the author to update_component,
+        // which would have restyled every <Card> on the site. `edit_elements
+        // {id, variants}` wrote it correctly all along.
+        case attr.startsWith('data-variant-'):
+          if (isComponentType(node.type)) setVariant(node, attr.slice('data-variant-'.length), value)
+          else {
+            refuse(
+              path,
+              `only a component instance wears a variant; <${parsed.tag}> inside ` +
+                `<${component}> does not`,
+            )
+          }
+          break
+
         default:
           shared(attr, node.attributes?.[attr])
       }
@@ -515,6 +540,15 @@ export function applyHtml(
       if (has(`data-bind-${attr}`)) fields[attr] = field
     }
     assignObject(node, 'fieldAttrs', fields)
+    // a pick the markup no longer carries is a pick removed, as it is for a
+    // top-level instance (pruneAbsent)
+    if (isComponentType(node.type)) {
+      const picks: Record<string, string> = {}
+      for (const [axis, option] of Object.entries(node.variants ?? {})) {
+        if (has(`data-variant-${axis}`)) picks[axis] = option
+      }
+      assignObject(node, 'variants', picks)
+    }
 
     if (parsed.text !== undefined && isLeafType(node.type)) setContent(node, parsed, path)
   }

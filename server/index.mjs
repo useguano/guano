@@ -171,6 +171,12 @@ const PUBLISH_CONFIG = join(DATA_DIR, 'publish.json')
 // site/ — it is server state, not a published file.
 const FORMS_MANIFEST = join(DATA_DIR, 'forms-manifest.json')
 const PREVIEW_FORMS_MANIFEST = join(DATA_DIR, 'forms-manifest.preview.json')
+// The 301s the LAST SUCCESSFUL export resolved — already checked against the
+// routes that shipped, so a source here can never be a real page. Its own file
+// for the reason the forms manifest has one: answering a redirect must not
+// cost a parse of published.json (hundreds of KB) on every miss.
+const REDIRECTS_MANIFEST = join(DATA_DIR, 'redirects.json')
+const PREVIEW_REDIRECTS_MANIFEST = join(DATA_DIR, 'redirects.preview.json')
 const FORMS_DIR = join(DATA_DIR, 'forms')
 const DIST = join(ROOT, 'dist')
 // The version of the `guano` package this server belongs to, surfaced on
@@ -402,6 +408,8 @@ const deliverer = createDeliverer({
 
 const liveForms = manifestReader(FORMS_MANIFEST)
 const previewForms = manifestReader(PREVIEW_FORMS_MANIFEST)
+const liveRedirects = manifestReader(REDIRECTS_MANIFEST)
+const previewRedirects = manifestReader(PREVIEW_REDIRECTS_MANIFEST)
 
 const handleFormPost = createFormsHandler({
   manifest: liveForms,
@@ -1559,6 +1567,7 @@ async function handlePreview(req, res) {
         { integrations },
       )
       await writeFormsManifest(PREVIEW_FORMS_MANIFEST, s.forms, parsed)
+      await writeRedirectsManifest(PREVIEW_REDIRECTS_MANIFEST, s.redirects)
       return s
     })
     return send(
@@ -1743,6 +1752,7 @@ async function handlePost(req, res, params) {
       // a successful export — a failed publish must never leave one pointing
       // at pages that did not ship
       await writeFormsManifest(FORMS_MANIFEST, s.forms, parsed)
+      await writeRedirectsManifest(REDIRECTS_MANIFEST, s.redirects)
       return s
     })
     if (method === 'zip') {
@@ -1950,6 +1960,22 @@ async function handleIntegrations(req, res, path) {
  * leave its endpoint answering, which is the sort of thing nobody discovers
  * until it is abused.
  */
+/**
+ * The resolved 301s, written only after a successful export for the same
+ * reason the forms manifest is: a failed publish must never leave the live
+ * site answering redirects it did not ship. An empty list is still written,
+ * so REMOVING the last redirect takes effect on the next publish.
+ */
+async function writeRedirectsManifest(file, redirects) {
+  await writeAtomic(
+    file,
+    JSON.stringify({ at: Date.now(), redirects: redirects?.live ?? [] }),
+  )
+  // the reader caches for 5s, and a publish is the one moment that staleness
+  // is both certain and visible
+  for (const reader of [liveRedirects, previewRedirects]) reader.invalidate()
+}
+
 async function writeFormsManifest(file, forms, project) {
   await writeAtomic(
     file,
@@ -1962,6 +1988,7 @@ async function writeFormsManifest(file, forms, project) {
       forms: forms ?? {},
     }),
   )
+  for (const reader of [liveForms, previewForms]) reader.invalidate()
 }
 
 /**
@@ -2929,10 +2956,52 @@ function cacheHeaders(target, data, preview, isPrivate = false) {
   }
 }
 
+/**
+ * The resolved redirects as a lookup, memoized per manifest object (the reader
+ * hands back the same parsed object for 5s, so this rebuilds at most that
+ * often).
+ */
+const redirectMaps = new WeakMap()
+function redirectMapOf(manifest) {
+  if (!manifest) return null
+  let map = redirectMaps.get(manifest)
+  if (!map) {
+    map = new Map((manifest.redirects ?? []).map((r) => [r.from, r.to]))
+    redirectMaps.set(manifest, map)
+  }
+  return map
+}
+
 async function serveSiteDir(req, res, root, { private: isPrivate = false } = {}) {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
+  const url = new URL(req.url, 'http://x')
+  const path = normalize(decodeURIComponent(url.pathname))
   const NOSNIFF = { 'x-content-type-options': 'nosniff' }
   const preview = root === PREVIEW
+
+  // 🔀 301s, BEFORE the file lookup — which is what makes them real redirects
+  // rather than the meta-refresh stubs sitting in site/ for static hosts. Safe
+  // in this order because the export already dropped every source a published
+  // route answers on, so a redirect can never shadow a page.
+  //
+  // The query string rides along (campaign parameters on an old link are the
+  // normal case), and `cache-control: no-cache` is deliberate: a bare 301 is
+  // cached by browsers indefinitely, so removing a redirect later would leave
+  // every visitor who ever followed it permanently stuck.
+  const to = redirectMapOf(await (preview ? previewRedirects : liveRedirects)())?.get(path)
+  // the value is one this instance's own exporter validated and wrote, so the
+  // character guard is defense in depth, not the check — a header value with
+  // whitespace in it is header injection
+  if (to && !/[\s<>"]/.test(to)) {
+    const location = url.search && !/^https?:/i.test(to) ? `${to}${url.search}` : to
+    // plain text: a 301 body is shown by almost nothing, and text needs no
+    // escaping to be safe
+    return send(res, 301, `Moved to ${location}\n`, 'text/plain', {
+      location,
+      'cache-control': 'no-cache',
+      ...NOSNIFF,
+      ...(preview ? { 'x-robots-tag': 'noindex, nofollow' } : {}),
+    })
+  }
   const headersFor = (target) => ({
     ...NOSNIFF,
     // unfinished work must never be indexed

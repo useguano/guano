@@ -14,7 +14,7 @@ import { compile, optimize } from '@tailwindcss/node'
 // Element registry shared verbatim with the client (src/lib/elements.ts
 // re-exports this same module) — one source of truth, no drift.
 import { ELEMENTS_DATA as ELEMENTS } from '../src/lib/shared/elements.js'
-import { themeBlock, rootFontSizeCss, applyTitleTemplate } from '../src/lib/shared/tokens.js'
+import { themeBlock, modeTokensCss, rootFontSizeCss, applyTitleTemplate } from '../src/lib/shared/tokens.js'
 import { PROSE_CSS, CUSTOM_VARIANTS } from '../src/lib/shared/prose.js'
 import { fontFaceBlock } from '../src/lib/shared/fonts.js'
 import { buildStructuredData, structuredDataTag } from '../src/lib/shared/structuredData.js'
@@ -52,6 +52,18 @@ import {
   isChannelTarget,
 } from '../src/lib/shared/interactionKeys.js'
 import { buildChannelIndex } from '../src/lib/shared/channels.js'
+import {
+  resolveRedirects,
+  redirectStubPath,
+  redirectStubHtml,
+} from '../src/lib/shared/redirects.js'
+import {
+  COLOR_MODE_ATTR,
+  colorModeScript,
+  defaultColorMode,
+  isThemeLink,
+  themeLinkAction,
+} from '../src/lib/shared/colorMode.js'
 import {
   animationStateKey,
   compileAnimation,
@@ -352,6 +364,82 @@ function scopedAnimTargets(root, masterId) {
   return list
 }
 
+/**
+ * Every animation binding that moves this node — instance-scoped, else plain.
+ * Memoized per node because the scoped lookup walks a whole component master
+ * and every child now asks the same question of its parent (stagger priming).
+ */
+function animTargetsOf(node, ctx) {
+  let hit = ctx.animTargets.get(node.id)
+  if (hit) return hit
+  const mapping = ctx.mm.get(node.id)
+  hit = mapping
+    ? scopedAnimTargets(mapping.root, mapping.master.id)
+    : (ctx.plainAnimTargets.get(node.id) ?? [])
+  ctx.animTargets.set(node.id, hit)
+  return hit
+}
+
+/**
+ * child id -> its parent node, over every tree a route renders. A staggered
+ * step moves its target's CHILDREN, so a child has to ask what its parent
+ * primes — and a parent's attributes are emitted AFTER its subtree is
+ * rendered, so it cannot hand the frame down.
+ */
+function buildParentIndex(page, project) {
+  const index = new Map()
+  const visit = (nodes, parent) => {
+    for (const n of nodes) {
+      if (parent) index.set(n.id, parent)
+      if (n.children?.length) visit(n.children, n)
+    }
+  }
+  for (const { tree } of routeTrees(page, project)) visit(tree, null)
+  return index
+}
+
+/** compiled + stagger-split, once per animation per export */
+function splitFor(animation, ctx) {
+  let hit = ctx.splits.get(animation.id)
+  if (!hit) ctx.splits.set(animation.id, (hit = splitByStagger(compileAnimation(animation))))
+  return hit
+}
+
+/**
+ * The pre-play frame this node inherits from a STAGGERED step aimed at its
+ * parent. A staggered track moves the target's children, so its `from` never
+ * lands on the target — and until it was baked here a staggered entrance
+ * shipped every child at its FINAL value: the page painted the end state, the
+ * deferred runtime booted, wrote the `from` on its first frame and played
+ * forward, which reads as a flash before the animation. Every trigger, by the
+ * same rule and the same helper as the node's own frame below, so the markup
+ * and the runtime's priming pass cannot disagree; a breakpoint-SCOPED binding
+ * is never baked, for the reason spelled out there.
+ *
+ * Only the default cascade (the target's direct children). A `staggerSelector`
+ * is matched in the DOM, which this exporter cannot evaluate, so those stay
+ * primed by the runtime.
+ */
+function staggerPrimeEntries(node, ctx) {
+  const parent = ctx.parents.get(node.id)
+  if (!parent) return []
+  const entries = []
+  for (const { b } of animTargetsOf(parent, ctx)) {
+    if (b.breakpoints) continue
+    const animation = ctx.animLib.get(b.animationId)
+    if (!animation) continue
+    const split = splitFor(animation, ctx)
+    if (!split.hasStagger || split.selector) continue
+    entries.push({
+      compiled: split.staggered,
+      delay: bindingDelay(b),
+      entrance: b.trigger === 'load' || b.trigger === 'appear',
+      mid: b.trigger === 'mouse',
+    })
+  }
+  return entries
+}
+
 /** interactions inside a component root targeting a given master node */
 function scopedTargets(root, masterId) {
   const list = []
@@ -412,7 +500,10 @@ async function buildCss(candidates, settings, { forms = false } = {}) {
     // tripping it is exactly the signal we want. A renderer-invented class, so
     // it gets a real rule rather than a candidate.
     (forms ? HONEYPOT_CSS : '') +
-    themeBlock(settings)
+    themeBlock(settings) +
+    // the dark half of the palette, unlayered so it beats `@theme`'s own
+    // `:root` block (which Tailwind emits inside @layer theme)
+    modeTokensCss(settings)
   const compiler = await compile(input, { base: ROOT, onDependency() {} })
   const css = compiler.build([...candidates])
   return optimize(css, { minify: true }).code
@@ -473,6 +564,14 @@ function resolveHref(node, ctx) {
     if (!ctx.project.locales.includes(code)) return null
     const path = ctx.routePath ?? '/'
     return code === ctx.defaultLocale ? path : `/${code}${path === '/' ? '' : path}`
+  }
+  // '@theme…' switches the colour mode, which is not a navigation: the head
+  // script (shared/colorMode.js) delegates the click off the reserved
+  // data-guano-theme attribute attrsFor emits instead. An <a> still gets a
+  // '#' href so it stays keyboard-operable; nothing else gets one, so no
+  // anchor is wrapped around it.
+  if (isThemeLink(raw)) {
+    return themeLinkAction(raw) && ELEMENTS[node.type]?.tag === 'a' ? '#' : null
   }
   if (!raw || !SAFE_HREF.test(raw)) return null
   // a link straight at a library asset (a PDF, a logo download) resolves to its
@@ -676,6 +775,15 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     }
   }
 
+  // the colour-mode switcher: a reserved attribute the head script delegates
+  // clicks from, rather than an href (a theme switch is not a navigation) and
+  // rather than an interaction (the choice has to be applied before the first
+  // paint, which only markup in <head> can do). Resolved along the chain like
+  // every other per-instance value, so one Header component's switch works on
+  // every route.
+  const themeAction = themeLinkAction(resolveInstanceValue(node, mapping, 'link'))
+  if (themeAction) attrs.push(`${COLOR_MODE_ATTR}="${themeAction}"`)
+
   // interaction wiring for the runtime
   // The scope that makes a binding key unique: the component instance AND the
   // collection-list repeat. Without the entry part, every repeated card shares
@@ -871,9 +979,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     }
     if (list.length) fxEntry.m = list
   }
-  const animTargets = mapping
-    ? scopedAnimTargets(mapping.root, mapping.master.id)
-    : (ctx.plainAnimTargets.get(node.id) ?? [])
+  const animTargets = animTargetsOf(node, ctx)
   // `data-atgt` is matched by the BINDING key (`meta.k`), not the play key, so
   // a channel binding's `k` is unscoped on both sides — which is exactly what
   // `scopeFor` returns for it. Click only (the one shared tween key), so there
@@ -888,9 +994,11 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     animDriven.push({ b: binding, key: ctx.intern(FX_KIND.binding, binding.id), bake: false })
   }
   const firstFrame = {}
+  // the frames this node wears before anything plays: its own timelines' and,
+  // for a staggered step aimed at its parent, that cascade's
+  const toPrime = staggerPrimeEntries(node, ctx)
   if (animDriven.length) {
     const keys = []
-    const toPrime = []
     for (const { b, key, bake } of animDriven) {
       const animation = ctx.animLib.get(b.animationId)
       if (!animation) continue
@@ -910,8 +1018,8 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // it applied at every width while the runtime only ever animated (or
       // end-stated) it inside the scope — outside it the element sat invisible
       // forever. Scoped ones are primed by the runtime instead (a brief
-      // natural-state paint inside the scope is the accepted tradeoff, same as
-      // staggered children).
+      // natural-state paint inside the scope is the accepted tradeoff, and the
+      // same one a `staggerSelector` makes).
       if (bake && !b.breakpoints) {
         toPrime.push({
           compiled: splitByStagger(compileAnimation(animation)).element,
@@ -927,9 +1035,11 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     // followed by a "close" (1 → 0, seconds later) primed the element VISIBLE,
     // with both states painted at once. The runtime primes with the same
     // helper, so the two cannot disagree.
-    if (toPrime.length) Object.assign(firstFrame, primeFirstFrame(toPrime))
     if (keys.length) fxEntry.a = keys
   }
+  // ONE call for both sources: an element wears one resting frame, whichever
+  // timeline decides each property (earliest start wins, see primeFirstFrame)
+  if (toPrime.length) Object.assign(firstFrame, primeFirstFrame(toPrime))
 
   if (Object.keys(fxEntry).length) {
     attrs.push(`${FX_ATTR}="${ctx.els.push(fxEntry) - 1}"`)
@@ -960,6 +1070,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     'alt',
     'href',
     'sizes',
+    COLOR_MODE_ATTR,
     ...Object.keys(SLIDER_LABEL_ATTRS),
   ])
   const wrapsInAnchor = wrapLink && def?.tag !== 'a' && !!resolveHref(node, ctx)
@@ -1362,6 +1473,30 @@ function scriptTag(js) {
 }
 
 /** the shared head + body-open shell for every exported page */
+/**
+ * Does this project switch colour modes at all? A light-only site must not pay
+ * for the head script, so it is emitted when the site opens in dark or follows
+ * the system, or when any node anywhere is a switcher.
+ *
+ * Cached per project object: renderShell runs once per ROUTE, and this walks
+ * every page and every master.
+ */
+const colorModeUse = new WeakMap()
+function usesColorMode(project) {
+  let hit = colorModeUse.get(project)
+  if (hit !== undefined) return hit
+  hit = defaultColorMode(project.settings ?? {}) !== 'light'
+  if (!hit) {
+    const scan = (node) => {
+      if (isThemeLink(node.link)) hit = true
+    }
+    for (const page of project.pages) walkNodes(page.elements, scan)
+    for (const component of project.components ?? []) walkNodes([component.root], scan)
+  }
+  colorModeUse.set(project, hit)
+  return hit
+}
+
 function renderShell(
   project,
   rewrite,
@@ -1375,8 +1510,13 @@ function renderShell(
 
   let head =
     `<!doctype html><html lang="${escapeHtml(locale)}"><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<title>${escapeHtml(title)}</title>`
+    `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  // FIRST, and blocking: the colour mode has to be on <html> before the first
+  // paint, or a dark-mode visitor gets a full paint of the light site and a
+  // flash on every navigation. Nothing deferred can do this, which is why the
+  // switcher is a renderer feature and not something an author wires up.
+  if (usesColorMode(project)) head += `<script>${colorModeScript(defaultColorMode(settings))}</script>`
+  head += `<title>${escapeHtml(title)}</title>`
   if (description) head += `<meta name="description" content="${escapeHtml(description)}">`
   head += `<meta property="og:title" content="${escapeHtml(title)}">`
   if (seo.siteName) head += `<meta property="og:site_name" content="${escapeHtml(seo.siteName)}">`
@@ -1458,6 +1598,14 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
     mm: buildMasterMap(page.elements, project.components),
     plainTargets: buildPlainTargets(page, project),
     plainAnimTargets: buildPlainAnimTargets(page, project),
+    // child id -> parent node, for the staggered frame a child inherits
+    parents: buildParentIndex(page, project),
+    // node id -> the bindings that move it (see animTargetsOf). A Map so it
+    // survives the `{...ctx}` spread every nested scope makes, like sliderIds.
+    animTargets: new Map(),
+    // animation id -> its compiled stagger split. A Map so it survives the
+    // `{...ctx}` spread every nested scope makes, like sliderIds.
+    splits: new Map(),
     // node id → its enclosing entry scope, which decides whether a binding's
     // state key carries the entry part (see attrsFor)
     scopeRoots: routeScopeRoots(page, project),
@@ -1767,6 +1915,12 @@ function renderNotFound(project, rewrite) {
 
 // ---------- routes ----------
 
+/** the URL a written file answers on: `fr/about/index.html` → `/fr/about` */
+function routeUrlOf(outPath) {
+  const dir = outPath.replace(/index\.html$/, '').replace(/\/+$/, '')
+  return `/${dir}`.replace(/\/{2,}/g, '/')
+}
+
 function enumerateRoutes(project) {
   const routes = []
   const locales = ['', ...(project.locales ?? []).filter((l) => l !== project.defaultLocale)]
@@ -1976,6 +2130,20 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
     for (const [name, body] of fxAssets) await write(name, body)
     for (const [outPath, html] of rendered) await write(outPath, html)
 
-    return { routes: written.size, bytes, forms: manifest }
+    // 301 redirects, resolved against what ACTUALLY shipped: `written` is the
+    // authoritative route list, so a redirect whose source is a real page is
+    // dropped here rather than being able to shadow it at serve time. The
+    // server answers the live ones before it looks for a file; the stubs are
+    // for a static host (a zip, GitHub Pages) that cannot answer a 301 at all.
+    const redirects = resolveRedirects(project.settings?.redirects, {
+      routes: new Set([...written].map(routeUrlOf)),
+      locales: project.locales ?? [],
+      defaultLocale: project.defaultLocale,
+    })
+    for (const r of redirects.live) {
+      await write(redirectStubPath(r.from), redirectStubHtml(r.to, escapeHtml))
+    }
+
+    return { routes: written.size, bytes, forms: manifest, redirects }
   })
 }

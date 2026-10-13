@@ -36,6 +36,7 @@ import { useComponents } from '@/composables/useComponents'
 import { useComponentBoard } from '@/composables/useComponentBoard'
 import { acceptsChildren } from '@/lib/treeOps'
 import { pushMasterStructure } from '@/lib/componentOps'
+import { THEME_LINK_PREFIX, themeLinkAction } from '@/lib/shared/colorMode.js'
 import type { CollectionEntry, CollectionField, ElementNode } from '@/types/editor'
 
 const FormSubmissionsModal = defineAsyncComponent(() => import('@/components/editor/forms/FormSubmissionsModal.vue'))
@@ -154,6 +155,23 @@ const linkToEntry = computed({
     if (selectedElement.value) setElementLink(selectedElement.value.id, on ? '@item' : null)
   },
 })
+
+// The colour-mode switcher is a `link` sentinel, like the language switcher's
+// `@locale:` — same field, so it is mutually exclusive with a destination by
+// construction, and the Link input is hidden while one is set rather than
+// showing a value that is not a URL.
+const themeSwitchOptions = [
+  { label: 'None', value: '' },
+  { label: 'Toggle light / dark', value: 'toggle' },
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+  { label: "The visitor's system", value: 'system' },
+]
+const themeSwitch = computed(() => themeLinkAction(link.value) ?? '')
+const setThemeSwitch = (action: string | null | undefined) => {
+  if (!selectedElement.value) return
+  setElementLink(selectedElement.value.id, action ? `${THEME_LINK_PREFIX}:${action}` : null)
+}
 
 const canBind = computed(
   () =>
@@ -957,8 +975,15 @@ const src = computed({
       <RowUI v-if="canLinkEntry" label="Link to entry">
         <ToggleUI v-model="linkToEntry" />
       </RowUI>
-      <RowUI v-if="canLink && !linkToEntry" label="Link">
+      <RowUI v-if="canLink && !linkToEntry && !themeSwitch" label="Link">
         <InputUI v-model="link" placeholder="/about or https://…" class="font-mono" />
+      </RowUI>
+      <RowUI v-if="canLink && !linkToEntry" label="Theme switch">
+        <SelectUI
+          :options="themeSwitchOptions"
+          :model-value="themeSwitch"
+          @update:model-value="(v) => setThemeSwitch(v)"
+        />
       </RowUI>
     </GroupPopover>
 

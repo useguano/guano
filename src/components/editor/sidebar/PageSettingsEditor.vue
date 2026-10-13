@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ChevronLeft, Copy, Trash2 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import InputUI from '@/components/ui/InputUI.vue'
@@ -12,6 +12,9 @@ import { useCollections } from '@/composables/useCollections'
 import { useModal } from '@/composables/useModal'
 import { useLocale } from '@/composables/useLocale'
 import { useAuth } from '@/composables/useAuth'
+import { useSettings } from '@/composables/useSettings'
+import { normalizeRedirectPath } from '@/lib/settings'
+import { entryRoutePath } from '@/lib/shared/slug.js'
 import { timeAgo } from '@/lib/time'
 
 export type SettingsTarget =
@@ -26,6 +29,7 @@ const { collections, updateEntryMeta, duplicateEntry, removeEntry } = useCollect
 const { confirm } = useModal()
 const { activeLocale, defaultLocale, isDefault } = useLocale()
 const { canBuild } = useAuth()
+const { redirectFrom, setRedirect, removeRedirect } = useSettings()
 
 const STATUS_OPTIONS = [
   { label: 'Published', value: 'published' },
@@ -77,12 +81,105 @@ function commitTitle() {
   else if (collection.value && entry.value)
     updateEntryMeta(collection.value, entry.value.id, { name })
 }
+/**
+ * Where this item answered BEFORE the first slug change of this session, per
+ * id — the path other people's links point at, and the only one worth a 301.
+ * Module-level because the drawer unmounts every time you navigate away, and
+ * the offer has to survive that; keyed by id, so two renames do not mix.
+ * The FIRST value wins: /a → /b → /c should offer /a, not /b.
+ *
+ * REACTIVE, and that is not decoration: a plain Map read inside `redirectOffer`
+ * is not a dependency, so the computed stayed on the `null` it returned at
+ * mount — it had early-returned before ever touching `page.path`, so nothing
+ * it tracked changed when the slug did, and the offer never appeared. A
+ * `reactive` Map tracks `get`/`has` per key (the same reason useElement's
+ * selection marks are one).
+ */
+const pathBefore = reactive(new Map<string, string>())
+const offerDismissed = reactive(new Set<string>())
+
+function routeOf(target: SettingsTarget, path: string): string {
+  if (target.kind === 'page') return normalizeRedirectPath(path || '/')
+  const col = collections.value.find((c) => c.id === target.collectionId)
+  const entry = col?.entries.find((e) => e.id === target.entryId)
+  if (!col || !entry) return ''
+  return normalizeRedirectPath(entryRoutePath(col, { ...entry, slug: path }) ?? '')
+}
+
 function commitSlug() {
   const slug = slugField.value.trim()
+  const before = page.value ? page.value.path : (entry.value?.slug ?? '')
+  const id = page.value?.id ?? entry.value?.id
   if (page.value) updatePageMeta(page.value.id, { slug })
   else if (collection.value && entry.value)
     updateEntryMeta(collection.value, entry.value.id, { slug })
+  // remember where it used to live, so the redirect can be offered. Only for
+  // a real move: typing in the field and tabbing out unchanged is not one.
+  if (id && slug !== before && before) {
+    if (!pathBefore.has(id)) pathBefore.set(id, before)
+    offerDismissed.delete(id)
+  }
 }
+
+/** the 301 worth adding after a rename: the old route, and where it went */
+const redirectOffer = computed(() => {
+  const id = page.value?.id ?? entry.value?.id
+  if (!id || !canBuild.value || isHome.value) return null
+  if (offerDismissed.has(id)) return null
+  const was = pathBefore.get(id)
+  if (!was) return null
+  const from = routeOf(props.target, was)
+  const to = routeOf(props.target, page.value ? page.value.path : (entry.value?.slug ?? ''))
+  // renamed back to where it started, or the rule is already there
+  if (!from || !to || from === to) return null
+  const have = redirectFrom(from)
+  if (have && normalizeRedirectPath(have.to) === to) return null
+  return { from, to, replacing: have ?? null }
+})
+
+function acceptRedirect() {
+  const offer = redirectOffer.value
+  const id = page.value?.id ?? entry.value?.id
+  if (!offer || !id) return
+  setRedirect(offer.from, offer.to)
+  pathBefore.delete(id)
+}
+
+/** keeping a shadowed rule is a real choice (the page may move again) */
+function keepClashingRedirect() {
+  const id = redirectClash.value?.id
+  if (id) clashKept.add(id)
+}
+
+function dismissRedirect() {
+  const id = page.value?.id ?? entry.value?.id
+  if (id) offerDismissed.add(id)
+}
+
+/**
+ * This item's own route is the SOURCE of a redirect — the "someone creates a
+ * page with the slug of something that is already redirected" case. The page
+ * wins either way (the export drops a shadowed rule), so the question is only
+ * whether to keep carrying a rule that no longer does anything.
+ *
+ * Shown ALONGSIDE the offer rather than instead of it, because renaming back
+ * onto an old path makes both true and they are different questions: the path
+ * you just left needs a redirect, and the one you came back to is still
+ * redirecting away (which would be a loop if a page did not always win). The
+ * one case that is NOT two questions is the rule the offer would replace —
+ * the offer says "instead of" for that, so it is suppressed here.
+ */
+const clashKept = reactive(new Set<string>())
+const redirectClash = computed(() => {
+  if (!canBuild.value) return null
+  const mine = routeOf(props.target, page.value ? page.value.path : (entry.value?.slug ?? ''))
+  if (!mine) return null
+  const offer = redirectOffer.value
+  // not the rule we are about to create for this very rename
+  if (offer && normalizeRedirectPath(offer.from) === mine) return null
+  const hit = redirectFrom(mine)
+  return hit && !clashKept.has(hit.id) ? hit : null
+})
 
 const status = computed({
   get: () => item.value?.status ?? 'published',
@@ -206,6 +303,46 @@ const hasHistory = computed(() => Boolean(item.value?.createdAt || item.value?.u
             @blur="commitSlug"
             @keydown.enter="commitSlug"
           />
+          <div
+            v-if="redirectOffer"
+            class="mt-1.5 flex flex-col gap-1.5 rounded-lg border border-input bg-input/40 p-2"
+          >
+            <p class="text-[10px] leading-snug text-muted-foreground">
+              Links to <span class="font-mono text-foreground">{{ redirectOffer.from }}</span> will
+              break.
+              <template v-if="redirectOffer.replacing">
+                Point it at
+                <span class="font-mono text-foreground">{{ redirectOffer.to }}</span> instead of
+                <span class="font-mono text-foreground">{{ redirectOffer.replacing.to }}</span>?
+              </template>
+              <template v-else>
+                Redirect it to
+                <span class="font-mono text-foreground">{{ redirectOffer.to }}</span>?
+              </template>
+            </p>
+            <div class="flex justify-end gap-1.5">
+              <ButtonUI variant="outline" size="xs" @click="dismissRedirect">No thanks</ButtonUI>
+              <ButtonUI size="xs" @click="acceptRedirect">
+                {{ redirectOffer.replacing ? 'Replace redirect' : 'Add 301 redirect' }}
+              </ButtonUI>
+            </div>
+          </div>
+          <div
+            v-if="redirectClash"
+            class="mt-1.5 flex flex-col gap-1.5 rounded-lg border border-input bg-input/40 p-2"
+          >
+            <p class="text-[10px] leading-snug text-muted-foreground">
+              This path already redirects to
+              <span class="font-mono text-foreground">{{ redirectClash.to }}</span
+              >. This page wins, so the redirect does nothing — remove it?
+            </p>
+            <div class="flex justify-end gap-1.5">
+              <ButtonUI variant="outline" size="xs" @click="keepClashingRedirect">Keep it</ButtonUI>
+              <ButtonUI size="xs" @click="removeRedirect(redirectClash.id)">
+                Remove redirect
+              </ButtonUI>
+            </div>
+          </div>
         </DrawerField>
 
         <DrawerField label="Status">

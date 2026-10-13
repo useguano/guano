@@ -550,3 +550,38 @@ test.describe('a count on a shared master', () => {
     expect(JSON.stringify(hit.where)).toContain('a few')
   })
 })
+
+test.describe('colour-mode warnings', () => {
+  // Both of these are "it published, and it does nothing", which is the one
+  // thing a successful publish cannot tell you on its own.
+  const SWITCH = '<header data-ref="bar">\n  <button href="@theme"><span>Theme</span></button>\n</header>'
+
+  test('a switcher with nothing to switch is flagged', async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('set_page_html', { pageId: home.id, html: pageHtml(SWITCH), version: home.version })
+    expect(await s.kinds()).toContain('theme-switch-no-dark')
+  })
+
+  test('a dark token makes the same switcher fine', async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('set_page_html', { pageId: home.id, html: pageHtml(SWITCH), version: home.version })
+    await s.call('update_settings', {
+      addTokens: [{ name: 'background', value: '#ffffff', dark: '#08090b' }],
+    })
+    expect(await s.kinds()).not.toContain('theme-switch-no-dark')
+  })
+
+  test('a dark palette no visitor can reach is flagged', async () => {
+    const s = await mcpSession()
+    await s.call('update_settings', {
+      addTokens: [{ name: 'background', value: '#ffffff', dark: '#08090b' }],
+    })
+    expect(await s.kinds()).toContain('dark-palette-unreachable')
+
+    // opening in the visitor's own mode is one of the two ways out
+    await s.call('update_settings', { theme: { colorMode: 'system' } })
+    expect(await s.kinds()).not.toContain('dark-palette-unreachable')
+  })
+})

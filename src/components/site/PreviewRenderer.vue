@@ -23,6 +23,7 @@ import { useProject } from '@/composables/useProject'
 import { usePage } from '@/composables/usePage'
 import { useCollections } from '@/composables/useCollections'
 import { usePageTransition } from '@/composables/usePageTransition'
+import { useColorMode } from '@/composables/useColorMode'
 import { resolveSitePath } from '@/lib/navigation'
 import { reducedMotion } from '@/lib/motion'
 import {
@@ -46,12 +47,13 @@ const { openEntry, activeEntryId } = useCollections()
 const { setActiveLocale, setNodeSrc, setEntryValue } = useLocale()
 const { contentEditing, openMenu, editRequest, consumeEditRequest } = usePreviewEditing()
 const pageTransition = usePageTransition()
+const { act } = useColorMode()
 
 const {
   def, mapping, boundField, boundEntry,
   listCollection, listEntries, listTemplateChildren, listEmptyChildren, itemCollection, itemEntry, itemTemplateChildren, selfNested,
   customAttrs, backgroundInfo, sliderLabels,
-  displayContent, richContent, srcAttr, altAttr, iconInfo, hidden, linkRaw, baseClasses,
+  displayContent, richContent, srcAttr, altAttr, iconInfo, hidden, linkRaw, themeAction, baseClasses,
   editableText, richEditing, inlineInitialText, commitInlineText,
   hoverHandlers, fireClickInteractions, fireChangeInteractions, el,
   motionStyle,
@@ -194,6 +196,14 @@ const handlers = {
   click(e: MouseEvent) {
     if (editing.value) return
     fireClickInteractions()
+    // the colour-mode switcher, applied the way the published head script
+    // applies it (one `resolveColorMode`), so Play is where a dark palette is
+    // checked without publishing
+    if (themeAction.value) {
+      e.preventDefault()
+      act(themeAction.value)
+      return
+    }
     if (!linkTarget.value?.internal) return
     e.preventDefault()
     const raw = linkTarget.value.raw

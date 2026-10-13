@@ -50,6 +50,12 @@ function maxStagger(split: StaggerSplit): number {
 
 export type MotionScope = string | ReadonlySet<string | undefined>
 
+export interface RestBinding {
+  binding: AnimationBinding
+  animation: Animation
+  part?: 'element' | 'staggered'
+}
+
 function playEnd(play: PlayState): number {
   if (!play.split.hasStagger) return play.compiled.duration
   return play.compiled.duration + maxStagger(play.split) * (play.maxChild ?? 0)
@@ -316,19 +322,29 @@ export function useMotion() {
    * Merged UNDER the playing values by the caller, and on values rather than
    * styles: two composed styles would have the later `transform` replace the
    * earlier one whole.
+   *
+   * A `part: 'staggered'` entry is a step aimed at the node's PARENT: a
+   * staggered track moves the target's children, so its `from` is what THEY
+   * rest at. Both parts go in one call, because an element wears one resting
+   * frame whichever timeline decides each property — the rule the exporter
+   * bakes with.
    */
-  function restValuesFor(
-    bindings: { binding: AnimationBinding; animation: Animation }[],
-  ): MotionValues | undefined {
-    if (!bindings.length) return undefined
-    const values = primeFirstFrameValues(
-      bindings.map(({ binding, animation }) => ({
-        compiled: compiledFor(animation).split.element,
+  function restValuesFor(bindings: RestBinding[]): MotionValues | undefined {
+    const entries = []
+    for (const { binding, animation, part } of bindings) {
+      const split = compiledFor(animation).split
+      if (part === 'staggered') {
+        if (!split.hasStagger) continue
+      }
+      entries.push({
+        compiled: part === 'staggered' ? split.staggered : split.element,
         delay: bindingDelay(binding),
         entrance: binding.trigger === 'load' || binding.trigger === 'appear',
         mid: binding.trigger === 'mouse',
-      })),
-    )
+      })
+    }
+    if (!entries.length) return undefined
+    const values = primeFirstFrameValues(entries)
     return Object.keys(values).length ? values : undefined
   }
 

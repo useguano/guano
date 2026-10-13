@@ -10,12 +10,14 @@ import { useElement } from '@/composables/useElement'
 import { useSettings } from '@/composables/useSettings'
 import { useVariants } from '@/composables/useVariants'
 import { useThemeTokens } from '@/composables/useThemeTokens'
+import { useColorMode } from '@/composables/useColorMode'
 
 void import('@tailwindcss/browser')
 useThemeTokens()
 useComponentBoardSession()
 
 const { groups, focusRequest, focusedKey } = useComponentBoard()
+const { mode: colorMode } = useColorMode()
 const { selectElement } = useElement()
 const { settings } = useSettings()
 const { picksFor, activeDrawing, wear } = useVariants()
@@ -133,6 +135,7 @@ function onBoardClick() {
                       data-board-card-surface
                       class="bg-white text-black shadow-lg"
                       :class="[
+                        colorMode,
                         isWide(card) ? '' : 'p-6',
                         isActive(card, axis.name, option) && 'ring-2 ring-accent',
                       ]"
@@ -154,7 +157,7 @@ function onBoardClick() {
                 data-site-scope
                 data-board-card-surface
                 class="bg-white text-black shadow-lg"
-                :class="isWide(card) ? '' : 'p-6'"
+                :class="[colorMode, isWide(card) ? '' : 'p-6']"
                 :style="surfaceStyle(card)"
                 @click.stop="focusedKey = card.key"
               >

@@ -6,10 +6,12 @@ import {
   stripFontFaces,
   fontFormatForUrl,
   tokenError,
+  normalizeRedirectPath,
+  normalizeRedirectTarget,
 } from '@/lib/settings'
 import { setColorTokens } from '@/lib/colors'
 import { setStyleTokens } from '@/lib/styles'
-import type { CustomFont, DesignToken, ProjectSettings } from '@/types/editor'
+import type { CustomFont, DesignToken, ProjectSettings, SiteRedirect } from '@/types/editor'
 import { uid } from '@/lib/shared/ids.js'
 
 let syncStarted = false
@@ -39,6 +41,47 @@ export function useSettings() {
 
   function removeToken(id: string) {
     settings.value.tokens = settings.value.tokens.filter((t) => t.id !== id)
+  }
+
+  /**
+   * The project's 301s. Written through here rather than touched in place
+   * because `settings.redirects` is optional: a project that never had one
+   * carries no key, and the panel must not have to know that.
+   */
+  const redirects = computed<SiteRedirect[]>(() => (settings.value.redirects ??= []))
+
+  function addRedirect(from = '', to = ''): SiteRedirect {
+    const redirect: SiteRedirect = { id: uid(), from, to }
+    redirects.value.push(redirect)
+    return redirect
+  }
+
+  function removeRedirect(id: string) {
+    settings.value.redirects = redirects.value.filter((r) => r.id !== id)
+  }
+
+  /** the rule whose SOURCE is this path, if any — "is this slug already taken by a redirect" */
+  function redirectFrom(path: string): SiteRedirect | undefined {
+    const want = normalizeRedirectPath(path)
+    return want ? redirects.value.find((r) => normalizeRedirectPath(r.from) === want) : undefined
+  }
+
+  /**
+   * Point `from` at `to`, replacing whatever rule already claimed that source.
+   * One source cannot have two rules (redirectError refuses it), so "add a
+   * redirect" and "overwrite the redirect" are the same write.
+   */
+  function setRedirect(from: string, to: string): SiteRedirect | null {
+    const source = normalizeRedirectPath(from)
+    const target = normalizeRedirectTarget(to)
+    if (!source || !target) return null
+    const existing = redirectFrom(source)
+    if (existing) {
+      existing.from = source
+      existing.to = target
+      return existing
+    }
+    return addRedirect(source, target)
   }
 
   function ensureTokens(wanted: DesignToken[]): string[] {
@@ -119,6 +162,11 @@ export function useSettings() {
     addToken,
     removeToken,
     ensureTokens,
+    redirects,
+    addRedirect,
+    removeRedirect,
+    redirectFrom,
+    setRedirect,
     customFonts,
     addFont,
     removeFont,

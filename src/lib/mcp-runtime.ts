@@ -145,6 +145,22 @@ export {
 export { fontError, fontFormatForUrl, FONT_FORMATS } from './shared/fonts.js'
 
 export {
+  redirectError,
+  normalizeRedirectPath,
+  normalizeRedirectTarget,
+  isAbsoluteTarget,
+  resolveRedirects,
+} from './shared/redirects.js'
+
+export {
+  COLOR_MODE_ACTIONS,
+  COLOR_MODE_DEFAULTS,
+  defaultColorMode,
+  isThemeLink,
+  themeLinkAction,
+} from './shared/colorMode.js'
+
+export {
   MOTION_PROPS,
   EASINGS,
   EASING_KEYS,

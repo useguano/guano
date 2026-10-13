@@ -46,12 +46,45 @@ function colorHead(base) {
 
 const VALUE_TAIL = /^(\d+(\.\d+)?|\[.*\]|\d+\/\d+|px|full|none|auto|0|screen|fit|min|max)$/
 
+/**
+ * `[color-scheme:dark]` or `[--bg:#08090b]` — an arbitrary property, whose
+ * conflict group is its PROPERTY NAME. Two of them with the same name replace
+ * each other, which is the rule `styles.ts` (`propKey`) applies when the Style
+ * panel writes a class, and therefore the rule an interaction has to apply
+ * when it evicts a base class.
+ */
+const ARBITRARY_PROPERTY_RE = /^\[(--[a-z0-9-]+|[a-z][a-z-]*):[^{};]+\]$/
+
+/** `scheme-dark`, `scheme-light-dark`, … — all one property */
+const SCHEME_RE = /^scheme-(?:normal|light|dark|light-dark|only-dark|only-light)$/
+
+/**
+ * The variant prefix and the bare utility. The split is on the last colon at
+ * bracket DEPTH 0: `lastIndexOf(':')` split `[color-scheme:light]` into the
+ * variant `[color-scheme:` and the base `light]`, so two arbitrary properties
+ * with the same name compared as different utilities under the same (nonsense)
+ * variant — an interaction toggling `[color-scheme:dark]` left the base
+ * `[color-scheme:light]` in the class list, the stylesheet resolved them by
+ * source order, and the published toggle did nothing while every tool
+ * reported success.
+ */
 function splitVariant(cls) {
-  const i = cls.lastIndexOf(':')
-  return i === -1 ? ['', cls] : [cls.slice(0, i + 1), cls.slice(i + 1)]
+  let depth = 0
+  let at = -1
+  for (let i = 0; i < cls.length; i++) {
+    const ch = cls[i]
+    if (ch === '[' || ch === '(') depth++
+    else if (ch === ']' || ch === ')') depth--
+    else if (ch === ':' && depth === 0) at = i
+  }
+  return at === -1 ? ['', cls] : [cls.slice(0, at + 1), cls.slice(at + 1)]
 }
 
 function headOf(base) {
+  const arbitrary = ARBITRARY_PROPERTY_RE.exec(base)
+  if (arbitrary) return `arbitrary:${arbitrary[1]}`
+  if (SCHEME_RE.test(base)) return 'color-scheme'
+  if (base === 'dark' || base === 'light') return 'color-mode'
   const color = colorHead(base)
   if (color) return color
   const keyword = KEYWORD_PROPERTY.get(base)

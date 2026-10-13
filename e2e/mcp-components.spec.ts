@@ -253,6 +253,46 @@ test("an instance wears the default even when its host picked otherwise", async 
   expect(looks).toEqual(['outline', 'default'])
 })
 
+test("a nested instance's variant pick is writable in page markup, not just by id", async () => {
+  // Template-01, DX: the serializer prints `data-variant-*` on a nested
+  // instance (it is the node's own value) and the writer refused it, pointing
+  // at update_component — which would have restyled every <Card> on the site.
+  // `edit_elements {id, variants}` wrote the same thing correctly, so the
+  // format was readable, unwritable, and misleading about the way out.
+  const { call, home, html, seed } = await mcpSession()
+  await seed(['button'])
+  const card = await call('create_component', { name: 'Card', html: '<div>\n  <Button />\n</div>' })
+  const h = await home()
+  const w = await call('set_page_html', {
+    pageId: h.id,
+    version: h.version,
+    html: page(
+      '<Card data-ref="c1">\n  <div>\n    <Button data-variant-variant="outline" />\n  </div>\n</Card>\n' +
+        '<Card data-ref="c2" />',
+    ),
+  })
+  expect(w.saved).toBe(true)
+  expect(JSON.stringify(w.refused ?? [])).not.toContain('update_component')
+  const looks = [...(await html()).matchAll(/<button class="([^"]*)"/g)].map((m) =>
+    m[1].includes('border-input') ? 'outline' : 'default',
+  )
+  expect(looks).toEqual(['outline', 'default'])
+
+  // and it reads back where it was written, so the next write is a no-op
+  const read = await call('get_page', { pageId: h.id })
+  expect(read.html).toContain('data-variant-variant="outline"')
+  const again = await call('set_page_html', {
+    pageId: h.id,
+    version: read.version,
+    html: read.html,
+  })
+  expect(again.saved).toBe(true)
+  const after = [...(await html()).matchAll(/<button class="([^"]*)"/g)].map((m) =>
+    m[1].includes('border-input') ? 'outline' : 'default',
+  )
+  expect(after).toEqual(['outline', 'default'])
+})
+
 test("a host's say about the instance it holds reaches the page", async () => {
   const { call, home, html, seed } = await mcpSession()
   await seed(['input'])

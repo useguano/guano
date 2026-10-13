@@ -57,7 +57,7 @@ async function readCapped(req) {
 /** cached manifest, re-read when the file's content changes */
 export function manifestReader(file) {
   let cached = { at: 0, data: null }
-  return async () => {
+  const read = async () => {
     if (Date.now() - cached.at < 5_000) return cached.data
     let data = null
     try {
@@ -68,6 +68,14 @@ export function manifestReader(file) {
     cached = { at: Date.now(), data }
     return data
   }
+  // The 5s window is fine for a read nobody is waiting on, but a PUBLISH is
+  // exactly the moment the file changed and the moment someone is watching:
+  // without this, the site kept answering the redirects (and validating forms
+  // against the fields) of the previous publish for up to five seconds.
+  read.invalidate = () => {
+    cached = { at: 0, data: null }
+  }
+  return read
 }
 
 /**

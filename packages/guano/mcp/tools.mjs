@@ -226,6 +226,15 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     isReservedToken,
     tokenError,
     isThemeValue,
+    redirectError,
+    resolveRedirects,
+    normalizeRedirectPath,
+    normalizeRedirectTarget,
+    defaultColorMode,
+    COLOR_MODE_ACTIONS,
+    COLOR_MODE_DEFAULTS,
+    themeLinkAction,
+    isThemeLink,
     RESERVED_TOKEN_NAMES,
     createPage,
     defaultSettings,
@@ -2794,11 +2803,25 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
       const value = String(edit.link ?? '')
       if (localized) {
         errors.push('link is not localizable — an @locale: switcher link is the same on every route')
-      } else if (value && value !== '@item' && !value.startsWith('@locale:') && !SAFE_HREF.test(value)) {
+      } else if (isThemeLink(value) && !themeLinkAction(value)) {
+        // a theme switcher with a misspelled action: name the four, rather
+        // than call it an unusable destination (it is not a destination)
+        errors.push(
+          `link refused: "${value}" is not a theme switcher — "@theme" flips the mode, or ` +
+            `"@theme:<mode>" with one of ${COLOR_MODE_ACTIONS.join(', ')}`,
+        )
+      } else if (
+        value &&
+        value !== '@item' &&
+        !value.startsWith('@locale:') &&
+        !themeLinkAction(value) &&
+        !SAFE_HREF.test(value)
+      ) {
         errors.push(
           `link refused: "${value}" is not a usable destination — a path ("/about"), an anchor ` +
-            '("#faq"), an absolute http(s)/mailto/tel URL, "@item" (the entry\'s own page) or ' +
-            '"@locale:<code>" (this route in another locale)',
+            '("#faq"), an absolute http(s)/mailto/tel URL, "@item" (the entry\'s own page), ' +
+            '"@locale:<code>" (this route in another locale) or "@theme" / "@theme:<mode>" ' +
+            '(a light/dark switcher)',
         )
       } else {
         if (!value) delete node.link
@@ -4246,6 +4269,38 @@ function designWarnings(project) {
     })
   }
 
+  // 1b. a colour-mode switcher with nothing to switch, and a dark palette no
+  // visitor can reach. Both are "it works, and it does nothing", which is the
+  // one thing a publish cannot tell you by succeeding.
+  const switchers = []
+  let darkStyling = false
+  eachRendered((n, where) => {
+    if (themeLinkAction(n.link)) switchers.push(where)
+    if (/(^|\s)dark:/.test(classesOf(n))) darkStyling = true
+  })
+  const darkTokens = (project.settings?.tokens ?? []).filter((t) => t.dark).length
+  if (switchers.length && !darkTokens && !darkStyling) {
+    warnings.push({
+      kind: 'theme-switch-no-dark',
+      where: [...new Set(switchers)].slice(0, 6),
+      message:
+        'a theme switcher is published but nothing on the site changes with the mode — no token ' +
+        'carries a `dark` value and no class uses the `dark:` variant, so the button toggles a ' +
+        'class and the page looks identical. Give the palette tokens a dark value ' +
+        '(update_settings {addTokens: [{name, value, dark}]}).',
+    })
+  }
+  if (!switchers.length && darkTokens && defaultColorMode(project.settings ?? {}) === 'light') {
+    warnings.push({
+      kind: 'dark-palette-unreachable',
+      message:
+        `${darkTokens} token(s) carry a dark value, but the site opens light and no element is a ` +
+        'theme switcher, so no visitor can ever see the dark palette. Add a switcher (an element ' +
+        'with link "@theme") or open in dark / the visitor\'s system ' +
+        '(update_settings {theme: {colorMode}}). See get_guide {section: "styling"}.',
+    })
+  }
+
   // 2. a body transition under an APP SHELL: fades the whole app every screen
   //
   // The subject is a shell the content sits inside — a sidebar or a bottom nav
@@ -4911,6 +4966,46 @@ function designWarnings(project) {
         (deadLinks.length > 3 ? ` (+${deadLinks.length - 3} more)` : '') +
         '. The usual causes are a slug that changed (update_page {rewriteLinks: true} moves ' +
         'them) and a page still in draft.',
+    })
+  }
+
+  // 7b. 301s, against that same route table.
+  //
+  // Every one of these is "it published and it does nothing", which a
+  // successful publish cannot tell you on its own. Resolved with no locale
+  // expansion: what the author wrote is what is worth reporting, and the
+  // route table above is unprefixed.
+  const rd = resolveRedirects(project.settings?.redirects, { routes })
+  if (rd.shadowed.length) {
+    warnings.push({
+      kind: 'redirect-shadowed',
+      where: rd.shadowed.slice(0, 6),
+      message:
+        `${rd.shadowed.length} redirect source(s) are published routes, so the page wins and the ` +
+        'rule never runs: ' +
+        rd.shadowed.slice(0, 3).join(', ') +
+        '. Remove them (update_settings {removeRedirects}) — the export drops them anyway.',
+    })
+  }
+  if (rd.dangling.length) {
+    warnings.push({
+      kind: 'redirect-dangling',
+      where: rd.dangling.slice(0, 6),
+      message:
+        `${rd.dangling.length} redirect(s) point at a path this publish does not export, so ` +
+        'following an old link lands on the 404 page: ' +
+        rd.dangling.slice(0, 3).join(', ') +
+        '. Point them at a route that exists.',
+    })
+  }
+  if (rd.chained.length) {
+    warnings.push({
+      kind: 'redirect-chained',
+      where: rd.chained.slice(0, 6),
+      message:
+        `${rd.chained.length} redirect(s) point at another redirect. The export collapses the ` +
+        'chain so a visitor pays one hop, but the stored rules are a chain nobody can read — ' +
+        're-point them at the final path.',
     })
   }
 
@@ -6184,6 +6279,12 @@ const tools = [
             'with `slug`: move every link that pointed at the old path (locale spellings too) ' +
             'onto the new one. Without it they are returned as `linksToOldSlug`',
         },
+        redirect: {
+          type: 'boolean',
+          description:
+            'with `slug`: add a 301 from the old path to the new one, so links other people ' +
+            'made keep working. Without it the move is reported as `redirectSuggestion`',
+        },
       },
       required: ['pageId', 'version'],
       additionalProperties: false,
@@ -6260,6 +6361,20 @@ const tools = [
         for (const p of project.pages ?? []) touch(p.elements ?? [])
         for (const def of project.components ?? []) touch([def.root])
       }
+      // the links OUTSIDE this site are the ones nobody can rewrite, which is
+      // what the 301 is for. Offered rather than assumed: a path that was
+      // never published has nothing pointing at it.
+      let redirected = null
+      if (movedFrom && movedFrom !== '/' && args.redirect) {
+        const settings = (project.settings ??= defaultSettings())
+        const from = normalizeRedirectPath(movedFrom)
+        const to = normalizeRedirectPath(page.path)
+        const list = (settings.redirects ??= [])
+        const have = list.find((r) => normalizeRedirectPath(r.from) === from)
+        if (have) have.to = to
+        else list.push({ id: randomUUID(), from, to })
+        redirected = { from, to }
+      }
       const touchedBefore = pageVersions(project)
       await saveTargetProject(project)
       return {
@@ -6269,6 +6384,19 @@ const tools = [
         slug: page.path,
         status: page.status,
         changed,
+        ...(redirected ? { redirect: redirected } : {}),
+        ...(movedFrom && movedFrom !== '/' && !redirected
+          ? {
+              redirectSuggestion: {
+                from: normalizeRedirectPath(movedFrom),
+                to: normalizeRedirectPath(page.path),
+                note:
+                  `"${movedFrom}" is no longer a route. Links other people made still point at ` +
+                  'it — pass redirect: true to add a 301, or leave it if the old path was never ' +
+                  'published.',
+              },
+            }
+          : {}),
         version: pageVersion(project, page),
         ...(stale.length
           ? rewritten
@@ -7073,8 +7201,15 @@ const tools = [
       return {
         seo: s.seo ?? {},
         domain: s.domain ?? '',
-        tokens: (s.tokens ?? []).map((t) => ({ name: t.name, value: t.value })),
+        tokens: (s.tokens ?? []).map((t) => ({
+          name: t.name,
+          value: t.value,
+          ...(t.dark ? { dark: t.dark } : {}),
+        })),
         ...(s.theme ? { theme: s.theme } : {}),
+        // the 301s, as stored — always present (an empty list is the answer to
+        // "are there any", which `undefined` is not)
+        redirects: (s.redirects ?? []).map((r) => ({ from: r.from, to: r.to })),
         fonts: s.fonts ?? { family: '' },
         favicon: s.favicon ?? '',
         faviconDark: s.faviconDark ?? '',
@@ -7115,7 +7250,11 @@ const tools = [
           description: 'REPLACES the whole token list — prefer addTokens / removeTokens',
           items: {
             type: 'object',
-            properties: { name: { type: 'string' }, value: { type: 'string' } },
+            properties: {
+              name: { type: 'string' },
+              value: { type: 'string' },
+              dark: { type: 'string', description: 'optional #hex worn under a `dark` class' },
+            },
             required: ['name', 'value'],
             additionalProperties: false,
           },
@@ -7144,10 +7283,49 @@ const tools = [
           description: 'add or re-value tokens by name, leaving the rest alone — the form for "one more colour"',
           items: {
             type: 'object',
-            properties: { name: { type: 'string' }, value: { type: 'string' } },
+            properties: {
+              name: { type: 'string' },
+              value: { type: 'string' },
+              dark: {
+                type: 'string',
+                description:
+                  'optional #hex for dark mode; omit for a colour that is the same in both. ' +
+                  'See get_guide {section: "styling"}.',
+              },
+            },
             required: ['name', 'value'],
             additionalProperties: false,
           },
+        },
+        redirects: {
+          type: 'array',
+          description:
+            'REPLACES the whole 301 list — prefer addRedirects / removeRedirects. A source a ' +
+            'published page answers on is ignored at publish (the page wins).',
+          items: {
+            type: 'object',
+            properties: {
+              from: { type: 'string', description: 'the old path, e.g. /old-pricing' },
+              to: { type: 'string', description: 'a path, or an https:// URL' },
+            },
+            required: ['from', 'to'],
+            additionalProperties: false,
+          },
+        },
+        addRedirects: {
+          type: 'array',
+          description: 'add or re-point 301s by source path, leaving the rest alone',
+          items: {
+            type: 'object',
+            properties: { from: { type: 'string' }, to: { type: 'string' } },
+            required: ['from', 'to'],
+            additionalProperties: false,
+          },
+        },
+        removeRedirects: {
+          type: 'array',
+          description: 'remove 301s by their source path',
+          items: { type: 'string' },
         },
         removeTokens: {
           type: 'array',
@@ -7167,6 +7345,11 @@ const tools = [
             leading: { type: 'object', description: "line-height steps: {tighter: '1.1'}", additionalProperties: { type: 'string' } },
             tracking: { type: 'object', additionalProperties: { type: 'string' } },
             radius: { type: 'object', additionalProperties: { type: 'string' } },
+            colorMode: {
+              type: 'string',
+              enum: ['light', 'dark', 'system'],
+              description: 'what a first-time visitor gets (default light)',
+            },
           },
           additionalProperties: false,
         },
@@ -7367,6 +7550,8 @@ const tools = [
       /** set by addTokens/removeTokens, so the response can say what changed
        * instead of echoing the whole token list back */
       let tokensChanged
+      /** set by any redirect write, same reason as tokensChanged */
+      let redirectsChanged
       const themeWarnings = []
       // extra fields for the response when a locale removal ran (purge counts,
       // dead @locale: switcher links)
@@ -7514,14 +7699,16 @@ const tools = [
         const kept = (s.tokens ?? []).filter((t) => !removing.has(t.name))
         const byName = new Map(kept.map((t) => [t.name, t]))
         const malformed = (args.addTokens ?? [])
-          .map((t) => ({ name: t.name, error: tokenError({ name: t.name, value: t.value }) }))
+          .map((t) => ({ name: t.name, error: tokenError(t) }))
           .filter((t) => t.error)
         if (malformed.length) {
           return {
             saved: false,
             reason: 'invalid-tokens',
             invalid: malformed.map((t) => t.name),
-            message: `token names are kebab-case ([a-z][a-z0-9-]*), values are #hex colours`,
+            message:
+              'token names are kebab-case ([a-z][a-z0-9-]*), values are #hex colours, and an ' +
+              'optional `dark` is a #hex colour too',
           }
         }
         const shadowing = (args.addTokens ?? [])
@@ -7542,10 +7729,16 @@ const tools = [
         if (shadowing.length) tokenWarnings.push(...shadowing)
         // upsert by NAME, keeping the id so unrelated diffs stay quiet
         for (const t of args.addTokens ?? []) {
+          const dark = typeof t.dark === 'string' && t.dark ? { dark: t.dark } : {}
           const have = byName.get(t.name)
-          if (have) have.value = t.value
-          else {
-            const made = { id: randomUUID(), name: t.name, value: t.value }
+          if (have) {
+            have.value = t.value
+            // an omitted `dark` on a re-value CLEARS it: the token's shape is
+            // what the caller sent, as it is for the replacing form
+            if (dark.dark) have.dark = dark.dark
+            else delete have.dark
+          } else {
+            const made = { id: randomUUID(), name: t.name, value: t.value, ...dark }
             byName.set(t.name, made)
             kept.push(made)
           }
@@ -7563,14 +7756,16 @@ const tools = [
         // the caller has not opted in (it is a legibility hazard, not a break —
         // a token defines `bg-blue`, never `bg-blue-500`)
         const malformed = args.tokens
-          .map((t) => ({ name: t.name, error: tokenError({ name: t.name, value: t.value }) }))
+          .map((t) => ({ name: t.name, error: tokenError(t) }))
           .filter((t) => t.error)
         if (malformed.length) {
           return {
             saved: false,
             reason: 'invalid-tokens',
             invalid: malformed.map((t) => t.name),
-            message: `token names are kebab-case ([a-z][a-z0-9-]*), values are #hex colours`,
+            message:
+              'token names are kebab-case ([a-z][a-z0-9-]*), values are #hex colours, and an ' +
+              'optional `dark` is a #hex colour too',
           }
         }
         const shadowing = args.tokens.filter((t) => isReservedToken(t.name)).map((t) => t.name)
@@ -7615,9 +7810,66 @@ const tools = [
           id: byName.get(t.name) ?? randomUUID(),
           name: t.name,
           value: t.value,
+          ...(typeof t.dark === 'string' && t.dark ? { dark: t.dark } : {}),
         }))
         setStyleTokens(s.tokens.map((t) => t.name))
       }
+      // 301s. One source cannot carry two rules, so an add with a source that
+      // already has one RE-POINTS it rather than making a second — which is
+      // the same write the editor makes when it offers to overwrite.
+      if (
+        args.redirects !== undefined ||
+        args.addRedirects !== undefined ||
+        args.removeRedirects !== undefined
+      ) {
+        const incoming = args.redirects ?? args.addRedirects ?? []
+        const malformed = []
+        const seen = []
+        for (const r of incoming) {
+          const error = redirectError(r, seen)
+          if (error) malformed.push({ from: r?.from, error })
+          else seen.push(r)
+        }
+        if (malformed.length) {
+          return {
+            saved: false,
+            reason: 'invalid-redirects',
+            invalid: malformed,
+            message:
+              'a redirect is {from, to}: `from` is a root-relative path that is not "/", `to` is ' +
+              'a path or an https:// URL, and one source carries one rule.',
+          }
+        }
+        const kept =
+          args.redirects !== undefined
+            ? []
+            : (s.redirects ?? []).filter(
+                (r) =>
+                  !(args.removeRedirects ?? []).some(
+                    (from) => normalizeRedirectPath(from) === normalizeRedirectPath(r.from),
+                  ),
+              )
+        const byFrom = new Map(kept.map((r) => [normalizeRedirectPath(r.from), r]))
+        for (const r of seen) {
+          const from = normalizeRedirectPath(r.from)
+          const to = normalizeRedirectTarget(r.to)
+          const have = byFrom.get(from)
+          if (have) {
+            have.from = from
+            have.to = to
+          } else {
+            const made = { id: randomUUID(), from, to }
+            byFrom.set(from, made)
+            kept.push(made)
+          }
+        }
+        s.redirects = kept
+        redirectsChanged = {
+          count: kept.length,
+          ...(args.removeRedirects?.length ? { removed: args.removeRedirects } : {}),
+        }
+      }
+
       if (args.theme !== undefined) {
         if (args.theme === null) delete s.theme
         else {
@@ -7627,6 +7879,16 @@ const tools = [
           const next = { ...(s.theme ?? {}) }
           const ignored = []
           for (const [key, value] of Object.entries(args.theme)) {
+            if (key === 'colorMode') {
+              // an enum, not a CSS length — isThemeValue would drop every
+              // valid answer, and `light` is the default so it is stored as
+              // the absence of a key
+              if (COLOR_MODE_DEFAULTS.includes(value)) {
+                if (value === 'light') delete next.colorMode
+                else next.colorMode = value
+              } else ignored.push(key)
+              continue
+            }
             if (key === 'rootFontSize' || key === 'spacing') {
               if (isThemeValue(value)) next[key] = String(value).trim()
               else ignored.push(key)
@@ -7808,13 +8070,28 @@ const tools = [
             }
           : {}),
         ...(tokensChanged ? { tokensChanged } : {}),
+        ...(redirectsChanged
+          ? {
+              redirectsChanged,
+              redirects: (s.redirects ?? []).map((r) => ({ from: r.from, to: r.to })),
+              note:
+                'a redirect takes effect on the next publish, and a published page always wins ' +
+                'over a rule claiming its path.',
+            }
+          : {}),
         // tokens are echoed whenever any token key was written: the names are
         // what a class has to spell, and a token write is the one place an
         // agent needs the resulting SET rather than its own input back
         ...(args.tokens !== undefined ||
         args.addTokens !== undefined ||
         args.removeTokens !== undefined
-          ? { tokens: (s.tokens ?? []).map((t) => ({ name: t.name, value: t.value })) }
+          ? {
+              tokens: (s.tokens ?? []).map((t) => ({
+                name: t.name,
+                value: t.value,
+                ...(t.dark ? { dark: t.dark } : {}),
+              })),
+            }
           : {}),
         ...touched('seo', s.seo),
         ...touched('fonts', s.fonts),
@@ -7938,8 +8215,9 @@ const tools = [
                 type: 'string',
                 description:
                   'where it goes: "/about", "#faq", an http(s)/mailto/tel URL, "@item" (the ' +
-                  'entry\'s own page) or "@locale:fr" (this route in another locale). ' +
-                  'Per-instance inside a component; "" falls back to the master\'s.',
+                  'entry\'s own page), "@locale:fr" (this route in another locale) or "@theme" ' +
+                  '(a light/dark switcher). Per-instance inside a component; "" falls back to ' +
+                  'the master\'s.',
               },
               attributes: {
                 type: ['object', 'null'],
@@ -10615,6 +10893,10 @@ const tools = [
             'overlays out of list templates and keep long option lists to one copy.',
         })
       }
+      // the export resolved these against what actually shipped; the lists
+      // themselves are already reported by collectPublishWarnings, so only the
+      // count is worth the response's bytes
+      if (stats?.redirects) stats.redirects = { count: stats.redirects.live?.length ?? 0 }
       // the export is served at the origin root; non-default locales at /<code>/
       const origin = (api.base ?? '').replace(/\/+$/, '')
       const defaultLocale = project.defaultLocale || 'en'

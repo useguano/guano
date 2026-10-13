@@ -390,11 +390,16 @@ function splitVariant(cls: string): { variant: string; base: string } {
   return { variant: variants.length ? `${variants.join(':')}:` : '', base }
 }
 
-const ARBITRARY_VARIANT_RE = /^\[&[^{};]{0,80}\]$/
+// `[&>li]`, and also `[.dark_&]` — a selector that puts the ampersand anywhere.
+// Tailwind compiles either; refusing the second shape meant an interaction
+// could only ever restyle its own target, so no toggle could restyle a subtree
+// (a theme switch, a billing switch, an "expanded" state).
+const ARBITRARY_VARIANT_RE = /^\[[^{};]{0,80}&[^{};]{0,80}\]$/
 
-const PARAM_VARIANT_RE = /^(?:data|aria|has|not|group-has|peer-has|supports|nth|nth-last)-\[[^{};]{1,80}\]$/
+const PARAM_VARIANT_RE =
+  /^(?:data|aria|has|not|in|group|peer|group-has|peer-has|group-not|peer-not|group-aria|peer-aria|group-data|peer-data|supports|nth|nth-last)-\[[^{};]{1,80}\]$/
 
-const GROUP_PEER_RE = /^(?:group|peer)-[a-z][a-z-]*$/
+const GROUP_PEER_RE = /^(?:group|peer|in)-[a-z][a-z-]*$/
 
 const NAMED_SCREEN_VARIANT_RE = /^(?:min|max)-(?:sm|md|lg|xl|2xl)$/
 
@@ -523,7 +528,30 @@ const PANEL_LESS_GROUPS: [RegExp, string][] = [
   [/^hyphens-/, 'hyphens'],
 ]
 
-const ARBITRARY_PROPERTY_RE = /^\[([a-z][a-z-]*):[^{};]+\]$/
+// `[color-scheme:dark]`, and `[--bg:#08090b]` — a custom property is an
+// arbitrary property like any other, and setting variables on an ancestor to
+// read them with `bg-(--bg)` is the standard CSS theming pattern. The shared
+// copy of this rule (shared/interactionClasses.js) keys the conflict group off
+// the same capture, so two of them with one name replace each other.
+const ARBITRARY_PROPERTY_RE = /^\[(--[a-z0-9-]+|[a-z][a-z-]*):[^{};]+\]$/
+
+// the v4 shorthand for a custom-property value: `bg-(--brand)`,
+// `text-(color:--fg)`, `w-(--size)`. Expanded before the conflict group is
+// decided, so it groups with the `-[…]` form it is sugar for.
+const CSS_VAR_SHORTHAND_RE = /^(.+)-\((?:[a-z-]+:)?(--[a-z0-9-]+)\)$/
+
+function expandVarShorthand(base: string): string {
+  const m = CSS_VAR_SHORTHAND_RE.exec(base)
+  return m ? `${m[1]}-[var(${m[2]})]` : base
+}
+
+// `dark` and `light` are not utilities — they are the markers the `dark:`
+// variant matches (see DARK_VARIANT in shared/prose.js), and the one thing an
+// interaction can toggle to switch a whole subtree's palette. They share one
+// conflict group, so an interaction adding `light` evicts a base `dark`.
+const MODE_CLASSES = new Set(['dark', 'light'])
+
+const SCHEME_RE = /^scheme-(?:normal|light|dark|light-dark|only-dark|only-light)$/
 
 const OPACITY_MODIFIER_RE =
   /^((?:bg|text|border|ring|outline|divide|shadow|from|via|to|decoration|caret|accent|placeholder|fill|stroke)-.+)\/(?:\d{1,3}|\[[^\]]+\])$/
@@ -534,6 +562,9 @@ export function isValidClass(cls: string): boolean {
   if (segments.some((v) => !isKnownVariant(v))) return false
   if (/-\[.+\]$/.test(base)) return true
   if (ARBITRARY_PROPERTY_RE.test(base)) return true
+  if (CSS_VAR_SHORTHAND_RE.test(base)) return true
+  if (MODE_CLASSES.has(base)) return true
+  if (SCHEME_RE.test(base)) return true
   const opacity = OPACITY_MODIFIER_RE.exec(base)
   if (opacity) return isValidClass(opacity[1]!)
   if (FLEX_NUMERIC_RE.test(base)) return true
@@ -585,7 +616,10 @@ function propForBase(base: string): StyleProperty | undefined {
   return found
 }
 
-function propKey(base: string): StyleProperty | string | undefined {
+function propKey(rawBase: string): StyleProperty | string | undefined {
+  const base = expandVarShorthand(rawBase)
+  if (MODE_CLASSES.has(base)) return 'color-mode'
+  if (SCHEME_RE.test(base)) return 'color-scheme'
   if (FLEX_NUMERIC_RE.test(base) || ['flex-auto', 'flex-initial', 'flex-none', 'flex-1'].includes(base))
     return 'flex-grow-shorthand'
   if (DISPLAY_CLASSES.has(base)) return 'display'
@@ -710,6 +744,26 @@ function unknownClassHint(value: string): string {
       `${badVariants.length === 1 ? '' : 's'}. Responsive: a named screen ` +
       '("md:", "max-md:") or an arbitrary width ("max-[767px]:"). State: "hover:", ' +
       '"focus-visible:", "group-hover:", "data-[open]:". Descendants: "[&>li]:".'
+    )
+  }
+
+  // a bracketed base that got here is an arbitrary property the shape check
+  // refused, and the agent's next move depends on knowing WHICH half is wrong —
+  // probing the validator by creating throwaway interactions is what it did
+  // instead
+  if (base.startsWith('[') && base.endsWith(']')) {
+    return (
+      ' — an arbitrary property is "[property:value]", where the property is a CSS ' +
+      'property name or a custom property ("[color-scheme:dark]", "[--bg:#08090b]"), ' +
+      'and the value carries no ";", "{" or "}". For a utility with an off-scale value ' +
+      'the form is "name-[value]" ("h-[72svh]", "bg-[#0d0d0cbb]").'
+    )
+  }
+  if (base.includes('(')) {
+    return (
+      ' — the custom-property shorthand is "name-(--var)" or "name-(type:--var)" ' +
+      '("bg-(--bg)", "text-(color:--fg)"); any other value goes in brackets, ' +
+      '"name-[value]".'
     )
   }
 

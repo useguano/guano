@@ -1445,3 +1445,152 @@ test.describe('preview', () => {
     expect(res.previewed).toBe(true)
   })
 })
+
+test.describe('a theme switcher link', () => {
+  // Template-01, BUG: `edit_elements {link: "@theme"}` was refused as "not a
+  // usable destination" while `href="@theme"` in markup was accepted, because
+  // the link validator's allowlist predated the switcher. Two writers, one
+  // field, two answers — and the refusal named every form EXCEPT the one asked
+  // for, which reads as "this feature does not exist".
+  const forms = ['@theme', '@theme:light', '@theme:dark', '@theme:system']
+
+  test('every switcher form is accepted, and reads back', async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('set_page_html', {
+      pageId: home.id,
+      version: home.version,
+      html: pageHtml('<button data-ref="t"><span>Theme</span></button>'),
+    })
+    for (const link of forms) {
+      const page = await s.home()
+      const out = await s.call('edit_elements', {
+        pageId: page.id,
+        version: page.version,
+        edits: [{ ref: 't', link }],
+      })
+      expect(out.failed, `${link} was refused: ${JSON.stringify(out.failures ?? [])}`).toBe(0)
+      expect((await s.call('get_page', { pageId: page.id })).html).toContain(`href="${link}"`)
+    }
+  })
+
+  test('a misspelled mode is refused by name, not as a bad destination', async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('set_page_html', {
+      pageId: home.id,
+      version: home.version,
+      html: pageHtml('<button data-ref="t"><span>Theme</span></button>'),
+    })
+    const page = await s.home()
+    const out = await s.call('edit_elements', {
+      pageId: page.id,
+      version: page.version,
+      edits: [{ ref: 't', link: '@theme:nope' }],
+    })
+    expect(out.failed).toBe(1)
+    const why = JSON.stringify(out.failures)
+    expect(why).toContain('not a theme switcher')
+    expect(why).toContain('system')
+    expect(why).not.toContain('usable destination')
+  })
+})
+
+test.describe('301 redirects', () => {
+  // The links other people made are the ones nobody can rewrite, so a slug
+  // change offers a redirect rather than assuming one — and a published page
+  // always wins over a rule claiming its path, which is what keeps a stale
+  // redirect from ever hiding a page.
+  test('a slug change reports the move, and writes the 301 when asked', async () => {
+    const s = await mcpSession()
+    const made = await s.call('create_page', { name: 'Pricing', slug: '/pricing' })
+    const moved = await s.call('update_page', {
+      pageId: made.pageId,
+      version: made.version,
+      slug: '/plans',
+    })
+    expect(moved.saved).toBe(true)
+    expect(moved.redirectSuggestion).toMatchObject({ from: '/pricing', to: '/plans' })
+    // nothing was written without being asked
+    expect((await s.call('get_settings', {})).redirects ?? []).toEqual([])
+
+    const again = await s.call('update_page', {
+      pageId: made.pageId,
+      version: moved.version,
+      slug: '/our-plans',
+      redirect: true,
+    })
+    expect(again.redirect).toMatchObject({ from: '/plans', to: '/our-plans' })
+    expect((await s.call('get_settings', {})).redirects).toEqual([
+      { from: '/plans', to: '/our-plans' },
+    ])
+  })
+
+  test('a redirect list is written, re-pointed and removed by source', async () => {
+    const s = await mcpSession()
+    const added = await s.call('update_settings', {
+      addRedirects: [
+        { from: '/old-pricing', to: '/pricing' },
+        { from: 'legacy/', to: '/pricing' },
+      ],
+    })
+    expect(added.saved).toBe(true)
+    // normalized on the way in, so a typed value and a page path compare equal
+    expect(added.redirects).toEqual([
+      { from: '/old-pricing', to: '/pricing' },
+      { from: '/legacy', to: '/pricing' },
+    ])
+
+    // one source carries ONE rule: adding the same source re-points it
+    const again = await s.call('update_settings', {
+      addRedirects: [{ from: '/old-pricing', to: '/plans' }],
+    })
+    expect(again.redirects).toEqual([
+      { from: '/old-pricing', to: '/plans' },
+      { from: '/legacy', to: '/pricing' },
+    ])
+
+    const gone = await s.call('update_settings', { removeRedirects: ['/legacy'] })
+    expect(gone.redirects).toEqual([{ from: '/old-pricing', to: '/plans' }])
+  })
+
+  test('what cannot be a redirect is refused by name', async () => {
+    const s = await mcpSession()
+    for (const [redirect, why] of [
+      [{ from: '/', to: '/home' }, /home page cannot redirect/],
+      [{ from: '/a', to: '/a' }, /itself/],
+      [{ from: '/a', to: 'javascript:alert(1)' }, /root-relative path/],
+      [{ from: '/a/../b', to: '/x' }, /root-relative path/],
+    ] as [Record<string, string>, RegExp][]) {
+      const out = await s.call('update_settings', { addRedirects: [redirect] })
+      expect(out.saved).toBe(false)
+      expect(out.reason).toBe('invalid-redirects')
+      expect(JSON.stringify(out.invalid)).toMatch(why)
+    }
+    // and two rules for one source never both land
+    const dup = await s.call('update_settings', {
+      addRedirects: [
+        { from: '/a', to: '/x' },
+        { from: '/a', to: '/y' },
+      ],
+    })
+    expect(dup.saved).toBe(false)
+    expect(JSON.stringify(dup.invalid)).toMatch(/already redirects/)
+  })
+
+  test('publish warns about a rule a page shadows, and one that leads nowhere', async () => {
+    const s = await mcpSession()
+    const home = await s.home()
+    await s.call('update_settings', {
+      addRedirects: [
+        { from: home.path === '/' ? '/nowhere-near' : '/x', to: '/also-nothing' },
+      ],
+    })
+    expect(await s.kinds()).toContain('redirect-dangling')
+
+    const made = await s.call('create_page', { name: 'Pricing', slug: '/pricing' })
+    expect(made.pageId).toBeTruthy()
+    await s.call('update_settings', { addRedirects: [{ from: '/pricing', to: '/' }] })
+    expect(await s.kinds()).toContain('redirect-shadowed')
+  })
+})

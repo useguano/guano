@@ -35,6 +35,12 @@
 
   var fired = new Set()
   var noanim = /[?&]noanim\b/.test(location.search)
+  // `?resetstate` forgets every remembered `once` state, for the author rather
+  // than the visitor: a persisted toggle is restored on load, so the first
+  // click of the next session turns it OFF and reads as a broken toggle. The
+  // keys are route-local ordinals (see `remember`), so there is no key worth
+  // documenting to clear by hand.
+  var resetState = /[?&]resetstate\b/.test(location.search)
 
   // breakpoint-scoped interactions: width→breakpoint map + per-state scope.
   // Absent when nothing is scoped, so gating is a no-op then.
@@ -179,6 +185,25 @@
       return null // private mode / blocked storage — degrade to not remembering
     }
   }
+  var forgetAll = function () {
+    var stores = [storageFor('local'), storageFor('session')]
+    for (var s = 0; s < stores.length; s++) {
+      var store = stores[s]
+      if (!store) continue
+      try {
+        var doomed = []
+        for (var i = 0; i < store.length; i++) {
+          var k = store.key(i)
+          if (k && k.indexOf('guano-int:') === 0) doomed.push(k)
+        }
+        for (var d = 0; d < doomed.length; d++) store.removeItem(doomed[d])
+      } catch (e) {
+        /* blocked storage — nothing remembered to forget */
+      }
+    }
+  }
+  if (resetState) forgetAll()
+
   var remember = function (where, key, on) {
     var store = storageFor(where)
     if (store) {

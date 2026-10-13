@@ -19,6 +19,7 @@ import { useInteraction } from '@/composables/useInteraction'
 import { useSettings } from '@/composables/useSettings'
 import { useThemeTokens } from '@/composables/useThemeTokens'
 import type { Breakpoint } from '@/types/editor'
+import { useColorMode } from '@/composables/useColorMode'
 
 void import('@tailwindcss/browser')
 
@@ -35,6 +36,7 @@ useThemeTokens()
 const vp = ref<InstanceType<typeof CanvasViewport>>()
 const viewport = computed(() => vp.value?.viewportEl ?? null)
 const { commentMode } = useCommentMode()
+const { mode: colorMode } = useColorMode()
 
 const pageComments = computed(() => visibleComments(activePage.value.id))
 
@@ -131,6 +133,7 @@ watch(focusTick, async () => {
               data-site-scope
               :data-breakpoint-id="bp.id"
               class="flex flex-col overflow-hidden bg-white text-black shadow-lg"
+              :class="colorMode"
               :style="{
                 width: `${bp.width}px`,
                 minHeight: `${bp.height}px`,

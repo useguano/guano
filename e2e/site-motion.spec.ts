@@ -723,3 +723,154 @@ test.describe('several entrances on one element, and a delayed binding', () => {
     await expect.poll(() => both.evaluate((el) => (el as HTMLElement).style.opacity), { timeout: 5000 }).toBe('0')
   })
 })
+
+// A STAGGERED step moves the target's CHILDREN, so its `from` never lands on
+// the target — and until the exporter baked it onto them, a staggered entrance
+// shipped every child at its FINAL value: the page painted the end state, the
+// deferred runtime booted, wrote the `from` on its first frame and played
+// forward. Which reads, on every load, as the finished section flashing before
+// the animation starts.
+const STAGGER = 'a-stag'
+const STAGGER_SEL = 'a-stag-sel'
+
+function staggerFixture() {
+  const step = (extra: Record<string, unknown> = {}) => ({
+    id: 's',
+    tracks: [
+      { prop: 'opacity', from: 0, to: 1 },
+      { prop: 'y', from: 28, to: 0 },
+    ],
+    duration: 300,
+    easing: 'linear',
+    stagger: 80,
+    ...extra,
+  })
+  const kids = (prefix: string) => [
+    node(`${prefix}-a`, 'div', { htmlId: `${prefix}-a`, content: 'one' }),
+    node(`${prefix}-b`, 'div', { htmlId: `${prefix}-b`, content: 'two' }),
+    node(`${prefix}-c`, 'div', { htmlId: `${prefix}-c`, content: 'three' }),
+  ]
+  return {
+    pages: [
+      {
+        id: 'p1',
+        name: 'Home',
+        path: '/',
+        status: 'published',
+        elements: [
+          node('p1-body', 'body', {
+            children: [
+              node('hero', 'div', {
+                htmlId: 'hero',
+                children: kids('hero'),
+                animations: [{ id: 'b-hero', animationId: STAGGER, trigger: 'load' }],
+              }),
+              // every trigger, not just the entrances — a hover stagger rests
+              // at its `from` exactly like a hover on the element itself
+              node('hov', 'div', {
+                htmlId: 'hov',
+                children: kids('hov'),
+                animations: [{ id: 'b-hov', animationId: STAGGER, trigger: 'hover' }],
+              }),
+              // a breakpoint-scoped binding is never baked: an inline style
+              // has no media query, so it would apply at every width
+              node('bp', 'div', {
+                htmlId: 'bp',
+                children: kids('bp'),
+                animations: [
+                  { id: 'b-bp', animationId: STAGGER, trigger: 'load', breakpoints: ['md'] },
+                ],
+              }),
+              // a staggerSelector is matched in the DOM, which the exporter
+              // cannot evaluate — the runtime primes those
+              node('sel', 'div', {
+                htmlId: 'sel',
+                children: kids('sel'),
+                animations: [{ id: 'b-sel', animationId: STAGGER_SEL, trigger: 'load' }],
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+    components: [],
+    collections: [],
+    interactions: [],
+    animations: [
+      { id: STAGGER, name: 'Stagger up', steps: [step()] },
+      { id: STAGGER_SEL, name: 'Stagger imgs', steps: [step({ staggerSelector: 'span' })] },
+    ],
+    breakpoints: [{ id: 'md', name: 'Tablet', width: 768 }],
+    comments: [],
+    locales: ['en'],
+    defaultLocale: 'en',
+    settings: {
+      publishing: { method: 'server', github: { repo: '', branch: '' } },
+      seo: { siteName: 'T', titleTemplate: '%s', description: '' },
+      domain: '',
+      smtp: {},
+      integrations: { stripe: {}, mailing: {} },
+      tokens: [],
+      customCode: { head: '' },
+      fonts: { family: 'sans' },
+    },
+  }
+}
+
+test.describe("a staggered step's children", () => {
+  test.beforeAll(async () => {
+    await exportSite(staggerFixture(), SITE)
+  })
+
+  test('each child ships its pre-play frame, and the container ships none', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const tag = (id: string) => new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+
+    for (const id of ['hero-a', 'hero-b', 'hero-c']) {
+      expect(tag(id)).toMatch(/style="[^"]*opacity:\s*0[;"]/)
+      expect(tag(id)).toMatch(/translateY\(28px\)/)
+    }
+    // the staggered tracks are the only ones in this timeline, so the target
+    // itself has nothing to hold — it must not wear its children's frame
+    expect(tag('hero')).not.toMatch(/style="/)
+  })
+
+  test('a hover stagger rests at its `from` too', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const tag = (id: string) => new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+    expect(tag('hov-a')).toMatch(/style="[^"]*opacity:\s*0[;"]/)
+    expect(tag('hov-a')).toMatch(/translateY\(28px\)/)
+  })
+
+  test('a breakpoint-scoped binding and a staggerSelector bake nothing', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const tag = (id: string) => new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+    for (const id of ['bp-a', 'bp-b', 'bp-c', 'sel-a', 'sel-b', 'sel-c']) {
+      expect(tag(id)).not.toMatch(/style="/)
+    }
+  })
+
+  test('the children come up from the baked frame, never down from the end state', async ({
+    page,
+  }) => {
+    const seen: number[] = []
+    await page.goto('/')
+    const first = page.locator('#hero-a')
+    // the markup already holds the first frame, so the very first paint the
+    // browser makes is the entrance's start — never 1 and then 0
+    for (let i = 0; i < 6; i++) {
+      seen.push(Number(await first.evaluate((el) => getComputedStyle(el).opacity)))
+      await page.waitForTimeout(30)
+    }
+    expect(Math.min(...seen)).toBeLessThan(0.9)
+    await expect
+      .poll(() => first.evaluate((el) => (el as HTMLElement).style.opacity), { timeout: 3000 })
+      .toBe('1')
+    // the last child lands too: the cascade runs over all three
+    await expect
+      .poll(() => page.locator('#hero-c').evaluate((el) => (el as HTMLElement).style.opacity), {
+        timeout: 3000,
+      })
+      .toBe('1')
+  })
+})

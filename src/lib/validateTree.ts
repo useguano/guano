@@ -3,6 +3,7 @@ import { isComponentType } from './components'
 import { BUILTIN_LIST_SOURCES } from './nodeState'
 import { pagesListScope, resolveBinding, resolveListScope } from './shared/fields.js'
 import { CHANNEL_NAME_RE, isChannelName } from './shared/interactionKeys.js'
+import { COLOR_MODE_ACTIONS, isThemeLink, themeLinkAction } from './shared/colorMode.js'
 
 export interface TreeDiagnostic {
   nodeId: string
@@ -134,6 +135,26 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
             `declare the channel on an element inside ${node.type} instead`,
         })
       }
+    }
+
+    // a misspelled switcher action renders a dead button: no href, no
+    // attribute, nothing for the head script to delegate from
+    if (isThemeLink(node.link) && !themeLinkAction(node.link)) {
+      diags.push({
+        nodeId: node.id,
+        message:
+          `'${node.link}' is not a theme switcher — the link is '@theme' to flip the mode, or ` +
+          `'@theme:<mode>' with one of ${COLOR_MODE_ACTIONS.join(', ')}`,
+      })
+    }
+    // the wrapper emits no element, so there is nothing to click
+    if (isComponentType(node.type) && isThemeLink(node.link)) {
+      diags.push({
+        nodeId: node.id,
+        message:
+          `<${node.type}> emits no element of its own, so it cannot be a theme switcher — ` +
+          `put the link on an element inside ${node.type}`,
+      })
     }
 
     if (node.type === 'list-empty') {

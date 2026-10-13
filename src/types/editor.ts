@@ -332,10 +332,20 @@ export interface ComponentDef {
   variants?: VariantAxis[]
 }
 
+/** a 301: a path the site used to answer on, and where it goes now */
+export interface SiteRedirect {
+  id: string
+  from: string
+  to: string
+}
+
 export interface DesignToken {
   id: string
   name: string
   value: string
+
+  /** the dark-mode value; absent means this colour is the same in both modes */
+  dark?: string
 }
 
 export type PublishMethod = 'server' | 'zip' | 'github'
@@ -374,6 +384,9 @@ export interface ProjectSettings {
   }
   tokens: DesignToken[]
 
+  /** 301s, served by the node host and shipped as stubs for a static one */
+  redirects?: SiteRedirect[]
+
   theme?: {
     rootFontSize?: string
     spacing?: string
@@ -381,6 +394,9 @@ export interface ProjectSettings {
     leading?: Record<string, string>
     tracking?: Record<string, string>
     radius?: Record<string, string>
+
+    /** what a first-time visitor gets, before they have chosen (default light) */
+    colorMode?: 'light' | 'dark' | 'system'
   }
 
   motion?: {

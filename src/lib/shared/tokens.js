@@ -17,7 +17,17 @@ export function tokenError(token) {
     return 'token names are kebab-case ([a-z][a-z0-9-]*)'
   }
   if (!HEX_RE.test(token?.value ?? '')) return 'token values are #hex colours'
+  // the dark value is optional; absent means this colour is the same in both
+  // modes, which is the right answer for a brand colour
+  if (token.dark !== undefined && token.dark !== '' && !HEX_RE.test(token.dark)) {
+    return 'a token dark value is a #hex colour'
+  }
   return null
+}
+
+/** the token's dark-mode value, or null when it has none */
+export function tokenDark(token) {
+  return token && typeof token.dark === 'string' && HEX_RE.test(token.dark) ? token.dark : null
 }
 
 export function isReservedToken(name) {
@@ -28,8 +38,14 @@ export function isValidToken(token) {
   return tokenError(token) === null && !isReservedToken(token.name)
 }
 
+/**
+ * Deliberately NOT `tokenError(token) === null`: a malformed `dark` must cost
+ * the dark half and nothing else. A blob can arrive by import, merge or agent
+ * without passing a writer, and dropping the whole token would take the light
+ * value with it — every class naming it would render as no colour at all.
+ */
 export function isEmittableToken(token) {
-  return tokenError(token) === null
+  return TOKEN_NAME_RE.test(token?.name ?? '') && HEX_RE.test(token?.value ?? '')
 }
 
 const MONO_STACK =
@@ -60,6 +76,33 @@ export function themeBlock(settings) {
   if (serif) lines.push(`  --font-serif: ${serif};`)
   lines.push(...themeScaleLines(settings?.theme))
   return lines.length ? `@theme {\n${lines.join('\n')}\n}` : ''
+}
+
+/**
+ * The dark half of every token that has one: the SAME custom properties, with
+ * their dark values, under the `dark` marker class — so `bg-background` needs
+ * no `dark:` counterpart anywhere and a retheme stays one token edit. A
+ * `light` island re-asserts the light values, which is what makes `light` an
+ * escape rather than just a class that happens to cancel `dark:` utilities.
+ *
+ * Custom properties INHERIT, so the marker only has to land on an ancestor —
+ * the site root for a whole-site toggle, a section for one dark band.
+ *
+ * `scope` prefixes both selectors (the editor scopes the whole palette to
+ * `[data-site-scope]`, so the chrome is never restyled by the project's
+ * tokens); the export passes nothing.
+ */
+export function modeTokensCss(settings, scope = '') {
+  const pairs = (settings?.tokens ?? []).filter(isEmittableToken).filter(tokenDark)
+  if (!pairs.length) return ''
+  const rule = (marker, pick) => {
+    const decls = pairs.map((t) => `  --color-${t.name}: ${pick(t)};`).join('\n')
+    const sel = scope
+      ? `${scope}:where(${marker}), ${scope} :where(${marker})`
+      : `:where(${marker})`
+    return `${sel} {\n${decls}\n}`
+  }
+  return [rule('.dark', (t) => tokenDark(t)), rule('.light', (t) => t.value)].join('\n')
 }
 
 const LENGTH_RE = /^-?\d*\.?\d+(?:px|rem|em|%|vw|vh|ch|ex|pt)?$/

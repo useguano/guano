@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import {
   Archive, Check, ChevronRight, Code2, Copy, KeyRound, Languages, Palette, Pencil, Plug,
   Plus, Rocket, ScanSearch, Search, Settings, Settings2, Trash2, Type, UserRound, Users, X,
-  Inbox, Mail, Webhook,
+  Inbox, Mail, Webhook, Moon, Signpost, ArrowRight, TriangleAlert,
 } from 'lucide-vue-next'
 import ModalHost from '@/components/modal/ModalHost.vue'
 import TabsUI from '@/components/tabs/TabsUI.vue'
@@ -42,7 +42,14 @@ import {
   type Integration,
   type IntegrationField,
 } from '@/lib/integrations'
-import type { CustomFont, StructuredDataType } from '@/types/editor'
+import type { CustomFont, DesignToken, SiteRedirect, StructuredDataType } from '@/types/editor'
+import { defaultColorMode } from '@/lib/shared/colorMode.js'
+import {
+  redirectError,
+  normalizeRedirectPath,
+  normalizeRedirectTarget,
+  isAbsoluteTarget,
+} from '@/lib/settings'
 import { SCHEMA_TYPES, customSchemaError } from '@/lib/shared/structuredData.js'
 import UsersSettings from '@/components/shared/UsersSettings.vue'
 import MediaPickerControl from '@/components/editor/content/MediaPickerControl.vue'
@@ -67,6 +74,7 @@ const PublishDialog = defineAsyncComponent(() => import('@/components/shared/Pub
 const { project, renameProject, hasEnabledForm } = useProject()
 const {
   settings, addToken, removeToken, smoothScroll,
+  redirects, addRedirect, removeRedirect,
   customFonts, addFont, removeFont,
   legacyHeadFonts, importLegacyHeadFonts, clearLegacyHeadFonts,
 } = useSettings()
@@ -100,6 +108,7 @@ const NAV = computed(() => {
   if (canBuild.value) {
     const site = [
       { id: 'locales', label: 'Locales', icon: Languages },
+      { id: 'redirects', label: 'Redirects', icon: Signpost },
       { id: 'publish', label: 'Publish', icon: Rocket },
     ]
     if (isAdmin.value) site.push({ id: 'code', label: 'Code', icon: Code2 })
@@ -476,6 +485,51 @@ const themeInvalid = computed(() =>
     .filter(([, v]) => v && !isThemeValue(v))
     .map(([label]) => label),
 )
+
+/** malformed, or claiming a source another rule already claims */
+const redirectIssue = (r: SiteRedirect) => redirectError(r, redirects.value)
+
+/**
+ * What is true but not wrong: the page that will win over this rule, and a
+ * destination no page answers on. Both are only knowable against the project,
+ * which is why they are notes here rather than part of redirectError.
+ */
+function redirectNote(r: SiteRedirect): string | null {
+  const from = normalizeRedirectPath(r.from)
+  const to = normalizeRedirectTarget(r.to)
+  const pathOf = (p: { path: string }) => normalizeRedirectPath(p.path || '/')
+  const published = project.value.pages.filter((p) => p.status === 'published')
+  if (published.some((p) => pathOf(p) === from)) {
+    return `${from} is a published page, so the page wins and this is ignored`
+  }
+  if (!isAbsoluteTarget(to) && to && !published.some((p) => pathOf(p) === to)) {
+    return `nothing is published at ${to} — visitors would land on the 404 page`
+  }
+  return null
+}
+
+const staticHost = computed(() => (settings.value.publishing?.method ?? 'server') !== 'server')
+
+const COLOR_MODE_OPTIONS = [
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+  { label: "The visitor's system", value: 'system' },
+]
+const colorModeDefault = computed({
+  get: () => defaultColorMode(settings.value),
+  set: (v: string) => {
+    const theme = { ...(settings.value.theme ?? {}) }
+    if (v === 'light') delete theme.colorMode
+    else theme.colorMode = v as 'dark' | 'system'
+    settings.value.theme = theme
+  },
+})
+
+/** a dark value starts as the light one, so the picker opens on something real */
+function toggleTokenDark(token: DesignToken) {
+  if (token.dark === undefined) token.dark = token.value
+  else delete token.dark
+}
 
 const tokenError = (id: string, name: string) =>
   tokenNameError(
@@ -1214,7 +1268,7 @@ async function onImportFile(e: Event) {
           <TabPanelUI class="gap-9" id="design">
             <SettingsGroup
               title="Design tokens"
-              description="Project colors, used as bg-<name>, text-<name>, border-<name>."
+              description="Project colors, used as bg-<name>, text-<name>, border-<name>. A dark value is worn under a `dark` class."
             >
               <template #action>
                 <ButtonUI size="xs" :icon="Plus" @click="addToken()">Add token</ButtonUI>
@@ -1224,6 +1278,19 @@ async function onImportFile(e: Event) {
                 <div class="flex items-center gap-1.5">
                   <InputUI v-model="token.name" placeholder="brand" class="font-mono" />
                   <ColorPickerUI v-model="token.value" output="hex" />
+                  <ColorPickerUI
+                    v-if="token.dark !== undefined"
+                    v-model="token.dark"
+                    output="hex"
+                  />
+                  <ButtonUI
+                    variant="ghost"
+                    size="xs"
+                    :icon="Moon"
+                    :class="token.dark !== undefined ? 'text-foreground' : 'text-muted-foreground'"
+                    :tooltip="token.dark !== undefined ? 'Remove the dark value' : 'Add a dark value'"
+                    @click="toggleTokenDark(token)"
+                  />
                   <ButtonUI variant="ghost" size="xs" :icon="Trash2" @click="removeToken(token.id)" />
                 </div>
                 <p v-if="tokenError(token.id, token.name)" class="text-[9px] text-danger">
@@ -1237,6 +1304,14 @@ async function onImportFile(e: Event) {
                 </p>
               </div>
               <EmptyListUI v-if="!settings.tokens.length">No tokens yet.</EmptyListUI>
+              <RowUI label="Opens in">
+                <SelectUI v-model="colorModeDefault" :options="COLOR_MODE_OPTIONS" />
+              </RowUI>
+              <p class="px-1 text-[9px] text-muted-foreground">
+                What a first-time visitor gets. A switcher element (Data → Theme switch) lets them
+                choose, and the choice is remembered in their browser and applied before the page
+                paints.
+              </p>
             </SettingsGroup>
 
             <SettingsGroup
@@ -1460,6 +1535,40 @@ async function onImportFile(e: Event) {
               </div>
               <p class="text-[9px] text-muted-foreground">
                 Changing the default does not move content between locales.
+              </p>
+            </SettingsGroup>
+          </TabPanelUI>
+
+          <TabPanelUI v-if="canBuild" class="gap-9" id="redirects">
+            <SettingsGroup
+              title="Redirects"
+              description="Old paths and where they go now. Each one answers with a permanent 301."
+            >
+              <template #action>
+                <ButtonUI size="xs" :icon="Plus" @click="addRedirect()">Add redirect</ButtonUI>
+              </template>
+
+              <div v-for="r in redirects" :key="r.id" class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-1.5">
+                  <InputUI v-model="r.from" placeholder="/old-pricing" class="font-mono" />
+                  <ArrowRight class="size-3.5 shrink-0 text-muted-foreground" />
+                  <InputUI v-model="r.to" placeholder="/pricing" class="font-mono" />
+                  <ButtonUI variant="ghost" size="xs" :icon="Trash2" @click="removeRedirect(r.id)" />
+                </div>
+                <p v-if="redirectIssue(r)" class="flex items-center gap-1 text-[9px] text-danger">
+                  <TriangleAlert class="size-3 shrink-0" />{{ redirectIssue(r) }}
+                </p>
+                <p v-else-if="redirectNote(r)" class="text-[9px] text-pending">
+                  {{ redirectNote(r) }}
+                </p>
+              </div>
+              <EmptyListUI v-if="!redirects.length">
+                No redirects. Change a page's slug and you'll be offered one.
+              </EmptyListUI>
+              <p class="text-[9px] text-muted-foreground">
+                A redirect takes effect on the next publish, and a real page always wins — a
+                redirect from a path that a published page answers on is ignored.
+                {{ staticHost ? 'This site publishes as files, so each one ships as a redirect page rather than a 301 header.' : '' }}
               </p>
             </SettingsGroup>
           </TabPanelUI>

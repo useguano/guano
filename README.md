@@ -170,6 +170,41 @@ Terminate TLS at the proxy, and set `Strict-Transport-Security` there. Guano
 does not send it: the header belongs to the origin as a whole, including
 whatever else that hostname serves.
 
+## Redirects
+
+Renaming a page breaks the links other people made to the old path, so the
+editor asks: change a slug and the page's settings offer a **301 redirect**
+from where it used to live. Move a page onto a path that already redirects
+somewhere and it says so, and offers to drop the rule.
+
+The list lives in Settings → Site → **Redirects** (`/old-pricing` → `/pricing`,
+or an `https://` URL). A **published page always wins** — a redirect from a path
+a page answers on is ignored rather than hiding the page — a chain is collapsed
+to one hop, and `/about → /contact` covers `/fr/about → /fr/contact` for free.
+Each rule takes effect on the next publish.
+
+On the node host each one is a real 301 (the query string rides along). A zip or
+GitHub export ships a redirect page per source instead, because a static host
+cannot answer a 301 of its own.
+
+## Light and dark mode
+
+A design token carries an optional **dark value** (Settings → Design → the moon
+beside the colour), and that is the whole mechanism: `bg-background` is then
+correct in both modes, and a retheme stays one token edit. `dark:` utilities are
+there for what a colour cannot express — a border that disappears, an icon swap.
+
+The switcher is a **link**: set an element's link to `@theme` (Data → Theme
+switch) and clicking it flips the mode; `@theme:light` / `@theme:dark` pin one,
+`@theme:system` hands it back to the visitor's OS setting. **Settings → Design →
+Opens in** decides what a first-time visitor gets — light, dark, or their own
+system preference.
+
+The choice is remembered per browser and applied **before the page paints**, by a
+small blocking script in `<head>`, so a returning dark-mode visitor never sees a
+flash of the light site. A light-only site emits nothing. On the canvas, a
+sun/moon button beside Edit/Play switches the mode you are designing in.
+
 ## Keyboard shortcuts
 
 Both surfaces (Edit and Play):

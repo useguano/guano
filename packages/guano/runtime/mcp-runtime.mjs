@@ -972,6 +972,7 @@ var RESERVED_TOKEN_NAMES = /* @__PURE__ */ new Set([
 function tokenError(token) {
 	if (!TOKEN_NAME_RE.test(token?.name ?? "")) return "token names are kebab-case ([a-z][a-z0-9-]*)";
 	if (!HEX_RE.test(token?.value ?? "")) return "token values are #hex colours";
+	if (token.dark !== void 0 && token.dark !== "" && !HEX_RE.test(token.dark)) return "a token dark value is a #hex colour";
 	return null;
 }
 function isReservedToken(name) {
@@ -980,8 +981,14 @@ function isReservedToken(name) {
 function isValidToken(token) {
 	return tokenError(token) === null && !isReservedToken(token.name);
 }
+/**
+* Deliberately NOT `tokenError(token) === null`: a malformed `dark` must cost
+* the dark half and nothing else. A blob can arrive by import, merge or agent
+* without passing a writer, and dropping the whole token would take the light
+* value with it — every class naming it would render as no colour at all.
+*/
 function isEmittableToken(token) {
-	return tokenError(token) === null;
+	return TOKEN_NAME_RE.test(token?.name ?? "") && HEX_RE.test(token?.value ?? "");
 }
 var LENGTH_RE = /^-?\d*\.?\d+(?:px|rem|em|%|vw|vh|ch|ex|pt)?$/;
 var FUNC_RE = /^(?:clamp|calc|min|max)\([-+*/\s\d.a-z%(),]*\)$/i;
@@ -990,6 +997,144 @@ function isThemeValue(value) {
 	if (!v || v.length > 64) return false;
 	if (v.includes(";") || v.includes("}") || v.includes("{")) return false;
 	return LENGTH_RE.test(v) || FUNC_RE.test(v);
+}
+//#endregion
+//#region src/lib/shared/redirects.js
+var MAX_PATH = 512;
+/** a root-relative path, no query, no hash, no traversal */
+var PATH_RE = /^\/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@%/]*)$/;
+/** an absolute destination: https anywhere, http only for a local host */
+var ABSOLUTE_RE = /^https:\/\/[^\s/?#]+[^\s]*$/;
+var LOCAL_HTTP_RE = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/[^\s]*)?$/;
+/**
+* One spelling for a source path: a leading slash, no trailing slash, no
+* query or hash. `/About/` and `About` both mean `/About`, so a typed value
+* and a path built from a page's slug compare equal.
+*/
+function normalizeRedirectPath(value) {
+	let v = String(value ?? "").trim();
+	if (!v) return "";
+	v = v.split("#")[0].split("?")[0];
+	if (!v.startsWith("/")) v = `/${v}`;
+	v = v.replace(/\/{2,}/g, "/");
+	if (v.length > 1) v = v.replace(/\/+$/, "");
+	return v;
+}
+/** the destination as stored: a path is normalized, an absolute URL is left alone */
+function normalizeRedirectTarget(value) {
+	const v = String(value ?? "").trim();
+	if (!v) return "";
+	return isAbsoluteTarget(v) ? v : normalizeRedirectPath(v);
+}
+/** a scheme we will not send a visitor to, typed as if it were a destination */
+var FOREIGN_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+function isAbsoluteTarget(value) {
+	const v = String(value ?? "").trim();
+	return ABSOLUTE_RE.test(v) || LOCAL_HTTP_RE.test(v);
+}
+/**
+* Why a redirect is malformed, or null. `others` are the redirects it has to
+* coexist with — two rules for one source is not a redirect, it is a coin toss.
+* @returns {string|null}
+*/
+function redirectError(redirect, others = []) {
+	const from = normalizeRedirectPath(redirect?.from);
+	const to = normalizeRedirectTarget(redirect?.to);
+	if (!from) return "a redirect needs the old path";
+	if (!to) return "a redirect needs somewhere to go";
+	if (from.length > MAX_PATH || to.length > MAX_PATH) return "a redirect path is too long";
+	if (from === "/") return "the home page cannot redirect away — change what it shows instead";
+	if (!PATH_RE.test(from) || from.includes("..")) return "the old path is a root-relative path, like /old-pricing";
+	if (!isAbsoluteTarget(to)) {
+		const typed = String(redirect?.to ?? "").trim();
+		if (FOREIGN_SCHEME_RE.test(typed) && !typed.startsWith("/")) return "the destination is a root-relative path (/pricing) or an https:// URL";
+		if (!PATH_RE.test(to) || to.includes("..")) return "the destination is a root-relative path (/pricing) or an https:// URL";
+	}
+	if (from === to) return "a redirect to itself does nothing";
+	const clash = others.find((o) => o !== redirect && normalizeRedirectPath(o?.from) === from);
+	if (clash) return `${from} already redirects to ${normalizeRedirectTarget(clash.to)}`;
+	return null;
+}
+/** the locale prefix a path carries, or '' */
+function localeOf(path, locales, defaultLocale) {
+	const first = path.split("/")[1] ?? "";
+	return first && first !== defaultLocale && locales.includes(first) ? first : "";
+}
+/**
+* What the site actually serves, from what the project stores.
+*
+* - every valid rule, PLUS its per-locale twin: a slug is shared across
+*   locales (the path is the same, prefixed), so `/about → /contact` has to
+*   answer on `/fr/about` too, or a rename breaks every translated route. A
+*   source that already names a locale is taken literally instead.
+* - a source that a published route answers on is SHADOWED and dropped: the
+*   page wins, always.
+* - a destination that is neither a published route nor an absolute URL is
+*   reported as `dangling` — a 301 into a 404 is worse than no redirect, but
+*   it is the author's call (a route may exist behind a reverse proxy), so it
+*   still ships.
+* - a destination that is itself a source is a CHAIN: reported, and resolved
+*   to its final target so a visitor never pays two round trips.
+*
+* @param {Array} list        settings.redirects
+* @param {object} site       { routes: Set<string>, locales: string[], defaultLocale: string }
+* @returns {{live: {from: string, to: string}[], shadowed: string[], dangling: string[], chained: string[]}}
+*/
+function resolveRedirects(list, site = {}) {
+	const routes = site.routes instanceof Set ? site.routes : new Set(site.routes ?? []);
+	const locales = site.locales ?? [];
+	const defaultLocale = site.defaultLocale ?? "";
+	const valid = [];
+	for (const r of list ?? []) if (redirectError(r, list ?? []) === null) valid.push({
+		from: normalizeRedirectPath(r.from),
+		to: normalizeRedirectTarget(r.to)
+	});
+	const bySource = new Map(valid.map((r) => [r.from, r.to]));
+	const chained = [];
+	const resolveTarget = (from, to) => {
+		const seen = /* @__PURE__ */ new Set([from]);
+		let target = to;
+		while (!routes.has(target) && bySource.has(target) && !seen.has(target)) {
+			seen.add(target);
+			chained.push(from);
+			target = bySource.get(target);
+		}
+		return target;
+	};
+	const live = [];
+	const shadowed = [];
+	const dangling = [];
+	const taken = /* @__PURE__ */ new Set();
+	for (const r of valid) {
+		const before = chained.length;
+		const to = resolveTarget(r.from, r.to);
+		if (routes.has(r.from)) chained.length = before;
+		if (!routes.has(r.from) && !isAbsoluteTarget(to) && !routes.has(to)) dangling.push(r.from);
+		const sources = [r.from];
+		if (!localeOf(r.from, locales, defaultLocale) && !isAbsoluteTarget(to)) for (const code of locales) {
+			if (code === defaultLocale) continue;
+			sources.push(`/${code}${r.from}`);
+		}
+		for (const from of sources) {
+			if (routes.has(from)) {
+				shadowed.push(from);
+				continue;
+			}
+			if (taken.has(from)) continue;
+			taken.add(from);
+			const prefix = localeOf(from, locales, defaultLocale);
+			live.push({
+				from,
+				to: prefix && from !== r.from ? `/${prefix}${to}` : to
+			});
+		}
+	}
+	return {
+		live,
+		shadowed,
+		dangling,
+		chained: [...new Set(chained)]
+	};
 }
 //#endregion
 //#region src/lib/shared/fonts.js
@@ -1439,6 +1584,7 @@ var RESERVED_DATA_ATTRS = /* @__PURE__ */ new Set([
 	"data-atgt",
 	"data-slider",
 	"data-channel",
+	"data-guano-theme",
 	"data-node-id",
 	"data-id",
 	"data-ref",
@@ -3659,9 +3805,9 @@ function splitVariant(cls) {
 		base
 	};
 }
-var ARBITRARY_VARIANT_RE = /^\[&[^{};]{0,80}\]$/;
-var PARAM_VARIANT_RE = /^(?:data|aria|has|not|group-has|peer-has|supports|nth|nth-last)-\[[^{};]{1,80}\]$/;
-var GROUP_PEER_RE = /^(?:group|peer)-[a-z][a-z-]*$/;
+var ARBITRARY_VARIANT_RE = /^\[[^{};]{0,80}&[^{};]{0,80}\]$/;
+var PARAM_VARIANT_RE = /^(?:data|aria|has|not|in|group|peer|group-has|peer-has|group-not|peer-not|group-aria|peer-aria|group-data|peer-data|supports|nth|nth-last)-\[[^{};]{1,80}\]$/;
+var GROUP_PEER_RE = /^(?:group|peer|in)-[a-z][a-z-]*$/;
 var NAMED_SCREEN_VARIANT_RE = /^(?:min|max)-(?:sm|md|lg|xl|2xl)$/;
 var ACCEPTED_VARIANTS = /* @__PURE__ */ new Set([
 	"open",
@@ -3804,7 +3950,14 @@ var PANEL_LESS_GROUPS = [
 	[/^overscroll-(?:auto|contain|none)$/, "overscroll-behavior"],
 	[/^hyphens-/, "hyphens"]
 ];
-var ARBITRARY_PROPERTY_RE = /^\[([a-z][a-z-]*):[^{};]+\]$/;
+var ARBITRARY_PROPERTY_RE = /^\[(--[a-z0-9-]+|[a-z][a-z-]*):[^{};]+\]$/;
+var CSS_VAR_SHORTHAND_RE = /^(.+)-\((?:[a-z-]+:)?(--[a-z0-9-]+)\)$/;
+function expandVarShorthand(base) {
+	const m = CSS_VAR_SHORTHAND_RE.exec(base);
+	return m ? `${m[1]}-[var(${m[2]})]` : base;
+}
+var MODE_CLASSES = /* @__PURE__ */ new Set(["dark", "light"]);
+var SCHEME_RE = /^scheme-(?:normal|light|dark|light-dark|only-dark|only-light)$/;
 var OPACITY_MODIFIER_RE = /^((?:bg|text|border|ring|outline|divide|shadow|from|via|to|decoration|caret|accent|placeholder|fill|stroke)-.+)\/(?:\d{1,3}|\[[^\]]+\])$/;
 function isValidClass(cls) {
 	const { variants: segments, base } = splitClassVariants(cls);
@@ -3812,6 +3965,9 @@ function isValidClass(cls) {
 	if (segments.some((v) => !isKnownVariant(v))) return false;
 	if (/-\[.+\]$/.test(base)) return true;
 	if (ARBITRARY_PROPERTY_RE.test(base)) return true;
+	if (CSS_VAR_SHORTHAND_RE.test(base)) return true;
+	if (MODE_CLASSES.has(base)) return true;
+	if (SCHEME_RE.test(base)) return true;
 	const opacity = OPACITY_MODIFIER_RE.exec(base);
 	if (opacity) return isValidClass(opacity[1]);
 	if (FLEX_NUMERIC_RE.test(base)) return true;
@@ -3868,7 +4024,10 @@ function propForBase(base) {
 	propForBaseCache.set(base, found);
 	return found;
 }
-function propKey(base) {
+function propKey(rawBase) {
+	const base = expandVarShorthand(rawBase);
+	if (MODE_CLASSES.has(base)) return "color-mode";
+	if (SCHEME_RE.test(base)) return "color-scheme";
 	if (FLEX_NUMERIC_RE.test(base) || [
 		"flex-auto",
 		"flex-initial",
@@ -3986,6 +4145,8 @@ function unknownClassHint(value) {
 	const parts = [];
 	const badVariants = variants.filter((v) => !isKnownVariant(v));
 	if (badVariants.length) return ` — ${badVariants.map((v) => `"${v}:"`).join(", ")} ${badVariants.length === 1 ? "is not a" : "are not"} known variant${badVariants.length === 1 ? "" : "s"}. Responsive: a named screen ("md:", "max-md:") or an arbitrary width ("max-[767px]:"). State: "hover:", "focus-visible:", "group-hover:", "data-[open]:". Descendants: "[&>li]:".`;
+	if (base.startsWith("[") && base.endsWith("]")) return " — an arbitrary property is \"[property:value]\", where the property is a CSS property name or a custom property (\"[color-scheme:dark]\", \"[--bg:#08090b]\"), and the value carries no \";\", \"{\" or \"}\". For a utility with an off-scale value the form is \"name-[value]\" (\"h-[72svh]\", \"bg-[#0d0d0cbb]\").";
+	if (base.includes("(")) return " — the custom-property shorthand is \"name-(--var)\" or \"name-(type:--var)\" (\"bg-(--bg)\", \"text-(color:--fg)\"); any other value goes in brackets, \"name-[value]\".";
 	const tokenish = /^(?:bg|text|border|outline|ring|accent|decoration|divide)-([a-z][a-z0-9-]*)$/.exec(base);
 	if (tokenish && !TOKEN_CLASSES.includes(base)) parts.push(`if "${tokenish[1]}" is meant to be a design token, no token with that name exists yet — save it in the project settings first`);
 	const dash = base.lastIndexOf("-");
@@ -4955,6 +5116,41 @@ function resolveListScope(collections, scopeCollection, scopeEntry, arg, pages) 
 	};
 }
 //#endregion
+//#region src/lib/shared/colorMode.js
+/** what a first-time visitor gets, before they have chosen anything */
+var COLOR_MODE_DEFAULTS = [
+	"light",
+	"dark",
+	"system"
+];
+/** what a switcher does: flip, or pin one mode, or hand it back to the system */
+var COLOR_MODE_ACTIONS = [
+	"toggle",
+	"light",
+	"dark",
+	"system"
+];
+/**
+* The switcher action a node's `link` declares, or null.
+* `@theme` is the toggle; `@theme:dark` / `:light` / `:system` pin a choice.
+*/
+function themeLinkAction(link) {
+	const raw = typeof link === "string" ? link : "";
+	if (raw === "@theme") return "toggle";
+	if (!raw.startsWith(`@theme:`)) return null;
+	const action = raw.slice(7);
+	return COLOR_MODE_ACTIONS.includes(action) ? action : null;
+}
+/** true for any `@theme…` link, including a misspelled action */
+function isThemeLink(link) {
+	const raw = typeof link === "string" ? link : "";
+	return raw === "@theme" || raw.startsWith(`@theme:`);
+}
+function defaultColorMode(settings) {
+	const mode = settings?.theme?.colorMode;
+	return COLOR_MODE_DEFAULTS.includes(mode) ? mode : "light";
+}
+//#endregion
 //#region src/lib/validateTree.ts
 function validateContext(project) {
 	const collections = project.collections ?? [];
@@ -5016,6 +5212,14 @@ function validateTree(root, ctx) {
 				message: `<${node.type}> emits no element of its own, so it cannot listen on a channel — declare the channel on an element inside ${node.type} instead`
 			});
 		}
+		if (isThemeLink(node.link) && !themeLinkAction(node.link)) diags.push({
+			nodeId: node.id,
+			message: `'${node.link}' is not a theme switcher — the link is '@theme' to flip the mode, or '@theme:<mode>' with one of ${COLOR_MODE_ACTIONS.join(", ")}`
+		});
+		if (isComponentType(node.type) && isThemeLink(node.link)) diags.push({
+			nodeId: node.id,
+			message: `<${node.type}> emits no element of its own, so it cannot be a theme switcher — put the link on an element inside ${node.type}`
+		});
 		if (node.type === "list-empty") {
 			if (!(!!parent && (parent.type === "collection-list" || parent.type === "slider" && !!parent.arg))) diags.push({
 				nodeId: node.id,
@@ -5384,6 +5588,7 @@ function applyHtml(root, parsed, opts) {
 					return;
 				}
 				fillPart(target, child, owner, childPath);
+				if (isComponentType(below.type) && !child.children.length) return;
 				if (below.slot) alignLevel(target, child.children, childPath);
 				else fill(target.children, below.children, child.children, childPath, isComponentType(below.type) ? below.type : owner);
 			});
@@ -5446,6 +5651,10 @@ function applyHtml(root, parsed, opts) {
 			case NEAR_MISS_BINDINGS.has(attr):
 				refuse(path, `'${attr}' binds nothing — a field binding is 'data-field'`);
 				break;
+			case attr.startsWith("data-variant-"):
+				if (isComponentType(node.type)) setVariant(node, attr.slice(13), value);
+				else refuse(path, `only a component instance wears a variant; <${parsed.tag}> inside <${component}> does not`);
+				break;
 			default: shared(attr, node.attributes?.[attr]);
 		}
 		const has = (attr) => parsed.attrs[attr] !== void 0;
@@ -5461,6 +5670,11 @@ function applyHtml(root, parsed, opts) {
 		const fields = {};
 		for (const [attr, field] of Object.entries(node.fieldAttrs ?? {})) if (has(`data-bind-${attr}`)) fields[attr] = field;
 		assignObject(node, "fieldAttrs", fields);
+		if (isComponentType(node.type)) {
+			const picks = {};
+			for (const [axis, option] of Object.entries(node.variants ?? {})) if (has(`data-variant-${axis}`)) picks[axis] = option;
+			assignObject(node, "variants", picks);
+		}
 		if (parsed.text !== void 0 && isLeafType(node.type)) setContent(node, parsed, path);
 	}
 	function applyState(node, parsed, type, path = name(node)) {
@@ -7279,4 +7493,4 @@ function routeChannelCounts(trees, instanceMap) {
 	return counts;
 }
 //#endregion
-export { APPEAR_MODES, BUILTIN_LIST_SOURCES, CHANNEL_NAME_RE, DEFAULT_SCROLL_AT, EASINGS, EASING_KEYS, ELEMENTS, ELIDED_DATA_URL, FONT_FORMATS, HEX_RE, INTERACTION_ACTIONS, INTERACTION_CLOSE_ON, INTERACTION_ONCE, INTERACTION_TRIGGERS, MAX_DEPTH, MAX_INPUT, MAX_SVG_BYTES, MOTION_PROPS, RESERVED_FIELD_NAMES, RESERVED_TOKEN_NAMES, SAFE_HREF, SAFE_SRC, SCHEMA_VERSION, SCROLL_LERP_MAX, SCROLL_LERP_MIN, SLIDER_DEFAULTS, STYLE_SECTIONS, TOKEN_NAME_RE, TRANSITION_DEFAULTS, TRANSITION_PRESET_IDS, VARIANT_NAME_RE, addVariantAxis, addVariantOption, adoptStructure, alignMirrors, alignStructure, applyClass, applyHtml, buildChannelIndex, buildInstanceMap, buildScopeRoots, canNest, channelListeners, channelName, channelTargetId, cloneForMaster, collectFormFields, collectionRouteBase, compileAnimation, componentReaches, componentUsage, contextFromProject, countLocaleSeo, countTargetError, createBody, createNode, createPage, createProject, customSchemaError, deepClone, defaultBreakpoints, defaultSettings, deleteComponent, dependencyOrder, describeMigration, detachInstance, duplicateComponent, effectiveClasses, entryRoutePath, fieldNameError, fieldValueError, findNode, findParent, fontError, fontFormatForUrl, formConfigError, formEnabled, formName, hasAncestorOfType, hasDetailRoutes, inheritedInstanceValue, interactionGroupKey, interactionStateKey, isAllowedAttribute, isChannelName, isChannelTarget, isComponentType, isEmittableToken, isEntryScopeRoot, isInstancePart, isInstanceWrapper, isKnownElement, isLeafElement, isLocalizableAttribute, isNodeHidden, isReservedToken, isRich, isStateClass, isSymmetricTrigger, isThemeValue, isTranslatableType, isValidClass, isValidToken, lucideNameOf, lucideSvg, masterToHtml, matchClass, mergeAttributeLayers, mergeClassLayers, migrateProject, nestedComponentNames, nodesByShortId, normalizeComponentName, pageToHtml, parseHtml, pickedKeys, purgeLocaleSeo, pushMasterStructure, removeVariantAxis, removeVariantOption, renameComponent, renameVariantAxis, renameVariantOption, resolveInstanceValue, resolveNodeAttributes, resolvePicks, resolveSliderConfig, routeChannelCounts, sameLayerProperty, sameProperty, sameType, sanitizeAttributes, sanitizeInlineSvg, sanitizeRich, setComponentCategory, setComponentMeta, setInstancePick, setNodeHidden, setStyleTokens, setVariantAxes, setVariantClasses, setVariantDefault, shortIds, sliderLabelAttributes, slugify, stripExtractedInstanceState, tagForType, tokenError, typeForTag, typeOptionsFor, validateAnimation, validateBinding, validateMotionSettings, validateSliderConfig, validateTree, variantKey, walkNodes };
+export { APPEAR_MODES, BUILTIN_LIST_SOURCES, CHANNEL_NAME_RE, COLOR_MODE_ACTIONS, COLOR_MODE_DEFAULTS, DEFAULT_SCROLL_AT, EASINGS, EASING_KEYS, ELEMENTS, ELIDED_DATA_URL, FONT_FORMATS, HEX_RE, INTERACTION_ACTIONS, INTERACTION_CLOSE_ON, INTERACTION_ONCE, INTERACTION_TRIGGERS, MAX_DEPTH, MAX_INPUT, MAX_SVG_BYTES, MOTION_PROPS, RESERVED_FIELD_NAMES, RESERVED_TOKEN_NAMES, SAFE_HREF, SAFE_SRC, SCHEMA_VERSION, SCROLL_LERP_MAX, SCROLL_LERP_MIN, SLIDER_DEFAULTS, STYLE_SECTIONS, TOKEN_NAME_RE, TRANSITION_DEFAULTS, TRANSITION_PRESET_IDS, VARIANT_NAME_RE, addVariantAxis, addVariantOption, adoptStructure, alignMirrors, alignStructure, applyClass, applyHtml, buildChannelIndex, buildInstanceMap, buildScopeRoots, canNest, channelListeners, channelName, channelTargetId, cloneForMaster, collectFormFields, collectionRouteBase, compileAnimation, componentReaches, componentUsage, contextFromProject, countLocaleSeo, countTargetError, createBody, createNode, createPage, createProject, customSchemaError, deepClone, defaultBreakpoints, defaultColorMode, defaultSettings, deleteComponent, dependencyOrder, describeMigration, detachInstance, duplicateComponent, effectiveClasses, entryRoutePath, fieldNameError, fieldValueError, findNode, findParent, fontError, fontFormatForUrl, formConfigError, formEnabled, formName, hasAncestorOfType, hasDetailRoutes, inheritedInstanceValue, interactionGroupKey, interactionStateKey, isAbsoluteTarget, isAllowedAttribute, isChannelName, isChannelTarget, isComponentType, isEmittableToken, isEntryScopeRoot, isInstancePart, isInstanceWrapper, isKnownElement, isLeafElement, isLocalizableAttribute, isNodeHidden, isReservedToken, isRich, isStateClass, isSymmetricTrigger, isThemeLink, isThemeValue, isTranslatableType, isValidClass, isValidToken, lucideNameOf, lucideSvg, masterToHtml, matchClass, mergeAttributeLayers, mergeClassLayers, migrateProject, nestedComponentNames, nodesByShortId, normalizeComponentName, normalizeRedirectPath, normalizeRedirectTarget, pageToHtml, parseHtml, pickedKeys, purgeLocaleSeo, pushMasterStructure, redirectError, removeVariantAxis, removeVariantOption, renameComponent, renameVariantAxis, renameVariantOption, resolveInstanceValue, resolveNodeAttributes, resolvePicks, resolveRedirects, resolveSliderConfig, routeChannelCounts, sameLayerProperty, sameProperty, sameType, sanitizeAttributes, sanitizeInlineSvg, sanitizeRich, setComponentCategory, setComponentMeta, setInstancePick, setNodeHidden, setStyleTokens, setVariantAxes, setVariantClasses, setVariantDefault, shortIds, sliderLabelAttributes, slugify, stripExtractedInstanceState, tagForType, themeLinkAction, tokenError, typeForTag, typeOptionsFor, validateAnimation, validateBinding, validateMotionSettings, validateSliderConfig, validateTree, variantKey, walkNodes };

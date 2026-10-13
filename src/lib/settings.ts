@@ -9,11 +9,23 @@ export {
   isEmittableToken,
   isReservedToken,
   tokenError,
+  tokenDark,
+  modeTokensCss,
   themeBlock,
   rootFontSizeCss,
   isThemeValue,
   applyTitleTemplate,
 } from './shared/tokens.js'
+
+export {
+  REDIRECT_CODE,
+  redirectError,
+  isValidRedirect,
+  normalizeRedirectPath,
+  normalizeRedirectTarget,
+  isAbsoluteTarget,
+  resolveRedirects,
+} from './shared/redirects.js'
 
 export {
   fontFaceBlock,

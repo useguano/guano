@@ -18,6 +18,7 @@ import { useMotion } from '@/composables/useMotion'
 import { reducedMotion, SCROLL_LERP_DEFAULT } from '@/lib/motion'
 import { createLerpScroller, wheelDeltaPx, insideNestedScroller } from '@/lib/shared/scroll.js'
 import { walkNodes } from '@/lib/tree'
+import { useColorMode } from '@/composables/useColorMode'
 
 void import('@tailwindcss/browser')
 
@@ -27,6 +28,7 @@ const { project } = useProject()
 const { addComment, activeComment, focusTick } = useComments()
 
 const { commentMode } = useCommentMode()
+const { mode: colorMode } = useColorMode()
 const mainEl = ref<HTMLElement>()
 
 const { contentEditing, menu, closeMenu, requestEdit } = usePreviewEditing()
@@ -261,7 +263,7 @@ const fontStyle = computed(() => ({
       ref="mainEl"
       data-site-scope
       class="isolate h-full overflow-hidden contain-paint bg-white font-sans text-black select-text"
-      :class="commentMode && 'cursor-crosshair'"
+      :class="[colorMode, commentMode && 'cursor-crosshair']"
       :style="fontStyle"
       @click.capture="onPreviewClick"
     >

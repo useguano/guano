@@ -434,6 +434,7 @@ on the card, not just its title.
 <a href="mailto:hello@example.com">…</a>
 <div href="@item" class="rounded-xl border p-4">…</div>   the current entry's page
 <a href="@locale:fr"><span>FR</span></a>       THIS page in another locale
+<button href="@theme"><span>Theme</span></button>       flip light / dark (see Styling)
 ```
 
 `@locale:<code>` always resolves to THIS page in that locale, from any route:
@@ -604,7 +605,9 @@ The validator accepts:
   `first:` `last:` `only:` `odd:` `even:` `empty:` `first-of-type:` `last-of-type:`;
   responsive/theme: `sm:` `md:` `lg:` `xl:` `2xl:` `dark:` `print:` `rtl:` `ltr:`
   `motion-safe:` `motion-reduce:`, plus arbitrary breakpoints `min-[900px]:` /
-  `max-[767px]:`.
+  `max-[767px]:`. **`dark:` is CLASS-based here** — it matches a `dark` class on the
+  element or any ancestor, NOT `prefers-color-scheme`; the switcher puts it on `<html>`.
+  See "Light and dark mode".
 - **Pseudo-elements**: `before:` `after:` `marker:` `selection:` `placeholder:`
   `first-line:` `first-letter:` `file:` `backdrop:`. With `content-['→']` these cover
   decorative bullets and arrows; `selection:bg-brand` sets the text-selection colour.
@@ -613,6 +616,18 @@ The validator accepts:
   rich-text output, whose tags the sanitizer strips attributes from. Also
   `group-*`/`peer-*` with any state (`group-focus-visible:`, `peer-checked:`) and the
   parameterized forms `data-[open]:`, `aria-[expanded=true]:`, `has-[img]:`.
+- **Ancestor state**: `in-[.dark]:hidden`, `group-[.open]:rotate-180`, and the
+  ampersand-anywhere form `[.open_&]:flex`. This is how ONE toggle restyles a whole
+  subtree: an interaction changes the classes of its target only, so the descendants
+  that have to react — a sun/moon icon pair, a monthly/yearly price — match a class on
+  an ancestor instead of carrying a binding each.
+- **Custom properties**: `[--pad:12px]`, `[--bg:#08090b]` set a variable on an element,
+  and the v4 shorthand reads it back: `p-(--pad)`, `bg-(--bg)`, `text-(color:--fg)`.
+  Each `--name` is its own conflict group. Prefer design tokens for colour (they are
+  the project's theming system); variables are for a value that varies per placement.
+- **`scheme-light` / `scheme-dark` / `scheme-light-dark`** set `color-scheme`, which is
+  what styles the native scrollbars, form controls and `light-dark()` values inside a
+  dark section. One conflict group, so an interaction can swap them.
 - **`prose`** — one class that styles a rich-text container's paragraphs, headings,
   lists, links, blockquotes and rules. Token-driven (it inherits the container's
   `text-*` colour and size), so `prose text-brand-blue text-lg` reads as it looks. Put
@@ -669,6 +684,67 @@ update_settings { theme: {
 Values are CSS lengths/numbers (or `clamp()`/`calc()` of them); anything else is
 dropped and named in `warnings`. `rootFontSize` is exact on the published site; in the
 editor it is scoped to the canvas so it cannot resize the editor itself.
+
+### Light and dark mode
+
+A token carries an optional **`dark`** value, and that is the whole mechanism:
+
+```
+update_settings { addTokens: [
+  { name: "background", value: "#ffffff", dark: "#08090b" },
+  { name: "foreground", value: "#0a0a0b", dark: "#f3f4f6" },
+  { name: "surface",    value: "#f7f7f8", dark: "#101217" },
+  { name: "brand",      value: "#0d594a" },               // one colour in both modes
+] }
+```
+
+Every token with a `dark` value is emitted twice — the light value in the theme, the
+dark one under a **`dark` class** — so `bg-background text-foreground` is already
+correct in both modes and a retheme stays one token edit. Omit `dark` for a colour that
+does not change; never hard-code a `light-dark()` pair into classes, which puts the
+palette back in the markup.
+
+**The switch is a class.** Put `dark` on an ancestor (the site shell's root for the
+whole site, a section for one dark band) and everything below it — tokens and `dark:`
+utilities alike — is in dark mode. `light` is the symmetric escape: it wins over an
+enclosing `dark`, which is what a light island inside a dark section needs, and what a
+site whose DEFAULT is dark toggles to.
+
+**The switcher is a link**, exactly like the language switcher, and it is the only thing
+you have to add:
+
+```html
+<button href="@theme"><span>Theme</span></button>
+```
+
+| link | what the visitor gets |
+|---|---|
+| `@theme` | flips light ⇄ dark |
+| `@theme:dark` / `@theme:light` | pins that mode |
+| `@theme:system` | hands it back to their OS setting |
+
+The choice is remembered per browser and **applied before the page paints**, by a small
+blocking script the exporter puts in `<head>` — which is the whole reason this is a
+link and not an interaction. A class interaction with `once: "local"` restores the
+state from the deferred `/assets/script.js`, so a dark-mode visitor got a full paint of
+the LIGHT site and a flash to dark on every navigation. Nothing you can author runs
+early enough.
+
+It also buys the third state an interaction cannot express: nothing stored. So
+`update_settings { theme: { colorMode: "system" } }` opens the site in the visitor's OS
+mode and still lets them choose otherwise; `"dark"` opens dark; the default is
+`"light"`. Put the switcher in the header component once and it works on every route —
+`dark:hidden` / `hidden dark:block` swap the sun and the moon on it.
+
+Do NOT hand-roll this with an interaction, and do not put `dark` on the body or a shell
+root to make a dark site: set `colorMode` instead. The marker classes are still there
+for a FIXED island — a permanently dark footer on a light site is `class="dark"` on that
+section, and `light` inside a dark one.
+
+Only colour tokens take a dark value. For anything a colour cannot express — a border
+that disappears, a shadow that lifts, an icon swap — use `dark:` utilities. `publish`
+warns when a switcher is published with no dark token and no `dark:` class anywhere
+(a toggle that changes nothing), and when dark values exist that no visitor can reach.
 
 ## Design standards
 
@@ -1563,7 +1639,10 @@ A `click` trigger **toggles** by default; `action` overrides that with `"on"` or
 `"off"`. Base classes that style the same property as the interaction's classes are
 **removed while fired** — so `hidden` → `flex` works, and the color families count:
 `text-ink` in `toClasses` evicts a base `text-cream` (bg-/text-/border- colors each
-form one group across token, palette, and arbitrary forms).
+form one group across token, palette, and arbitrary forms). An **arbitrary property**
+is grouped by its property NAME, so `[color-scheme:dark]` evicts a base
+`[color-scheme:light]` and `[--bg:#000]` evicts a base `[--bg:#fff]`; `dark` and
+`light` are one group too (see "Light and dark mode").
 
 Binding options (all optional, all on the binding):
 
@@ -1695,6 +1774,12 @@ with `{ref: "dismiss", trigger: "click", targetRef: "bar", action: "on", once: "
 `toClasses: "hidden"`. `once` is honoured on the published site only — the editor always
 shows the element so you can still select and style it.
 
+**Testing a remembered state**: a `once` state is restored on load, so your NEXT visit
+starts with the effect already on and the first click turns it OFF — which reads as a
+broken toggle when you are the one testing it. Load the page (preview or published)
+with **`?resetstate`** to forget every remembered state for that browser. The keys
+themselves are route-local ordinals, so there is nothing worth clearing by hand.
+
 **Conditional form field** — `change` reads a control's checked/non-empty state:
 
 ```html
@@ -1802,6 +1887,47 @@ unscoped, so the trigger outside the component and the buttons inside share the 
   not use it to inject scripts, styling hacks, content — or **fonts** (see below). If
   something seems to need it, report that as a limitation instead. `customCodeBody` is
   the same thing before every `</body>` (a tag manager's noscript, a chat widget).
+
+### Redirects (301s)
+
+A slug change breaks every link other people made to the old path, and those are
+the links nobody can rewrite. So `update_page {slug}` reports the move:
+
+```
+update_page {pageId, version, slug: "/plans"}
+  → {saved: true, redirectSuggestion: {from: "/pricing", to: "/plans", note: …}}
+update_page {pageId, version, slug: "/plans", redirect: true}
+  → {saved: true, redirect: {from: "/pricing", to: "/plans"}}
+```
+
+Add `redirect: true` when the old path was ever published; skip it when the page
+is new and nothing could be pointing at it. The list is editable directly:
+
+```
+update_settings {addRedirects: [{from: "/old-pricing", to: "/pricing"}]}
+update_settings {removeRedirects: ["/old-pricing"]}
+```
+
+Rules worth knowing, all enforced:
+
+- `from` is a root-relative path and **never `/`** (the home page is the site
+  root). `to` is a path or an `https://` URL.
+- **one source carries one rule** — adding a `from` that already has one
+  RE-POINTS it rather than making a second.
+- **a published page always wins.** A rule whose source is a real route is
+  dropped at publish and reported as `redirect-shadowed`; it can never hide a
+  page. So moving a page back onto a path that redirects away is safe, and the
+  rule is then dead weight — remove it.
+- a locale-prefixed twin is free: `/about → /contact` also answers on
+  `/fr/about → /fr/contact`.
+- a chain (`/a → /b → /c`) is collapsed to one hop at publish, and reported as
+  `redirect-chained` so the stored rules get fixed too.
+- `redirect-dangling` means the destination is a path nothing publishes — a 301
+  into the 404 page.
+
+`get_settings` returns the list. On the node host each one is a real 301; a
+zip/GitHub export ships a redirect page per source instead, since a static host
+cannot answer a 301 of its own.
 
 ### Custom webfonts
 

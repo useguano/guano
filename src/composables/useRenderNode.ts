@@ -9,9 +9,10 @@ import {
 } from './useInteraction'
 import { useComponents } from './useComponents'
 import { useAnimation, animBindingActiveAt, scopedAnimBindings } from './useAnimation'
+import { COLOR_MODE_ATTR, isThemeLink, themeLinkAction } from '@/lib/shared/colorMode.js'
 import { bindingScope, entryScopePart } from '@/lib/shared/entryScope.js'
 import { resolveFieldAttrs } from '@/lib/shared/fields.js'
-import { useMotion } from './useMotion'
+import { useMotion, type RestBinding } from './useMotion'
 import {
   appearRootMargin,
   composeMotionStyle,
@@ -56,7 +57,6 @@ import { DEFAULT_ICON_SVG, parseInlineSvg, sanitizeInlineSvg } from '@/lib/share
 import { isBareWrapper, isNodeHidden, resolveInstanceValue } from '@/lib/instances'
 import { variantClassesFor } from './useVariants'
 import type {
-  Animation,
   AnimationBinding,
   CollectionEntry,
   ElementNode,
@@ -242,6 +242,10 @@ export function useRenderNode(
     )
     const attrs: Record<string, string> = { ...(def.value?.attrs ?? {}), ...own }
     if (isCurrentLink.value && !attrs['aria-current']) attrs['aria-current'] = 'page'
+    // renderer-owned, like the export's (a reserved name, so it can never
+    // collide with an authored one). Emitted on both surfaces so the DOM an
+    // author inspects is the DOM that ships; only Play acts on the click.
+    if (themeAction.value) attrs[COLOR_MODE_ATTR] = themeAction.value
     if (node.value.type === 'slider') {
       for (const name of Object.keys(SLIDER_LABEL_ATTRS)) delete attrs[name]
     }
@@ -369,8 +373,18 @@ export function useRenderNode(
     return (entry && collection ? entryPath(collection, entry) : activePage.value.path) || '/'
   })
 
+  /**
+   * The colour-mode switcher this node declares (`@theme`, `@theme:dark`, …).
+   * A switch is not a navigation, so it never becomes an href — the published
+   * page carries `data-guano-theme` and the head script delegates the click.
+   */
+  const themeAction = computed(() =>
+    themeLinkAction(resolveInstanceValue(node.value, mapping.value, 'link')),
+  )
+
   const linkRaw = computed(() => {
     let raw = resolveInstanceValue(node.value, mapping.value, 'link')
+    if (isThemeLink(raw)) return null
     if (raw === '@item') {
       if (!scope?.entry) return null
       raw = entryPath(scope.collection, scope.entry) ?? undefined
@@ -504,6 +518,16 @@ export function useRenderNode(
     return motion.staggerValuesFor(parentTargetId, index, selfScope.value)
   })
 
+  /** the bindings aimed at this node's parent — the staggered half moves THIS node */
+  const parentAnimTargets = computed(() => {
+    const parent = parentIndex.value.get(node.value.id)
+    if (!parent || parent.children.indexOf(node.value) === -1) return []
+    const parentMapping = masterFor(parent.id)
+    return parentMapping
+      ? scopedAnimBindings(parentMapping.master.id, parentMapping.root)
+      : (animTargetIndex.value.get(parent.id) ?? [])
+  })
+
   /**
    * The resting frame of every timeline aimed at this node — what it wears
    * before any of them plays, from the same helper the exporter bakes with.
@@ -517,14 +541,20 @@ export function useRenderNode(
    */
   const restMotionValues = computed(() => {
     if (!opts?.restingMotion) return undefined
-    const bindings: { binding: AnimationBinding; animation: Animation }[] = []
-    const collect = ({ binding }: { binding: AnimationBinding }) => {
-      if (!animBindingActiveAt(binding, renderBreakpointId.value)) return
-      const animation = animationFor(binding.animationId)
-      if (animation) bindings.push({ binding, animation })
-    }
-    animTargets.value.forEach(collect)
-    channelAnimTargets.value.forEach(collect)
+    const bindings: RestBinding[] = []
+    const collect =
+      (part: 'element' | 'staggered') =>
+      ({ binding }: { binding: AnimationBinding }) => {
+        if (!animBindingActiveAt(binding, renderBreakpointId.value)) return
+        const animation = animationFor(binding.animationId)
+        if (animation) bindings.push({ binding, animation, part })
+      }
+    animTargets.value.forEach(collect('element'))
+    channelAnimTargets.value.forEach(collect('element'))
+    // a staggered step aimed at the PARENT moves this node, so its `from` is
+    // this node's resting state too — without it a staggered entrance rested
+    // at its final value and snapped to the `from` on the first played frame
+    parentAnimTargets.value.forEach(collect('staggered'))
     return motion.restValuesFor(bindings)
   })
 
@@ -786,6 +816,7 @@ export function useRenderNode(
     inlineInitialText,
     commitInlineText,
     linkRaw,
+    themeAction,
     baseClasses,
     hoverHandlers,
     fireClickInteractions,
