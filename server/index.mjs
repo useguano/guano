@@ -23,7 +23,6 @@ import {
   mkdir,
   readdir,
   readFile,
-  rename,
   rm,
   stat,
   writeFile,
@@ -2391,9 +2390,6 @@ async function handleUnpublish(req, res) {
 // package layout inside the zip: manifest.json, store/<key>.json,
 // media/index.json, media/files/*, media/thumbs/*.webp
 const PACKAGE_FORMAT = 'guano-package'
-// pre-rename backups stay importable; the post-import store migration
-// normalizes their old key filenames
-const LEGACY_PACKAGE_FORMAT = 'superbird-package'
 const PACKAGE_VERSION = 1
 
 /** GET /api/project-export — admin-only backup package (.zip). Excludes
@@ -2498,14 +2494,8 @@ async function applyPackage(raw) {
     if (path === 'manifest.json') {
       try {
         const m = JSON.parse(data.toString('utf8'))
-        if (
-          (m.format !== PACKAGE_FORMAT && m.format !== LEGACY_PACKAGE_FORMAT) ||
-          m.version !== PACKAGE_VERSION
-        ) {
+        if (m.format !== PACKAGE_FORMAT || m.version !== PACKAGE_VERSION) {
           return 'unrecognized package format'
-        }
-        if (m.format === LEGACY_PACKAGE_FORMAT) {
-          log.info('importing a legacy superbird-package backup (deprecated format)')
         }
         manifestOk = true
       } catch {
@@ -2518,7 +2508,7 @@ async function applyPackage(raw) {
       } catch {
         return `unreadable store entry: ${path}`
       }
-      if (path.startsWith('store/guano-project__') || path.startsWith('store/superbird-project__')) {
+      if (path.startsWith('store/guano-project__')) {
         if (Array.isArray(parsed.pages) && parsed.pages.length) hasProject = true
       }
     } else if (path === 'media/index.json') {
@@ -2568,7 +2558,7 @@ async function applyPackage(raw) {
 
     await swapDir(STORE_DIR, tmpStore)
     await swapDir(MEDIA_DIR, tmpMedia)
-    await migrateStoreDir() // a legacy backup arrives with old key filenames
+    await migrateStore()
     resetMediaIndexCache() // make imported media visible without a restart
     resetIntegrationsCache() // the restored store may carry a legacy settings.smtp
     return null
@@ -2688,23 +2678,15 @@ async function handleSnapshots(req, res, path) {
   return fail(res, 404, 'not found')
 }
 
-/** one-time rename of pre-rename store keys (superbird-* → guano-*) on the
- * live store dir. Idempotent: an existing new-name file is never clobbered.
- * Runs at boot and after a project-package import (legacy backups). */
-async function migrateStoreDir() {
-  let files = []
-  try {
-    files = await readdir(STORE_DIR)
-  } catch {
-    return // no store yet
-  }
-  for (const f of files) {
-    if (!f.startsWith('superbird-') || !f.endsWith('.json')) continue
-    const to = 'guano-' + f.slice('superbird-'.length)
-    if (existsSync(join(STORE_DIR, to))) continue
-    await rename(join(STORE_DIR, f), join(STORE_DIR, to))
-    log.info(`store migration: ${f} -> ${to}`)
-  }
+/** The store migrations, at boot and after a project-package import: the
+ * one-way v2 schema rewrite, then the one-time move of legacy per-provider
+ * credentials into the integrations store.
+ *
+ * The existence check is load-bearing — boot() creates DATA_DIR but not the
+ * store dir, and migrateSchema readdirs it unguarded, so a fresh instance
+ * would throw in boot() and refuse to start. */
+async function migrateStore() {
+  if (!existsSync(STORE_DIR)) return // no store yet
   await migrateSchema()
   await migrateIntegrations()
 }
@@ -3246,7 +3228,7 @@ async function boot() {
   instance = await ensureInstance()
   if (!PORT_ENV && instance.port) PORT = instance.port
   await sweepDataDir()
-  await migrateStoreDir()
+  await migrateStore()
   bootState.migrated = true
   await runRetention()
   // `unref` so a timer never holds the process open against a shutdown
