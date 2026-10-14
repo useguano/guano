@@ -343,6 +343,83 @@ async function remotePolicy(base, token) {
   }
 }
 
+/**
+ * Device authorization: get a token for a REMOTE instance without a copy-paste.
+ *
+ * The CLI asks for a short code, the human approves it in that instance's own
+ * /admin where they are already signed in, and the CLI collects the token. The
+ * admin session is the remote stand-in for "I hold the data dir" — see
+ * server/device.mjs. `--token` remains for a headless runner, which has no
+ * browser to approve anything in.
+ */
+async function authorizeDevice(base) {
+  let started
+  try {
+    const res = await fetch(`${base}/api/auth/device`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'guano connect (Claude Desktop)' }),
+    })
+    started = await res.json()
+    if (!res.ok) throw new Error(started?.error ?? `could not start (${res.status})`)
+  } catch (e) {
+    console.error(
+      `✗ ${base} would not start an authorization (${e.message}).\n` +
+        '  An older instance has no device flow — make a token in its editor under My account →\n' +
+        `  API tokens and pass it:  guano connect --url ${base} --token guano_…`,
+    )
+    process.exit(1)
+  }
+  const verifyUrl = `${base}${started.verifyPath}`
+  console.log('')
+  console.log(`  Approve this connection at:  ${verifyUrl}`)
+  console.log(`  Your code:                   ${started.userCode}`)
+  console.log('')
+  console.log('  Waiting for approval… (ctrl-C to stop)')
+  openBrowser(verifyUrl)
+
+  const interval = Math.max(1, Number(started.intervalSeconds) || 2) * 1000
+  const deadline = Date.now() + (Number(started.expiresInSeconds) || 600) * 1000
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, interval))
+    let body
+    try {
+      const res = await fetch(`${base}/api/auth/device/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceCode: started.deviceCode }),
+      })
+      body = await res.json()
+      // 429 is the server enforcing its own poll interval — wait, never give up
+      if (res.status === 429) continue
+      if (res.status === 404) {
+        console.error(`\n✗ ${body?.error ?? 'that authorization is gone'}`)
+        process.exit(1)
+      }
+    } catch (e) {
+      console.error(`\n✗ lost contact with ${base}: ${e.message}`)
+      process.exit(1)
+    }
+    if (body?.status === 'granted') {
+      console.log(`\n✓ approved by ${body.email}`)
+      return body
+    }
+  }
+  console.error('\n✗ that code expired before it was approved — run `guano connect` again')
+  process.exit(1)
+}
+
+/** best effort: the flow prints the url too, so a failure here costs nothing */
+function openBrowser(url) {
+  const cmd =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  try {
+    execFileSync(cmd, [url], { stdio: 'ignore', timeout: 4000 })
+  } catch {
+    /* no browser, headless box, or a platform without the helper */
+  }
+}
+
 /** a slug for a remote project with no local folder to name it after */
 function hostSlug(base) {
   try {
@@ -437,19 +514,31 @@ export async function main(args = [], opts = {}) {
   //    would connect Claude to the wrong instance. The scaffolder passes it.
   let minted
   if (remote) {
-    // The token is the human's: they were signed in to that instance's /admin
-    // to create it, which is the proof the nonce stands in for locally.
-    const token = opt('--token') ?? ''
-    if (!/^guano_[0-9a-f]{16,}$/.test(token)) {
-      console.error(
-        '✗ --url needs --token. Create one in that instance\'s editor under My account →\n' +
-          '  API tokens, then re-run:\n' +
-          `    guano connect --url ${base} --token guano_…\n` +
-          '  (the token travels on every request, so keep it out of your shell history if you can)',
-      )
-      process.exit(1)
+    const given = opt('--token') ?? ''
+    if (given) {
+      // The escape hatch, and the only option on a headless box: a token the
+      // human made in that instance's editor. Being signed in there to create
+      // it is the same proof the device flow asks for, done by hand.
+      if (!/^guano_[0-9a-f]{16,}$/.test(given)) {
+        console.error(
+          `✗ --token does not look like a Guano API token (expected guano_… ): "${given.slice(0, 12)}…"\n` +
+            '  Make one in that instance\'s editor under My account → API tokens.',
+        )
+        process.exit(1)
+      }
+      minted = { token: given, email: null, agentPolicy: await remotePolicy(base, given) }
+    } else {
+      // No token: ask the instance to authorize this machine, and let the
+      // human approve it in a browser. No clipboard, no shell history, and the
+      // agent policy gets chosen in a UI that explains it.
+      const granted = await authorizeDevice(base)
+      minted = {
+        token: granted.token,
+        email: granted.email,
+        agentPolicy: { ...(granted.agentPolicy ?? {}), __name: granted.projectName ?? '' },
+      }
+      if (granted.instance) identity.id = granted.instance
     }
-    minted = { token, email: null, agentPolicy: await remotePolicy(base, token) }
   } else if (flag('--offline')) {
     minted = await mintDirect(dataDir, policy)
   } else {

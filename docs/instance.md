@@ -63,11 +63,21 @@ An unreachable instance is **`status === 0`** from `api.mjs` and nothing else, w
 
 ## Connecting a remote instance
 
-`guano connect --url https://studio.example.com --token guano_…`.
+`guano connect --url https://studio.example.com`.
 
-Everything the local flow does to prove it may mint a token touches the data dir — the nonce file `/api/auth/connect` reads back, and the direct write `--offline` falls back to — and that route is **loopback-only** besides. Neither is possible from another machine, so a remote connect carries a token the human made in the editor (My account → API tokens) instead of minting one.
+Everything the local flow does to prove it may mint a token touches the data dir — the nonce file `/api/auth/connect` reads back, and the direct write `--offline` falls back to — and that route is **loopback-only** besides. Neither is possible from another machine, so a VPS could not be connected at all.
 
-`--url` must be `https:` (plain `http:` only for localhost): the token travels on every request. Identity comes from `/api/health`, and the project name from `/api/auth/me`. The agent policy is that instance's own, set in its Settings → MCP, since the file lives in a data dir this machine cannot write.
+**The remote stand-in for "I hold the data dir" is "I can sign in to this instance's `/admin` as an admin."** That is a device authorization (`server/device.mjs`): the CLI asks for a short code, prints it and opens the browser, the human approves it at `/admin/authorize` where they are already signed in, and the CLI polls until it can collect the token.
+
+Four endpoints. `POST /api/auth/device` and `POST /api/auth/device/token` are **unauthenticated**, because they are the calls made before any credential exists; the device code is the secret, compared in constant time and **spent on first success**. `GET /api/auth/device/:code` and `POST …/approve` are **admin + session only** — an API token must never be able to approve one, or an agent could authorize another client to the instance it is already talking to.
+
+The pending record lives **in memory**, for ten minutes, capped at a dozen. There is nothing worth persisting in a single-use ten-minute secret, and keeping it off disk means no file for the boot sweep, the retention timer or a snapshot to carry. A restart loses pending codes and the CLI reports the expiry it would have reported anyway.
+
+The user code avoids `0/O/1/I/5/S` because it is read off one screen and typed into another. The start endpoint is rate-limited per address and the lookup harder still — the short code is the only guessable surface in the flow. The poll interval is enforced server-side (`429` with `retry-after`, which the CLI waits out rather than giving up).
+
+**The consent screen is where a remote connect picks the agent policy** — the same two switches the local flow takes as `--main`/`--publish`, asked in a UI that explains them. That is better than a flag, and it is also why a remote connect accepts neither.
+
+`--token guano_…` remains the escape hatch, and the only option for a headless runner with no browser to approve anything in. Either way `--url` must be `https:` (plain `http:` only for localhost), because the token travels on every request. Identity comes from `/api/health` and the project name from `/api/auth/me`.
 
 Note that **the data-dir rule below does not apply to a remote entry**: it exists to stop `connect` probing a *default port* and baking whatever answers into this project's entry. A remote url is named explicitly by the human, so the address is the contract and health is the only identity source there is.
 

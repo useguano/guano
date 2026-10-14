@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, request as pwRequest } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -341,4 +341,84 @@ test('two running projects are refused by name rather than guessed between', asy
   })
   expect(pinned.out).toContain('pinned to beta')
   expect(pinned.out).toContain('working on "beta"')
+})
+
+test('a remote instance is connected by approving a code in its own editor', async () => {
+  // The local flow proves authority by writing a nonce into the data dir, on a
+  // route that is loopback-only besides — neither of which another machine can
+  // do, so a VPS could not be connected at all. The remote stand-in for "I
+  // hold the data dir" is "I can sign in to this instance's /admin as an
+  // admin", which is what the device flow asks for.
+  const srv = await boot('device', 4391)
+  const setup = await srv.api.post('/api/auth/setup', {
+    data: {
+      email: 'owner@example.com',
+      password: 'correct horse battery',
+      name: 'Owner',
+      projectName: 'Remote Site',
+    },
+  })
+  expect(setup.ok()).toBeTruthy()
+
+  // 1. the CLI's side needs no credential — that is the point of the flow
+  const started = await (
+    await srv.api.post('/api/auth/device', { data: { name: 'Claude Desktop' } })
+  ).json()
+  expect(started.userCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/)
+  expect(started.deviceCode).toMatch(/^[0-9a-f]{64}$/)
+  expect(started.verifyPath).toContain('/admin/authorize?code=')
+
+  // 2. before approval there is nothing to collect
+  expect((await (await srv.api.post('/api/auth/device/token', {
+    data: { deviceCode: started.deviceCode },
+  })).json()).status).toBe('pending')
+
+  // 3. the approval screen is admin + SESSION only. An API token must never be
+  //    able to approve one: that would let an agent authorize another client to
+  //    the instance it is already talking to.
+  const anon = await pwRequest.newContext({ baseURL: `http://localhost:${srv.port}` })
+  expect((await anon.get(`/api/auth/device/${started.userCode}`)).status()).toBe(401)
+
+  // 4. the admin approves, choosing what it may do — the same two switches the
+  //    local flow takes as --main/--publish, asked here in a UI instead
+  const approved = await srv.api.post(`/api/auth/device/${started.userCode}/approve`, {
+    data: { policy: { allowMainWrites: true } },
+  })
+  expect(approved.ok()).toBeTruthy()
+
+  // 5. the CLI collects it, ONCE: the record is spent as it is handed over
+  await new Promise((r) => setTimeout(r, 2200))
+  const granted = await (
+    await srv.api.post('/api/auth/device/token', { data: { deviceCode: started.deviceCode } })
+  ).json()
+  expect(granted.status).toBe('granted')
+  expect(granted.token).toMatch(/^guano_[0-9a-f]+$/)
+  expect(granted.agentPolicy.allowMainWrites).toBe(true)
+  expect(granted.projectName).toBe('Remote Site')
+  expect(granted.instance).toBe((await (await srv.api.get('/api/health')).json()).instance)
+
+  const spent = await srv.api.post('/api/auth/device/token', {
+    data: { deviceCode: started.deviceCode },
+  })
+  expect(spent.status()).toBe(404)
+
+  // 6. and the token it handed over actually works on that instance
+  const me = await anon.get('/api/auth/me', {
+    headers: { authorization: `Bearer ${granted.token}` },
+  })
+  expect(me.ok()).toBeTruthy()
+  await anon.dispose()
+})
+
+test('remote connect refuses plain http and an unusable token', async () => {
+  // The token travels on every request; over plain http anything on the path
+  // reads it. localhost is exempted because that is a loopback, not a network.
+  const http = cli(['connect', '--url', 'http://example.com', '--token', 'guano_' + '0'.repeat(32)])
+  expect(http.code).toBe(1)
+  expect(http.out).toContain('must be an https: address')
+
+  const srv = await boot('remote-refuse', 4392)
+  const bad = cli(['connect', '--url', `http://localhost:${srv.port}`, '--token', 'not-a-token'])
+  expect(bad.code).toBe(1)
+  expect(bad.out).toContain('does not look like a Guano API token')
 })

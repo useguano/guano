@@ -42,6 +42,14 @@ import {
 import { pushSiteToGitHub } from './github.mjs'
 import { createZip, readZip } from './zip.mjs'
 import { relativizeSite, mountSite } from './relative.mjs'
+import {
+  approveDevice,
+  denyDevice,
+  describeDevice,
+  pollDevice,
+  POLL_INTERVAL_S,
+  startDevice,
+} from './device.mjs'
 import { slugify } from '../src/lib/shared/slug.js'
 import {
   mergeBranchesMeta,
@@ -522,6 +530,12 @@ const publishAllowed = slidingLimiter(12, 60_000)
 // previews are cheap and nothing ships, so they get their own, looser budget —
 // spending the publish budget on looking is what this exists to avoid
 const previewAllowed = slidingLimiter(30, 60_000)
+// Starting a device authorization is unauthenticated (the CLI has no
+// credential yet), so it is limited per client address as well as capped in
+// device.mjs. Looking one up by its short code is limited harder: that is the
+// only guessable surface in the flow.
+const deviceStartAllowed = slidingLimiter(6, 60_000)
+const deviceLookupAllowed = slidingLimiter(20, 60_000)
 
 const tooManyRequests = (res, retryAfterSeconds, what) =>
   send(
@@ -654,6 +668,106 @@ async function handleAuth(req, res, path) {
     const patch = onboardingPolicy(policy)
     const agentPolicy = Object.keys(patch).length ? await writeAgentPolicy(patch) : await readAgentPolicy()
     return send(res, 200, JSON.stringify({ ...minted, agentPolicy }))
+  }
+  // ---------- device authorization: `guano connect --url <remote>` ----------
+  //
+  // The local flow proves authority with a nonce file in the data dir, on a
+  // loopback-only route. From another machine neither is possible, so the
+  // stand-in is a real admin SESSION in that instance's own /admin: the CLI
+  // shows a short code, the human approves it in the browser, the CLI collects
+  // the token. See server/device.mjs.
+  if (path === '/api/auth/device' && req.method === 'POST') {
+    // Unauthenticated on purpose — this is the call made BEFORE there is any
+    // credential. Limited per address, and capped in device.mjs.
+    const limit = deviceStartAllowed(clientIp(req))
+    if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'authorization requests')
+    const body = await readBody(req, MAX_AUTH_BODY)
+    let name = ''
+    try {
+      ;({ name } = JSON.parse(body ?? '{}') ?? {})
+    } catch {
+      /* a name is a label; a bad body just means the default */
+    }
+    const started = startDevice({ name })
+    if (started.error) return fail(res, 429, started.error)
+    return send(
+      res,
+      200,
+      JSON.stringify({
+        userCode: started.userCode,
+        deviceCode: started.deviceCode,
+        verifyPath: `/admin/authorize?code=${encodeURIComponent(started.userCode)}`,
+        expiresInSeconds: started.expiresInSeconds,
+        intervalSeconds: POLL_INTERVAL_S,
+      }),
+    )
+  }
+  if (path === '/api/auth/device/token' && req.method === 'POST') {
+    // Also unauthenticated: the device code IS the credential, and it is
+    // compared in constant time and spent on first success.
+    const body = await readBody(req, MAX_AUTH_BODY)
+    let deviceCode = ''
+    try {
+      ;({ deviceCode } = JSON.parse(body ?? '{}') ?? {})
+    } catch {
+      return fail(res, 400, 'invalid request')
+    }
+    const result = pollDevice(deviceCode)
+    if (result.slowDown) {
+      return tooManyRequests(res, result.retryAfterSeconds, 'polls')
+    }
+    if (result.error) return fail(res, 404, result.error)
+    return send(res, 200, JSON.stringify(result))
+  }
+  if (path.startsWith('/api/auth/device/')) {
+    // Everything else in the flow is the HUMAN's side, and the proof of
+    // authority is this: an admin, with a session cookie. An API token must
+    // NOT be able to approve one — that would let an agent authorize another
+    // client to the instance it is already talking to.
+    const user = sessionUser(req)
+    if (!user) return fail(res, 401, 'unauthorized')
+    if (user.role !== 'admin') return fail(res, 403, 'only an admin can authorize a client')
+    const rest = path.slice('/api/auth/device/'.length)
+    const [rawCode, action] = rest.split('/')
+    const code = decodeURIComponent(rawCode ?? '')
+    if (req.method === 'GET' && !action) {
+      const limit = deviceLookupAllowed(user.id)
+      if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'lookups')
+      const found = describeDevice(code)
+      if (!found) return fail(res, 404, 'that code has expired or was never issued')
+      return send(res, 200, JSON.stringify(found))
+    }
+    if (req.method === 'POST' && action === 'approve') {
+      const body = await readBody(req, MAX_AUTH_BODY)
+      let policy = {}
+      try {
+        ;({ policy } = JSON.parse(body ?? '{}') ?? {})
+      } catch {
+        /* no policy is a valid answer: grant nothing extra */
+      }
+      // The same two onboarding switches the local flow applies, chosen here
+      // in a UI that explains them rather than passed as a CLI flag — which is
+      // also why a remote `connect` needs no --main/--publish.
+      const patch = onboardingPolicy(policy)
+      const agentPolicy = Object.keys(patch).length
+        ? await writeAgentPolicy(patch)
+        : await readAgentPolicy()
+      const { token } = await createApiToken(user.id, describeDevice(code)?.name || 'guano connect')
+      const granted = approveDevice(code, {
+        token,
+        email: user.email,
+        agentPolicy,
+        instance: instance?.id ?? null,
+        projectName: (await currentProjectName()) || '',
+      })
+      if (granted.error) return fail(res, 409, granted.error)
+      return send(res, 200, JSON.stringify({ ok: true }))
+    }
+    if (req.method === 'POST' && action === 'deny') {
+      denyDevice(code)
+      return send(res, 200, JSON.stringify({ ok: true }))
+    }
+    return fail(res, 404, 'not found')
   }
   if (
     (path === '/api/auth/comments-seen' || path === '/api/auth/forms-seen') &&

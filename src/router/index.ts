@@ -16,6 +16,12 @@ const router = createRouter({
       meta: { title: 'Join — Guano' },
     },
     {
+      path: '/authorize',
+      name: 'authorize',
+      component: () => import('@/views/AuthorizeView.vue'),
+      meta: { title: 'Authorize a client — Guano' },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
@@ -35,7 +41,7 @@ router.beforeEach(async (to) => {
   const auth = useAuth()
   await auth.check()
   const authed = !!auth.email.value
-  if (to.name === 'build' && !authed) {
+  if ((to.name === 'build' || to.name === 'authorize') && !authed) {
     return auth.needsSetup.value ? '/setup' : '/login'
   }
   if ((to.name === 'login' || to.name === 'setup') && authed) return '/'
