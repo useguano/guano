@@ -74,6 +74,20 @@ const name =
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '') || DEFAULT_DIR
 
+/**
+ * The same thing, as a NAME rather than a package slug.
+ *
+ * `acme-landing` is what npm needs and what the folder is called; "Acme
+ * Landing" is what belongs in a field labelled Project name. The setup screen
+ * prefills it and the human can change it there — this is a head start, not a
+ * decision.
+ */
+const displayName = name
+  .split('-')
+  .filter(Boolean)
+  .map((w) => w[0].toUpperCase() + w.slice(1))
+  .join(' ')
+
 await mkdir(target, { recursive: true })
 if ((await readdir(target)).length) {
   rl?.close()
@@ -148,6 +162,12 @@ export default {}
 # must not share one, or whichever starts first answers for both and the
 # other's MCP token is refused with a 401.
 PORT=${port}
+
+# What you called this project in the terminal. It prefills the Project name
+# on the setup screen, so nobody is asked to name the same thing twice. Only
+# read before the first admin account exists; edit the name in the editor
+# after that.
+GUANO_PROJECT_NAME=${displayName}
 `,
 
   '.env.example': `PORT=${port}

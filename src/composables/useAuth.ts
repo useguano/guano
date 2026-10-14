@@ -9,6 +9,7 @@ const name = ref('')
 const role = ref<Role | null>(null)
 const userId = ref<string | null>(null)
 const needsSetup = ref(false)
+const setupProjectName = ref('')
 
 const presetAgentPolicy = ref<{ allowMainWrites: boolean; allowPublish: boolean } | null>(null)
 
@@ -36,6 +37,8 @@ export function useAuth() {
       } else {
         const detail = await res.json().catch(() => null)
         needsSetup.value = !!detail?.needsSetup
+        setupProjectName.value =
+          typeof detail?.projectName === 'string' ? detail.projectName : ''
         const preset = detail?.agentPolicy
         presetAgentPolicy.value =
           preset && typeof preset === 'object'
@@ -136,6 +139,7 @@ export function useAuth() {
     canEditContent,
     isReviewer,
     needsSetup,
+    setupProjectName,
     presetAgentPolicy,
     commentsSeenAt,
     markCommentsSeen,

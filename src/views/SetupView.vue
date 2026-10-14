@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { CircleAlert } from 'lucide-vue-next'
 import InputUI from '@/components/ui/InputUI.vue'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -7,9 +7,9 @@ import ToggleUI from '@/components/ui/ToggleUI.vue'
 import MainLogo from '@/assets/MainLogo.vue'
 import { useAuth } from '@/composables/useAuth'
 
-const { setup, presetAgentPolicy } = useAuth()
+const { setup, presetAgentPolicy, setupProjectName } = useAuth()
 
-const projectName = ref('')
+const projectName = ref(setupProjectName.value)
 const email = ref('')
 const password = ref('')
 const confirm = ref('')
@@ -17,6 +17,10 @@ const allowMainWrites = ref(false)
 const allowPublish = ref(false)
 const error = ref<string | null>(null)
 const busy = ref(false)
+
+watch(setupProjectName, (name) => {
+  if (name && !projectName.value) projectName.value = name
+})
 
 async function submit() {
   if (busy.value) return

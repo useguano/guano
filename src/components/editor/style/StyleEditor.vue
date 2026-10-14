@@ -439,18 +439,6 @@ watch(pendingFocus, consumeFocus)
       </div>
     </div>
 
-    <div class="flex flex-col gap-1.5 p-3 border-b border-input">
-      <p class="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Classes</p>
-      <ClassInput
-        ref="classInput"
-        :tokens="tokens"
-        :inherited="inheritedTokens"
-        :removable-inherited="removableInherited"
-        @commit="setTokens"
-        @remove="removeToken"
-      />
-    </div>
-
     <GroupAccordion
       v-for="section in visibleSections"
       :key="section.id"
@@ -617,5 +605,16 @@ watch(pendingFocus, consumeFocus)
       </ContentAccordion>
     </GroupAccordion>
 
+    <div class="flex flex-col gap-1.5 p-3">
+      <p class="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Classes</p>
+      <ClassInput
+        ref="classInput"
+        :tokens="tokens"
+        :inherited="inheritedTokens"
+        :removable-inherited="removableInherited"
+        @commit="setTokens"
+        @remove="removeToken"
+      />
+    </div>
   </div>
 </template>

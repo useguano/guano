@@ -42,6 +42,7 @@ import {
 import { pushSiteToGitHub } from './github.mjs'
 import { createZip, readZip } from './zip.mjs'
 import { relativizeSite, mountSite } from './relative.mjs'
+import { gatePage } from './gate.mjs'
 import {
   approveDevice,
   denyDevice,
@@ -554,11 +555,18 @@ async function handleAuth(req, res, path) {
       // ask again. Nothing here anyone could not set: with no users, whoever
       // reaches this instance is about to become its admin.
       const preset = (await agentPolicyPreset()) ? await readAgentPolicy() : null
+      // ...and the name they gave the project in the terminal, written to .env
+      // by `npm create @useguano` and loaded by the CLI. Nobody should be asked
+      // to name the same thing twice. Trimmed and capped because it reaches a
+      // form field, and read ONLY while there is no admin — after that the name
+      // lives in the project blob and is edited in the editor.
+      const scaffolded = String(process.env.GUANO_PROJECT_NAME ?? '').trim().slice(0, 60)
       return send(
         res,
         401,
         JSON.stringify({
           needsSetup: true,
+          ...(scaffolded ? { projectName: scaffolded } : {}),
           ...(preset
             ? { agentPolicy: { allowMainWrites: preset.allowMainWrites, allowPublish: preset.allowPublish } }
             : {}),
@@ -2448,23 +2456,6 @@ const emptySitePage = (preview) => `<!doctype html><html lang="en"><head><meta c
 <h1>${preview ? 'Nothing to preview yet' : 'Nothing published yet'}</h1>
 </body></html>`
 
-const gatePage = (next, wrong) => `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
-<title>Private site</title>
-<style>
-  body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;background:#f5f5f4;color:#1c1917}
-  form{width:min(92vw,320px);display:flex;flex-direction:column;gap:12px;padding:28px;background:#fff;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.06)}
-  h1{margin:0;font-size:17px}p{margin:0;color:#57534e;font-size:13px}
-  input{font:inherit;padding:10px 12px;border:1px solid #d6d3d1;border-radius:10px;outline:none}input:focus{border-color:#1c1917}
-  button{font:inherit;font-weight:600;padding:10px 12px;border:0;border-radius:10px;background:#1c1917;color:#fff;cursor:pointer}
-  .err{color:#b91c1c}
-</style></head><body><form method="post" action="/_guano/unlock">
-<h1>This site is private</h1><p>Enter the password to continue.</p>
-<input type="password" name="password" placeholder="Password" autofocus required>
-<input type="hidden" name="next" value="${escapeAttr(next)}">
-${wrong ? '<p class="err">That password is not right.</p>' : ''}
-<button type="submit">Continue</button></form></body></html>`
-const escapeAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 /** the private-site gate in front of the live site. Returns true when it
  * answered the request itself (gate page, unlock), false to serve normally. */
