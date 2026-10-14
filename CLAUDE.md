@@ -2,11 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What this is
+
+A browser-based visual website builder. The user builds pages on a live canvas with a **Layers tree** — inserting and arranging elements, then styling them — and can add interactions and animations, leave comments, branch and merge, translate into locales, and build reusable components and CMS collections. **AI agents read and write the same pages as a strict HTML subset** through the MCP server.
+
+A page's structure is an `ElementNode` **tree, and the tree is all there is** — no text format sits beside it (there was an indentation DSL until the v2 schema).
+
+There is **one admin shell** with **two surfaces** over one shared document, switched by the **Edit / Play** toggle on the page canvas: Edit is the rails + canvas + Layers builder, Play is the full-site render. It is a runtime mode in `useViewMode`, **not a route**, and contributors are pinned to Play. → `docs/ui.md`
+
+The published site is a **static export** (`server/export.mjs`) served by the node server at `/`; it never enters the Vue app. → `docs/export.md`
+
+## Hard rules
+
+These have no natural trigger point — nothing will remind you mid-task.
+
+- **Never `crypto.randomUUID()`** — use `uid()` from `src/lib/shared/ids.js`. `randomUUID` needs a secure context, so an editor reached over plain http at a LAN address threw on the first insert. There is deliberately no `Math.random` tier.
+- **Never a bare `console.*` in `server/`** — logging goes through `server/log.mjs` (levels, `LOG_JSON`, the request id).
+- **Every structural change goes through `lib/treeOps`**, parameterized by a `StructureHost`. Never mutate a tree by hand.
+- **Keep the three renderers in sync** — `ElementRenderer` (Edit), `PreviewRenderer` (Play), `server/export.mjs` (published). Anything that adds per-node or per-instance state must be read the same way in all three.
+- **Never animate one property with both motion systems.** Interactions write classes; animations write inline styles.
+- **Reuse the UI primitives** in `src/components/ui/` — never hand-roll an input or a button, never render a modal or popover with a local `v-if`, and never use the native `title` attribute.
+- **Errors must have a surface** — `useNotice()`, never a silent catch.
+- **No prose comments in `src/`.** Keep directives and typed JSDoc, nothing else.
+- **A `check:corpus` difference is a bug, never a re-baseline** (one documented exception: an asset you just rebuilt).
+
 ## Stack
 
 Vue `3.5`, vue-router `5`, Vite `8`, TypeScript `6`, Tailwind `4` (CSS-first, no config file — theme tokens live in `src/assets/main.css`). Node `^22.18.0 || >=24.12.0`. Path alias `@` → `src/` (`vite.config.ts`).
 
-**Pinia is not used** — it isn't a dependency and there is no `src/stores/`. Ignore any stale reference to it; state lives in composable singletons (below).
+**Pinia is not used** — it isn't a dependency and there is no `src/stores/`. Ignore any stale reference to it; state lives in composable singletons (see **State model**).
 
 ## Commands
 
@@ -33,17 +57,6 @@ To exercise pure `src/lib/*` logic or a composable headlessly, write a throwaway
 npx -y tsx --tsconfig tsconfig.app.json .tmp-test.ts && rm -f .tmp-test.ts
 ```
 
-## What this is
-
-A browser-based visual website builder. The user builds pages on a live canvas with a **Layers tree** — inserting and arranging elements, then styling them. A page's structure is an `ElementNode` **tree**, and the tree is all there is: no text format sits beside it (there was an indentation DSL until the v2 schema; see the migration below). AI agents read and write the same tree as a strict **HTML** subset. The canvas lets them style elements, add interactions, leave comments, branch/merge, translate into locales, and build reusable components and CMS collections. There is **one admin shell** (`BuildView` at `/admin`, laid out by `EditorLayout`) with **two surfaces** over one shared document, switched by the **Edit / Play** toggle at the bottom-right of the page canvas (`ModeToggle`; the bottom-left corner is the ⌘E Insert dock's) — a runtime mode in `useViewMode`, **not a route**. **Edit / Play is the UI's whole vocabulary for this; the internals stay `build`/`preview`** (`mode`, `isBuild`, `isPreview`, `SitePreview`, `PreviewRenderer`), and `ModeToggle` is the one place both names appear:
-
-- **Build** (shown as **Edit**) — the left **rail** (`AppRail`), one optional 16rem **column** (Pages or Components — a page's and a component's **layers** are edited inside them), the infinite **canvas** — the open page's breakpoint frames (`CanvasEditor` → `ElementRenderer`) or the components board (`ComponentsBoard`) — and the right **settings rail + panel** (`SettingsEditor`).
-- **Preview** (shown as **Play**) — the Build-only columns drop out and the centre becomes the full-site render (`SitePreview` → `PreviewRenderer`). For an admin or editor it is **read-only**: the site the way a visitor gets it, with links navigating (state-driven, no URL change), interactions, animations, scrub, sliders and smooth scroll all running for real, no editor affordance drawn over it, and text edited on the Edit canvas (`ElementRenderer`). Anyone can add a **comment** (hold C, click). **A contributor also edits content on the render** (`usePreviewEditing`, gated on `!canBuild`): double-click text to edit it in place (`useInlineEdit` with `escBehavior: 'save'`; field-bound text writes the entry, locale-aware), double-click an image/video to replace it from the media library, and right-click for **Edit content** / **Replace background** (the menu lives in `SitePreview`). Text inside a component instance is per-instance content, so it is editable; a background inside one is the master's (`backgroundInfo` renders from it, and the contributor merge keeps masters), so it is not offered. While editing is on, a link's single click waits 250ms (one shared `pendingNav` timer) so a double-click can cancel it; for builders a click navigates at once. The chrome around it still edits: the sidebar panels are per account type, not per mode, so an admin keeps the full Data/Style/Interactions inspector in Play, and the Pages drawer keeps its page/item settings. **Contributors are pinned here** (`useViewMode` forces the mode the moment `canBuild` resolves false; the Components rail button, the Pages drawer's Edit-layers icons and the toggle itself are hidden for them, so they only ever see Play and never learn there was a switch) — which means a contributor's content editing is the in-place editing above, plus the **Pages drawer's** item/page settings (entry field values, name/slug/status/seo) and comments.
-
-The toggle is a **page's** mode, so `BuildView` mounts it only when `canBuild && !showComponents` — the components board has nothing to play, and you leave it by opening a page. Leaving Edit closes the ⌘E palette (`ModeToggle` calls `closePalette`, not `setMode`, so the view-mode singleton never pulls in `useStructure`). It sits bottom-RIGHT so it never shares a corner with `InsertDock`, and its Play offset pays back the framed pane's `my-2` + border so switching doesn't move it under the pointer.
-
-Tailwind v4 (via `@tailwindcss/vite`), CSS-first with no config file — theme tokens live in `src/assets/main.css`. `@tailwindcss/browser` is dynamically imported in `CanvasEditor` so classes typed at runtime (and the project's design tokens) compile on the fly.
-
 ## Routes (`src/router/index.ts`)
 
 The SPA is the **admin editor only**, served under `/admin/` (Vite `base: '/admin/'`, so route paths are base-relative). The published site is the static export served by the node server at `/` — it never enters the Vue app. Routes: `/` (`build` — the whole editor, both surfaces), `/login`, `/setup` (first-run), `/invite/:token` (`SetPasswordView`, accept invite), plus a catch-all redirect to `/`. Preview stopped being a route when the two views merged into one shell, and no legacy path is kept as a redirect — the app is not public, so there are no old bookmarks to honour. A `beforeEach` guard gates everything on auth (redirecting to `/setup` or `/login`); there is no role redirect — contributors reach the same route and are pinned to the Preview surface by `useViewMode`. Hard `window.location.assign('/admin…')` calls (login/logout flows) use full server URLs and keep their `/admin` prefix.
@@ -53,7 +66,7 @@ The SPA is the **admin editor only**, served under `/admin/` (Vite `base: '/admi
 Shared state is module-level `ref`s declared **outside** the exported composable function, so every caller of e.g. `useProject()` sees the same instance — a hand-rolled store. This is the backbone; follow it for new global state. Two flavors: composables that derive from the `project` document, and newer server-hydrated ones (`useAuth`, `useUsers`, `useBranches`) that hold data fetched from the API.
 
 - `useProject` — owns the single `project` ref (the whole document) and project-level ops.
-- `usePage` — active page selection, page CRUD, keeps each page's `@setup` in sync with its `code`.
+- `usePage` — active page selection and page CRUD (add/duplicate/remove/rename, `updatePageMeta`, `setActivePage`, `homePage`).
 - `useElement` — selection/drag/highlight state + **all structural mutations** (add/remove/duplicate/paste/reorder/change-type/set-arg). Selection defaults to the page body when nothing is picked.
 - `useEditorBoot` — admin-zone boot: `await hydrateStore()` then start autosave/sync. Module-scoped `started` flag so it runs exactly once however the shell mounts. Autosave and undo therefore run in the Preview surface too, not just Build.
 - `usePersistence` — autosave + undo/redo + which branch is loaded (`docs/server.md`).
@@ -65,7 +78,7 @@ Shared state is module-level `ref`s declared **outside** the exported composable
 
 A `Page` has `elements` — the `ElementNode` tree — and **that is the whole of its structure**. There is no second representation to keep in step. Every structural change — insert, drag-reorder, duplicate, delete, wrap, retype — mutates the tree directly, through `lib/treeOps`.
 
-Tree edits carry identity for free, which is the point: the node objects survive, so ids, per-node state, selection and interaction `targetId` cross-references do too. Identity has to be *matched* in exactly two places now — realigning an instance to its master (`alignStructure`), and applying an agent's HTML (`lib/html/apply.ts`) — and both are documented below.
+Tree edits carry identity for free, which is the point: the node objects survive, so ids, per-node state, selection and interaction `targetId` cross-references do too. Identity has to be *matched* in exactly two places now — realigning an instance to its master (`alignStructure`), and applying an agent's HTML (`lib/html/apply.ts`). → `docs/components.md`, `docs/html.md`
 
 `alignStructure` keeps the node object for every child its signature-LCS pairs and leaves an already-current subtree byte-identical — a push that reads as an edit would be adopted straight back over the edit.
 
@@ -103,17 +116,28 @@ Two rules that cost a release each: **binding scope is decided by the TARGET, no
 
 **The detail lives in `docs/`, one file per theme.** Each entry there records the invariant **and the bug that produced it**, which is the only thing that stops a fix being undone; none of it is re-derivable from the code. READ the file before editing the subsystem — or just its `##` section when you need one answer.
 
-- **`docs/server.md`** — the server-backed store and autosave, drafts and the 3-way merge, auth roles and the contributor/reviewer merges, agent policy, integrations, capabilities, forms, redirects. Read it for anything under `server/` that is not the exporter, and for `usePersistence` / `useBranches` / `useAuth`.
+**The document and its renderers**
+
+- **`docs/schema.md`** — what v2 removed, the idempotent migration, its three load-bearing rules, salvage, and where it runs. Read it before touching `src/lib/migrate.ts`.
+- **`docs/html.md`** — the agent HTML subset: the registry mapping, the serializer's determinism, what the parser refuses and where, how `apply.ts` matches identity, refs and `validateTree`. Read it with `npm run check:html`.
+- **`docs/structure.md`** — `treeOps`, the `StructureHost`, `useStructure`'s policy and its `can`/`canDrop` answers, the Layers tree. Read it for any structural mutation.
+- **`docs/rendering.md`** — the shared render core, the Build-only empty box, how an interaction's scope is keyed, channels, and what canvas cost is made of. Read it before touching a renderer or adding per-node state.
+
+**Authoring subsystems**
+
 - **`docs/components.md`** — masters and instances, the one instance resolver (`shared/instances.js`), hidden parts, variants, nesting and mirrors, slots, the drawer's whole-project ops, the board. Read it for any component work, and before adding per-instance state (it must resolve along the chain, in all three renderers).
 - **`docs/content.md`** — collections and field types, localization, the `@locale:` switcher, `list-empty`, attribute layers, `fieldAttrs`, reserved `data-*`, sliders, icons, `custom-code`. Read it for CMS content, a locale, an attribute, or a node's media.
 - **`docs/motion.md`** — interactions (class toggles) and animations (tween timelines): two systems, one panel, all the math in `shared/motion.js` imported verbatim by editor, exporter and runtime. Read it for any trigger, tween or effect work. **Never animate one property with both.**
-- **`docs/structure.md`** — `treeOps`, the `StructureHost`, `useStructure`'s policy and its `can`/`canDrop` answers, the Layers tree. Read it for any structural mutation.
 - **`docs/theming.md`** — design tokens, a token's `dark` value, the `@theme` link sentinel, and why `dark:` is class-based here rather than `prefers-color-scheme`. Read it before "fixing" either.
+
+**The server and what it ships**
+
+- **`docs/server.md`** — the server-backed store and autosave, drafts and the 3-way merge, auth roles and the contributor/reviewer merges, agent policy, integrations, capabilities, forms, redirects. Read it for anything under `server/` that is not the exporter, and for `usePersistence` / `useBranches` / `useAuth`.
 - **`docs/export.md`** — the exporter (`server/export.mjs`), the compiled fx wire format, image hints and responsive variants, the three cache tiers, publish methods (server/zip/github), `apiOrigin`, private site, the preview port, package import/export. Read it before touching anything that ships bytes to a visitor.
+- **`docs/instance.md`** — the instance id, the remembered port, the per-project config entry, `boot()`'s ordering, the SIGTERM drain, `/api/health`, logging, the staging primitives and retention. Read it before touching `server/lifecycle.mjs`, `boot()` or the CLI's connect path.
+
+**Agents, chrome, checks**
+
 - **`docs/mcp.md`** — the agent toolset (`packages/guano/mcp/`): the write target and its consent channel, `serializeHandler`'s per-call baseline and lock, the HTML page tools, component and instance-part addressing, design warnings, and the untrusted-content fence. Read it with `mcp/GUIDE.md`, which is the agent-facing half and must stay in sync.
 - **`docs/ui.md`** — the primitives, the app-level floating hosts, where a component file goes, the two rails, the drawers and the Layers view, the class validator, and the four places shortcuts are registered. Read it before building or reshaping editor chrome.
 - **`docs/gates.md`** — what each `check:*` refuses and why, the committed `build:*` artifacts, the e2e suite's shape and its ordering rule, and the dev-server port walk. Read it before running or changing a gate.
-- **`docs/rendering.md`** — the shared render core, the Build-only empty box, how an interaction's scope is keyed, channels, and what canvas cost is made of. Read it before touching a renderer or adding per-node state.
-- **`docs/html.md`** — the agent HTML subset: the registry mapping, the serializer's determinism, what the parser refuses and where, how `apply.ts` matches identity, refs and `validateTree`. Read it with `npm run check:html`.
-- **`docs/schema.md`** — what v2 removed, the idempotent migration, its three load-bearing rules, salvage, and where it runs. Read it before touching `src/lib/migrate.ts`.
-- **`docs/instance.md`** — the instance id, the remembered port, the per-project config entry, `boot()`'s ordering, the SIGTERM drain, `/api/health`, logging, the staging primitives and retention. Read it before touching `server/lifecycle.mjs`, `boot()` or the CLI's connect path.

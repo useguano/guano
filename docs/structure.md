@@ -2,7 +2,8 @@
 
 <!-- Extracted from CLAUDE.md. Read this file before editing this subsystem;
      CLAUDE.md keeps a one-line definition per subsystem and points here.
-     "above"/"below" inside an entry refer to CLAUDE.md's own sections. -->
+     "above"/"below" inside an entry may point at a sibling docs/ file,
+     since those sections now live here rather than in CLAUDE.md. -->
 
 ## Structure: `lib/treeOps.ts`, `useStructure`, and the Layers tree
 
