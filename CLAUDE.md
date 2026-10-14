@@ -134,7 +134,7 @@ Two rules that cost a release each: **binding scope is decided by the TARGET, no
 
 - **`docs/server.md`** — the server-backed store and autosave, drafts and the 3-way merge, auth roles and the contributor/reviewer merges, agent policy, integrations, capabilities, forms, redirects. Read it for anything under `server/` that is not the exporter, and for `usePersistence` / `useBranches` / `useAuth`.
 - **`docs/export.md`** — the exporter (`server/export.mjs`), the compiled fx wire format, image hints and responsive variants, the three cache tiers, publish methods (server/zip/github), `apiOrigin`, private site, the preview port, package import/export. Read it before touching anything that ships bytes to a visitor.
-- **`docs/instance.md`** — the instance id, the remembered port, the per-project config entry, `boot()`'s ordering, the SIGTERM drain, `/api/health`, logging, the staging primitives and retention. Read it before touching `server/lifecycle.mjs`, `boot()` or the CLI's connect path.
+- **`docs/instance.md`** — the instance id and the remembered port; the ONE MCP config entry and its `GUANO_PROJECTS` map; how the live project is resolved (pin, then sole-reachable, then refuse) and why the agent never picks it; remote connect; `boot()`'s ordering, the SIGTERM drain, `/api/health`, logging, the staging primitives and retention. Read it before touching `server/lifecycle.mjs`, `boot()` or anything under `packages/guano/mcp/`.
 
 **Agents, chrome, checks**
 

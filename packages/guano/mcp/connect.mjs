@@ -251,23 +251,105 @@ function projectFolder(dataDir) {
 }
 
 /**
- * The name of the mcpServers entry: `guano-<slug>`, one per project.
+ * This project's slug inside the shared entry's GUANO_PROJECTS map.
  *
- * It used to be the bare key `guano` for every project, so connecting a second
- * one silently EVICTED the first — and because both entries also pointed at
- * the same default port, the surviving one talked to whichever instance had
- * booted first and got a 401 for its trouble. A key per project is what lets
- * several be connected at once, and it puts the project's name in front of the
- * agent (`mcp__guano-landing__get_page`) instead of leaving it ambiguous.
+ * There have been three schemes. The bare key `guano` for every project, which
+ * silently EVICTED the previous one. Then `guano-<slug>`, one mcpServers entry
+ * each — which fixed the eviction and introduced a worse nuisance: Claude
+ * Desktop launches every entry it has at startup, so every project not running
+ * that minute failed its handshake and raised its own "could not connect"
+ * alert. Now ONE entry whose env carries a map, keyed by this slug: one
+ * process, one toolset, one tool list, and nothing to fail for a project that
+ * is simply not up.
  */
-function entryName(projectName, dataDir) {
+const ENTRY_KEY = 'guano'
+
+function projectSlug(projectName, dataDir) {
   const raw = projectName?.trim() || projectFolder(dataDir)
   const slug = raw
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
-  return slug ? `guano-${slug}` : 'guano'
+  return slug || 'project'
+}
+
+/** a slug nothing else in the map is using — two sites both called "Site" would
+ *  otherwise overwrite each other's url and token */
+function uniqueSlug(base, taken, selfInstance) {
+  if (!taken[base] || taken[base].instance === selfInstance) return base
+  for (let i = 2; i < 50; i++) {
+    const candidate = `${base}-${i}`
+    if (!taken[candidate] || taken[candidate].instance === selfInstance) return candidate
+  }
+  return base
+}
+
+/**
+ * A remote instance's identity, over HTTP only.
+ *
+ * `readIdentity` reads instance.json first and consults a server only to
+ * confirm it — because probing an address and trusting what answers is how a
+ * connect bakes ANOTHER project's id into this project's entry. That reasoning
+ * does not apply here: the human named the url explicitly, so the address IS
+ * the contract and health is the only identity source there is.
+ */
+async function remoteIdentity(base) {
+  let health = null
+  try {
+    const res = await fetch(`${base}/api/health`)
+    health = await res.json()
+  } catch (e) {
+    console.error(
+      `✗ cannot reach ${base} (${e.message}). Check the url, and that the instance is running\n` +
+        '  and reachable from here — a VPS needs its studio published, not just its site.',
+    )
+    process.exit(1)
+  }
+  if (!health || typeof health !== 'object') {
+    console.error(`✗ ${base} answered /api/health with something that is not a Guano instance`)
+    process.exit(1)
+  }
+  return {
+    id: typeof health.instance === 'string' ? health.instance : '',
+    base,
+    name: '',
+    strayPort: false,
+  }
+}
+
+/** the remote instance's agent policy and project name, as the token sees them.
+ *  Reported rather than set: that file lives in the server's own data dir. */
+async function remotePolicy(base, token) {
+  try {
+    const res = await fetch(`${base}/api/auth/me`, {
+      headers: { authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      console.error(
+        `✗ ${base} refused that token (${res.status}). Create a fresh one in its editor under\n` +
+          '  My account → API tokens. A token is bound to ONE instance — one from another\n' +
+          '  project will always be refused here.',
+      )
+      process.exit(1)
+    }
+    const me = await res.json()
+    console.log(`✓ token accepted by ${base} as ${me.email} (${me.role})`)
+    if (me.instance?.name) console.log(`✓ project: ${me.instance.name}`)
+    return { ...(me.agentPolicy ?? {}), __name: me.instance?.name ?? '' }
+  } catch (e) {
+    console.error(`✗ cannot reach ${base}: ${e.message}`)
+    process.exit(1)
+  }
+}
+
+/** a slug for a remote project with no local folder to name it after */
+function hostSlug(base) {
+  try {
+    return new URL(base).hostname.replace(/^www\./, '')
+  } catch {
+    return 'remote'
+  }
 }
 
 /** the project's own name, for the entry slug (no server needed) */
@@ -301,26 +383,52 @@ export async function main(args = [], opts = {}) {
     const i = args.indexOf(name)
     return i !== -1 ? args[i + 1] : undefined
   }
-  const dataDir = await resolveDataDir()
+  /**
+   * REMOTE mode: a project on a VPS, reached over HTTPS.
+   *
+   * Everything the local flow does to prove it may mint a token touches the
+   * data dir — the nonce file that `/api/auth/connect` reads back, and the
+   * direct write that `--offline` falls back to. Neither is possible from
+   * another machine, and that route is loopback-only besides, so remote
+   * connects carry a token the human made in the editor (My account → API
+   * tokens) instead of minting one. The agent policy is that instance's own,
+   * set in its Settings → MCP rather than by a flag here.
+   */
+  const remoteUrl = opt('--url')
+  const remote = !!remoteUrl
+  if (remote && !/^https:\/\//.test(remoteUrl) && !/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(remoteUrl)) {
+    console.error(
+      `✗ --url must be an https: address (got ${remoteUrl}). A token travels on every request;\n` +
+        '  over plain http anything on the path can read it. http is allowed for localhost only.',
+    )
+    process.exit(1)
+  }
+
+  const dataDir = remote ? null : await resolveDataDir()
   // Pin it for every server module loaded from here on. `util.mjs` reads
   // GUANO_DATA_DIR once at import time and `agent-policy.mjs` derives its file
   // from that, so without this the token could be written to one dir and the
   // policy beside it to another — which is exactly what the clone layout did.
-  process.env.GUANO_DATA_DIR = dataDir
+  if (dataDir) process.env.GUANO_DATA_DIR = dataDir
   // The address of THIS project, not of port 4174. An explicit GUANO_URL or
   // PORT is a contract and still wins; otherwise the port this data dir last
   // landed on is what the entry gets baked with, so a second project's config
   // never points at the first project's socket.
-  const pinned = process.env.GUANO_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : '')
-  const identity = await readIdentity((pinned || 'http://localhost:4174').replace(/\/+$/, ''), dataDir)
+  const pinned = remote
+    ? remoteUrl
+    : process.env.GUANO_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : '')
+  const identity = remote
+    ? await remoteIdentity(remoteUrl.replace(/\/+$/, ''))
+    : await readIdentity((pinned || 'http://localhost:4174').replace(/\/+$/, ''), dataDir)
   const base = (pinned || identity.base).replace(/\/+$/, '')
   if (identity.strayPort && !pinned) {
     console.log(`! another Guano project is on :4174 — this entry targets ${base} instead`)
   }
 
   // 1. the agent permissions — asked before anything is written, so a ^C here
-  //    changes nothing
-  const policy = await choosePolicy(flag)
+  //    changes nothing. A remote instance owns its own policy: it lives in that
+  //    server's data dir, which this machine cannot write.
+  const policy = remote ? {} : await choosePolicy(flag)
 
   // 2. mint a token. Through the running server when there is one (its token
   //    cache stays coherent); straight into the data dir when it is down —
@@ -328,7 +436,21 @@ export async function main(args = [], opts = {}) {
   //    default port may belong to ANOTHER project, and minting through it
   //    would connect Claude to the wrong instance. The scaffolder passes it.
   let minted
-  if (flag('--offline')) {
+  if (remote) {
+    // The token is the human's: they were signed in to that instance's /admin
+    // to create it, which is the proof the nonce stands in for locally.
+    const token = opt('--token') ?? ''
+    if (!/^guano_[0-9a-f]{16,}$/.test(token)) {
+      console.error(
+        '✗ --url needs --token. Create one in that instance\'s editor under My account →\n' +
+          '  API tokens, then re-run:\n' +
+          `    guano connect --url ${base} --token guano_…\n` +
+          '  (the token travels on every request, so keep it out of your shell history if you can)',
+      )
+      process.exit(1)
+    }
+    minted = { token, email: null, agentPolicy: await remotePolicy(base, token) }
+  } else if (flag('--offline')) {
     minted = await mintDirect(dataDir, policy)
   } else {
     try {
@@ -356,44 +478,122 @@ export async function main(args = [], opts = {}) {
       (!Object.keys(policy).length && somethingOff ? ' (unchanged — pass --main / --publish to turn them on)' : ''),
   )
 
-  const projectName = await readProjectName(dataDir)
-  const name = entryName(projectName, dataDir)
-  const entry = {
-    command: process.execPath,
-    args: [join(ROOT, 'bin', 'guano.js'), 'mcp'],
-    env: {
-      GUANO_URL: base,
-      GUANO_TOKEN: minted.token,
+  const projectName = remote
+    ? minted.agentPolicy?.__name || identity.name
+    : await readProjectName(dataDir)
+  const configPath = opt('--config') ?? claudeConfigPath()
+
+  // Read the config BEFORE building the entry: this project is one key in the
+  // shared entry's GUANO_PROJECTS map, so the other projects already in it are
+  // part of what gets written back. Read-only here — the write is below, after
+  // the Claude-is-running check.
+  let config = {}
+  try {
+    config = JSON.parse(await readFile(configPath, 'utf8'))
+  } catch {
+    /* first MCP server ever — start fresh */
+  }
+  const servers = { ...(config.mcpServers ?? {}) }
+
+  /**
+   * Fold every legacy per-project entry into the map.
+   *
+   * `guano-<slug>` entries are what Claude Desktop launches one process each
+   * for, so leaving them in place would keep raising the alerts this is meant
+   * to end — and they are unambiguously ours (the key, the command and the
+   * GUANO_URL all say so), unlike a sibling entry pointing at a port we cannot
+   * identify. The bare `guano` key is the one being taken over, so its own env
+   * is folded in too.
+   */
+  const inherited = {}
+  for (const [key, value] of Object.entries(servers)) {
+    if (key !== ENTRY_KEY && !key.startsWith('guano-')) continue
+    const env = value?.env ?? {}
+    // already a map? take every project in it
+    if (typeof env.GUANO_PROJECTS === 'string' && env.GUANO_PROJECTS) {
+      try {
+        for (const [slug, p] of Object.entries(JSON.parse(env.GUANO_PROJECTS))) {
+          if (p && typeof p === 'object' && typeof p.url === 'string') inherited[slug] = p
+        }
+      } catch {
+        /* malformed map — the router drops bad entries too; do not lose the rest */
+      }
+      continue
+    }
+    if (typeof env.GUANO_URL !== 'string' || !env.GUANO_URL) continue
+    const slug = key === ENTRY_KEY ? projectSlug('', '') : key.slice('guano-'.length)
+    inherited[slug] = {
+      url: env.GUANO_URL.replace(/\/+$/, ''),
+      token: env.GUANO_TOKEN ?? '',
+      ...(env.GUANO_INSTANCE ? { instance: env.GUANO_INSTANCE } : {}),
+      ...(env.GUANO_MCP_TARGET ? { target: env.GUANO_MCP_TARGET } : {}),
+    }
+  }
+  const foldedIn = Object.keys(servers).filter((k) => k !== ENTRY_KEY && k.startsWith('guano-'))
+
+  // This project's own key: its slug, unless another project already holds it
+  // (two sites both called "Site" would otherwise overwrite each other).
+  const slug = uniqueSlug(
+    projectSlug(projectName, dataDir ?? hostSlug(base)),
+    inherited,
+    identity.id,
+  )
+  const projects = {
+    ...inherited,
+    [slug]: {
+      url: base,
+      token: minted.token,
       // Which project this token belongs to. `guano mcp` compares it against
       // /api/health before presenting the token, so another project squatting
       // the port is REFUSED by name instead of answering with a 401 that reads
       // as "the token is dead".
-      ...(identity.id ? { GUANO_INSTANCE: identity.id } : {}),
+      ...(identity.id ? { instance: identity.id } : {}),
       // Main allowed → the target is settled in the client's own config, the
-      // one consent channel a prompt-injected agent cannot reach, and the
-      // agent starts working instead of asking "Main or a draft?"
-      ...(mainAllowed ? { GUANO_MCP_TARGET: 'main' } : {}),
+      // one consent channel a prompt-injected agent cannot reach, and the agent
+      // starts working instead of asking "Main or a draft?". Per PROJECT, so
+      // pinning Main for a landing page does not pin it for a client's site.
+      ...(mainAllowed ? { target: 'main' } : {}),
+      ...(projectName ? { name: projectName } : {}),
     },
   }
-  if (mainAllowed) console.log('✓ GUANO_MCP_TARGET=main — the agent writes to Main without asking')
-  console.log(`✓ MCP entry: ${name} → ${base}${projectName ? ` (${projectName})` : ''}`)
+
+  const entry = {
+    command: process.execPath,
+    args: [join(ROOT, 'bin', 'guano.js'), 'mcp'],
+    env: {
+      GUANO_PROJECTS: JSON.stringify(projects),
+      // Confine the tools' local-path arguments. They are a read-anything —
+      // and, through the worklist writer, a write-anything — primitive the
+      // moment an agent can be talked into a path, and `guano mcp` could only
+      // WARN that this was unset. The project folder is the right default: it
+      // is where a payload would live, and it is already the blast radius of
+      // everything else this entry can do.
+      // A remote project has no local data dir, so the directory connect was
+      // run from is the best available answer — and it is where a payload for
+      // that site would be kept anyway.
+      GUANO_MCP_FILE_ROOT: dataDir ? resolve(dataDir, '..') : process.cwd(),
+    },
+  }
+  if (mainAllowed) console.log(`✓ target: main — the agent writes to Main without asking`)
+  console.log(`✓ MCP project "${slug}" → ${base}${projectName ? ` (${projectName})` : ''}`)
+  const siblings = Object.keys(projects).filter((s) => s !== slug)
+  if (siblings.length) console.log(`  also connected in this entry: ${siblings.join(', ')}`)
 
   // 3. --print: emit the snippet for any MCP client, touch nothing
   if (flag('--print')) {
     console.log('\nAdd this under "mcpServers" in your MCP client config:\n')
-    console.log(JSON.stringify({ [name]: entry }, null, 2))
+    console.log(JSON.stringify({ [ENTRY_KEY]: entry }, null, 2))
     return
   }
 
   // 4. write Claude Desktop's config — but never while the app is running
   //    (it flushes its in-memory copy on quit, silently reverting the edit)
-  const configPath = opt('--config') ?? claudeConfigPath()
   while (!opt('--config') && !flag('--force') && claudeDesktopRunning()) {
     const answer = opts.whenClaudeRunning ? await opts.whenClaudeRunning() : 'exit'
     if (answer === 'retry') continue
     if (answer === 'skip') {
       console.log('\nClaude Desktop left running — its config was not written. Add this under "mcpServers" yourself:\n')
-      console.log(JSON.stringify({ [name]: entry }, null, 2))
+      console.log(JSON.stringify({ [ENTRY_KEY]: entry }, null, 2))
       console.log('\nor quit Claude Desktop and run `npm run connect` later to write it for you.')
       return
     }
@@ -403,48 +603,33 @@ export async function main(args = [], opts = {}) {
     )
     process.exit(1)
   }
-  let config = {}
-  try {
-    config = JSON.parse(await readFile(configPath, 'utf8'))
-  } catch {
-    /* first MCP server ever — start fresh */
-  }
-  const servers = { ...(config.mcpServers ?? {}) }
-  // Retire a legacy bare `guano` entry, but ONLY when it is this same project:
-  // leaving it would point a second MCP server at the same instance under a
-  // name no `connect` ever updates again, and deleting someone else's would
-  // disconnect a project this run never looked at.
-  const legacy = servers.guano
-  const legacyIsOurs =
-    name !== 'guano' &&
-    legacy &&
-    (legacy.env?.GUANO_INSTANCE === identity.id || legacy.env?.GUANO_URL === base)
-  if (legacyIsOurs) {
-    delete servers.guano
-    console.log('✓ replaced the old unnamed `guano` entry with a per-project one')
-  }
-  servers[name] = entry
+
+  for (const key of foldedIn) delete servers[key]
+  servers[ENTRY_KEY] = entry
   config.mcpServers = servers
 
-  // A sibling entry aiming at the SAME url is a different project that this
-  // one has taken the port from — its token can never be accepted here while
-  // we hold the address. It is not deleted: that project may simply not be
-  // running, and removing an entry this run never verified would disconnect a
-  // site nobody asked about. Named instead, because two entries on one port is
-  // precisely the confusion this naming scheme exists to end.
-  const clashing = Object.entries(servers).filter(
-    ([k, v]) => k !== name && v?.env?.GUANO_URL === base && v?.env?.GUANO_INSTANCE !== identity.id,
+  // Two projects on ONE url is a real problem and still worth naming: whichever
+  // instance holds the port answers for both, and only one of the two tokens
+  // can be accepted. The map cannot fix that — it is a port collision, not a
+  // config one.
+  const sameUrl = Object.entries(projects).filter(
+    ([s, p]) => s !== slug && p.url === base && p.instance !== identity.id,
   )
-  for (const [k] of clashing) {
+  for (const [s] of sameUrl) {
     console.log(
-      `! ${k} also targets ${base} but is a different project — it cannot work while this\n` +
-        `  one holds that port. Give one of them its own PORT, or remove the entry.`,
+      `! project "${s}" also targets ${base} but is a different project — it cannot work\n` +
+        `  while this one holds that port. Give one of them its own PORT in its .env.`,
     )
   }
   await mkdir(join(configPath, '..'), { recursive: true })
   await writeFile(configPath, JSON.stringify(config, null, 2))
   console.log(`✓ Claude Desktop config updated: ${configPath}`)
-  const others = Object.keys(servers).filter((k) => k.startsWith('guano') && k !== name)
-  if (others.length) console.log(`  other guano projects still connected: ${others.join(', ')}`)
-  console.log(`\nDone. Open Claude Desktop — ${name} will be connected.`)
+  if (foldedIn.length) {
+    console.log(
+      `✓ folded ${foldedIn.length} per-project entr${foldedIn.length === 1 ? 'y' : 'ies'} into one ` +
+        `(${foldedIn.join(', ')}) — Claude Desktop no longer starts a process per project, so it\n` +
+        '  stops reporting "could not connect" for the ones you are not running',
+    )
+  }
+  console.log(`\nDone. Open Claude Desktop — guano is connected, working on "${slug}".`)
 }

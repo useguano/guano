@@ -2,15 +2,13 @@
 // the data dir directly — every read/write goes through the authed HTTP API,
 // exactly as the browser editor does. Auth is a `guano_` API-token bearer
 // (create one in the editor: My account → API tokens).
-
-const BASE = (process.env.GUANO_URL || 'http://localhost:4174').replace(/\/+$/, '')
-const TOKEN = process.env.GUANO_TOKEN || ''
-// Which project this entry was connected to, written by `guano connect`. A
-// token is minted into ONE data dir, so when several projects share a default
-// port the instance that answers may not be the one that issued the token —
-// and the 401 it returns is indistinguishable from a revoked token. Comparing
-// this against /api/health turns that into a message naming both projects.
-const INSTANCE = process.env.GUANO_INSTANCE || ''
+//
+// `createApi` is the per-project client. One Claude Desktop entry now carries
+// SEVERAL projects (GUANO_PROJECTS), each with its own url, token and instance
+// id, and the live one is resolved per call — so a client cannot be bound to
+// one address at import time any more. The module-level exports below are the
+// single-project form, built from the environment, and are what a bare
+// GUANO_URL/GUANO_TOKEN setup still uses.
 
 class ApiError extends Error {
   constructor(status, message, detail) {
@@ -28,149 +26,206 @@ class ApiError extends Error {
   }
 }
 
-async function req(method, path, body, extraHeaders) {
-  let res
-  try {
-    res = await fetch(BASE + path, {
-      method,
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        ...extraHeaders,
-      },
-      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
-    })
-  } catch (e) {
-    throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
-  }
-  if (!res.ok) {
-    const detail = await res.json().catch(() => null)
-    const msg = detail?.error ?? `request failed (${res.status})`
-    throw new ApiError(res.status, msg, detail)
-  }
-  return res
-}
-
-/** the unauthenticated identity probe — never throws on a 401/404, because an
- *  older instance has no `instance` field and must still be usable */
-export async function health() {
-  try {
-    const res = await fetch(`${BASE}/api/health`)
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-/** the authenticated user, or throws (bad URL / token / role) */
-export async function whoami() {
-  const res = await req('GET', '/api/auth/me')
-  return res.json()
-}
-
-/** raw stored string for a key, or null when absent */
-export async function storeGetRaw(key) {
-  const res = await req('GET', `/api/store?keys=${encodeURIComponent(key)}`)
-  const map = await res.json()
-  return map[key] ?? null
-}
-
-/** parsed JSON for a key, or null when absent */
-export async function storeGetJson(key) {
-  const raw = await storeGetRaw(key)
-  return raw === null ? null : JSON.parse(raw)
-}
-
 /**
- * Write a raw string under a key.
- *
- * `ifMatch` is the sha256 of the bytes the caller believes are stored — the
- * server compares it under its own per-key lock and answers 412 rather than
- * overwriting someone else's write. That last word matters: the caller's own
- * read-then-compare cannot see a write that lands between its check and its
- * PUT, and the whole blob goes out on every write, so what is lost in that gap
- * is a whole page, not a field.
+ * A client for ONE instance.
+ * @param {{base: string, token: string, instance?: string}} conf
  */
-export async function storePutRaw(key, raw, { ifMatch } = {}) {
-  await req(
-    'PUT',
-    `/api/store/${encodeURIComponent(key)}`,
-    raw,
-    ifMatch ? { 'if-match': ifMatch } : undefined,
-  )
-}
+export function createApi({ base, token, instance = '' }) {
+  const BASE = String(base ?? '').replace(/\/+$/, '')
+  const TOKEN = token ?? ''
+  const INSTANCE = instance ?? ''
 
-/** publish (server method): editor+ only, gated server-side */
-export async function publish(projectSnapshot) {
-  const res = await req('POST', '/api/published?method=server', projectSnapshot)
-  return res.json()
-}
-
-/**
- * Export the snapshot to the PREVIEW site and return where to look at it.
- * Nothing reaches the live origin, and the agent publish policy does not gate
- * it — seeing your own work should never require shipping it.
- */
-export async function preview(projectSnapshot) {
-  const res = await req('POST', '/api/preview', projectSnapshot)
-  return res.json()
-}
-
-/** the forms with submissions, and one form's rows. Gated server-side on the
- *  `allowFormSubmissions` agent policy, which is OFF by default: submissions
- *  are site visitors' personal details, and an injected agent with read access
- *  could exfiltrate them through any write it can make. */
-export async function formsList() {
-  const res = await req('GET', '/api/forms')
-  return res.json()
-}
-
-export async function formSubmissions(formId, { limit, before } = {}) {
-  const params = new URLSearchParams()
-  if (limit) params.set('limit', String(limit))
-  if (before) params.set('before', before)
-  const query = params.toString()
-  const res = await req(
-    'GET',
-    `/api/forms/${encodeURIComponent(formId)}/submissions${query ? `?${query}` : ''}`,
-  )
-  return res.json()
-}
-
-/** the integrations, as NAMES only — never a value, plain or secret. An agent
- *  needs the names to write a valid {{ENV.X}} reference in custom code and
- *  nothing more. */
-export async function integrationsList() {
-  const res = await req('GET', '/api/integrations')
-  return res.json()
-}
-
-/** the media library index: { assets, folders } */
-export async function mediaIndex() {
-  const res = await req('GET', '/api/media')
-  return res.json()
-}
-
-/** upload raw bytes as a new library asset — the server validates mime, size
- *  caps, content sniffing and quota exactly as for browser uploads */
-export async function mediaUpload({ name, folderId, mime, bytes }) {
-  const params = new URLSearchParams({ name })
-  if (folderId) params.set('folder', folderId)
-  let res
-  try {
-    res = await fetch(`${BASE}/api/media?${params}`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': mime },
-      body: bytes,
-    })
-  } catch (e) {
-    throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
+    async function req(method, path, body, extraHeaders) {
+    let res
+    try {
+      res = await fetch(BASE + path, {
+        method,
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+          ...extraHeaders,
+        },
+        body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+      })
+    } catch (e) {
+      throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
+    }
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      const msg = detail?.error ?? `request failed (${res.status})`
+      throw new ApiError(res.status, msg, detail)
+    }
+    return res
   }
-  if (!res.ok) {
-    const detail = await res.json().catch(() => null)
-    throw new ApiError(res.status, detail?.error ?? `upload failed (${res.status})`, detail)
+
+  /** the unauthenticated identity probe — never throws on a 401/404, because an
+   *  older instance has no `instance` field and must still be usable */
+  async function health() {
+    try {
+      const res = await fetch(`${BASE}/api/health`)
+      return await res.json()
+    } catch {
+      return null
+    }
   }
-  return res.json()
+
+  /** the authenticated user, or throws (bad URL / token / role) */
+  async function whoami() {
+    const res = await req('GET', '/api/auth/me')
+    return res.json()
+  }
+
+  /** raw stored string for a key, or null when absent */
+  async function storeGetRaw(key) {
+    const res = await req('GET', `/api/store?keys=${encodeURIComponent(key)}`)
+    const map = await res.json()
+    return map[key] ?? null
+  }
+
+  /** parsed JSON for a key, or null when absent */
+  async function storeGetJson(key) {
+    const raw = await storeGetRaw(key)
+    return raw === null ? null : JSON.parse(raw)
+  }
+
+  /**
+   * Write a raw string under a key.
+   *
+   * `ifMatch` is the sha256 of the bytes the caller believes are stored — the
+   * server compares it under its own per-key lock and answers 412 rather than
+   * overwriting someone else's write. That last word matters: the caller's own
+   * read-then-compare cannot see a write that lands between its check and its
+   * PUT, and the whole blob goes out on every write, so what is lost in that gap
+   * is a whole page, not a field.
+   */
+  async function storePutRaw(key, raw, { ifMatch } = {}) {
+    await req(
+      'PUT',
+      `/api/store/${encodeURIComponent(key)}`,
+      raw,
+      ifMatch ? { 'if-match': ifMatch } : undefined,
+    )
+  }
+
+  /** publish (server method): editor+ only, gated server-side */
+  async function publish(projectSnapshot) {
+    const res = await req('POST', '/api/published?method=server', projectSnapshot)
+    return res.json()
+  }
+
+  /**
+   * Export the snapshot to the PREVIEW site and return where to look at it.
+   * Nothing reaches the live origin, and the agent publish policy does not gate
+   * it — seeing your own work should never require shipping it.
+   */
+  async function preview(projectSnapshot) {
+    const res = await req('POST', '/api/preview', projectSnapshot)
+    return res.json()
+  }
+
+  /** the forms with submissions, and one form's rows. Gated server-side on the
+   *  `allowFormSubmissions` agent policy, which is OFF by default: submissions
+   *  are site visitors' personal details, and an injected agent with read access
+   *  could exfiltrate them through any write it can make. */
+  async function formsList() {
+    const res = await req('GET', '/api/forms')
+    return res.json()
+  }
+
+  async function formSubmissions(formId, { limit, before } = {}) {
+    const params = new URLSearchParams()
+    if (limit) params.set('limit', String(limit))
+    if (before) params.set('before', before)
+    const query = params.toString()
+    const res = await req(
+      'GET',
+      `/api/forms/${encodeURIComponent(formId)}/submissions${query ? `?${query}` : ''}`,
+    )
+    return res.json()
+  }
+
+  /** the integrations, as NAMES only — never a value, plain or secret. An agent
+   *  needs the names to write a valid {{ENV.X}} reference in custom code and
+   *  nothing more. */
+  async function integrationsList() {
+    const res = await req('GET', '/api/integrations')
+    return res.json()
+  }
+
+  /** the media library index: { assets, folders } */
+  async function mediaIndex() {
+    const res = await req('GET', '/api/media')
+    return res.json()
+  }
+
+  /** upload raw bytes as a new library asset — the server validates mime, size
+   *  caps, content sniffing and quota exactly as for browser uploads */
+  async function mediaUpload({ name, folderId, mime, bytes }) {
+    const params = new URLSearchParams({ name })
+    if (folderId) params.set('folder', folderId)
+    let res
+    try {
+      res = await fetch(`${BASE}/api/media?${params}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': mime },
+        body: bytes,
+      })
+    } catch (e) {
+      throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
+    }
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new ApiError(res.status, detail?.error ?? `upload failed (${res.status})`, detail)
+    }
+    return res.json()
+  }
+
+  return {
+    health,
+    whoami,
+    storeGetRaw,
+    storeGetJson,
+    storePutRaw,
+    publish,
+    preview,
+    formsList,
+    formSubmissions,
+    integrationsList,
+    mediaIndex,
+    mediaUpload,
+    base: BASE,
+    token: TOKEN,
+    instance: INSTANCE,
+  }
 }
+
+// ---------- the single-project client, from the environment ----------
+//
+// A bare GUANO_URL/GUANO_TOKEN entry (and `server/agent.mjs`, and every test
+// that builds its own api) still works exactly as before. The router in
+// projects.mjs builds its clients with `createApi` instead.
+const BASE = (process.env.GUANO_URL || 'http://localhost:4174').replace(/\/+$/, '')
+const TOKEN = process.env.GUANO_TOKEN || ''
+// Which project this entry was connected to, written by `guano connect`. A
+// token is minted into ONE data dir, so when several projects share a default
+// port the instance that answers may not be the one that issued the token —
+// and the 401 it returns is indistinguishable from a revoked token. Comparing
+// this against /api/health turns that into a message naming both projects.
+const INSTANCE = process.env.GUANO_INSTANCE || ''
+
+const envApi = createApi({ base: BASE, token: TOKEN, instance: INSTANCE })
+
+export const health = envApi.health
+export const whoami = envApi.whoami
+export const storeGetRaw = envApi.storeGetRaw
+export const storeGetJson = envApi.storeGetJson
+export const storePutRaw = envApi.storePutRaw
+export const publish = envApi.publish
+export const preview = envApi.preview
+export const formsList = envApi.formsList
+export const formSubmissions = envApi.formSubmissions
+export const integrationsList = envApi.integrationsList
+export const mediaIndex = envApi.mediaIndex
+export const mediaUpload = envApi.mediaUpload
 
 export { ApiError, BASE, TOKEN, INSTANCE }

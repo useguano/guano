@@ -37,10 +37,15 @@ Usage:
                          edit the live project, --publish lets it publish;
                          with neither it asks, --yes skips) and writes the MCP
                          config (quit Claude first; --print emits the snippet
-                         for other MCP clients). Works before /admin setup
-                         too — the token is bound to the first admin.
+                         for other MCP clients). Every project goes into ONE
+                         entry, so Claude stops reporting "could not connect"
+                         for the ones you are not running. Works before /admin
+                         setup too — the token is bound to the first admin.
                          --offline never talks to a server (what
                          \`npm create @useguano\` runs for you)
+                         --url https://host --token guano_… connects a REMOTE
+                         instance (a VPS): make the token in its editor under
+                         My account → API tokens
   guano mcp              run the MCP server (stdio) for AI agents
   guano --version
 

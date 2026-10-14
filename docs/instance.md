@@ -25,11 +25,51 @@ Because the port a project owns is the one it actually got: recording what it as
 
 A `previewPort` sat beside it until the preview moved onto this server under `/_guano/preview` (see `docs/export.md`). **A project owns one port now**, which is also why `npm create @useguano` steps by one when it picks a free one rather than by two.
 
-## The config entry is per project
+## ONE config entry, with a map of projects
 
-`connect` writes `mcpServers["guano-<slug>"]`, not the fixed key `guano` it used to — which silently EVICTED the previous project's entry, so connecting a second site disconnected the first with no evidence but Claude no longer reaching a site nobody had touched.
+There have been three schemes, and each fixed the one before it.
 
-A legacy bare `guano` entry is retired only when it is demonstrably the same instance (matching id or url); deleting one that is not would disconnect a project the run never looked at. The slug also puts the project in front of the agent (`mcp__guano-landing__get_page`).
+The fixed key `guano` silently **EVICTED** the previous project's entry, so connecting a second site disconnected the first with no evidence but Claude no longer reaching a site nobody had touched.
+
+`guano-<slug>`, one `mcpServers` entry per project, fixed that — and introduced a worse nuisance. **Claude Desktop launches every entry it has at startup**, so every project not running that minute failed its handshake and raised its own "could not connect" alert. On a machine with four sites that is the normal state, and the alerts name a cause (a dead server) that is not a problem.
+
+Now one entry, `mcpServers.guano`, whose env carries **`GUANO_PROJECTS`**: `{"<slug>": {url, token, instance, target, name}}`. One process, one toolset, and therefore **one tool list whatever the project count** — which matters, because the tool list is injected into the model's context on every turn and `check:mcp` budgets it at 80,000 B. Per-project entries would have paid that per running project.
+
+`connect` folds every legacy `guano-*` entry (and a bare `guano` one) into the map, keeping each one's token and target: they are unambiguously ours, and leaving them would keep raising the alerts. An unrelated MCP server's entry is never touched. The slug is unique within the map, so two sites both called "Site" do not overwrite each other.
+
+**`target` is per project.** It was one `GUANO_MCP_TARGET` for the whole entry; with several projects behind one entry, pinning Main for a landing page would have pinned it for a client's live site too.
+
+What is lost: the project no longer appears in the tool name (`mcp__guano__get_page`, not `mcp__guano-landing__get_page`). `get_status` and the startup log name the live project instead.
+
+## Which project is live
+
+`packages/guano/mcp/projects.mjs`. **The agent must never be the one that decides which site it writes to** — a node id addresses one tree and a token is minted into one data dir, so a misdirected write is not a smaller version of the right write, it is an edit to someone else's site reported as success.
+
+Resolution order:
+
+1. **`GUANO_MCP_PROJECT`** — pinned in the entry's env. The human edited a config file, which is the one consent channel a prompt-injected agent cannot reach. Never asked, never overridden.
+2. **The sole reachable project** — if exactly one mapped project answers `/api/health` with its own instance id, that is the one. Starting a server is a human action the agent has no way to perform (it has no shell; its only reach is HTTP to something already running), so this is **consent by action** and needs no prompt. It is also the whole plug-and-play case: one local project, nothing configured.
+3. **Otherwise refuse and name the candidates.** Guessing between two running projects is how "which site am I editing" becomes a question nobody can answer from the outside.
+
+A probe is cached for 5s, so a burst of tool calls does not re-probe every project, and a project started mid-session is picked up within a call or two — **no restart to switch projects**. A missing `instance` on either side is never a mismatch, for the same reason as above.
+
+Per-project session state — the write target, the compare-and-swap baseline, a translation worklist handle — is **dropped when the live project changes** (`syncProject` in `tools.mjs`). All three are addresses into one project's blob, and carrying any of them across a switch means a write built on project A's bytes landing in project B.
+
+## The MCP client serves while nothing is running
+
+`main()` used to `process.exit(1)` whenever it could not reach the instance. The process died before the MCP handshake, so the client could only report "could not connect" — which is the alert above.
+
+An unreachable instance is **`status === 0`** from `api.mjs` and nothing else, which is what makes the two cases separable. Not running: log it and serve, and let the first tool call say which project to start. A revoked token, a pending setup, or the wrong project on the port: still exit loudly, because those are states a human has to fix and failing quietly would hide them behind tools that 401 one at a time.
+
+## Connecting a remote instance
+
+`guano connect --url https://studio.example.com --token guano_…`.
+
+Everything the local flow does to prove it may mint a token touches the data dir — the nonce file `/api/auth/connect` reads back, and the direct write `--offline` falls back to — and that route is **loopback-only** besides. Neither is possible from another machine, so a remote connect carries a token the human made in the editor (My account → API tokens) instead of minting one.
+
+`--url` must be `https:` (plain `http:` only for localhost): the token travels on every request. Identity comes from `/api/health`, and the project name from `/api/auth/me`. The agent policy is that instance's own, set in its Settings → MCP, since the file lives in a data dir this machine cannot write.
+
+Note that **the data-dir rule below does not apply to a remote entry**: it exists to stop `connect` probing a *default port* and baking whatever answers into this project's entry. A remote url is named explicitly by the human, so the address is the contract and health is the only identity source there is.
 
 ## The data dir is the authority on identity, never the port
 

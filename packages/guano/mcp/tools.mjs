@@ -694,6 +694,41 @@ let target = null
  * to write anything at all.
  */
 const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
+// The configured target of the project currently being worked on. One MCP entry
+// now carries several projects, so a target pinned for a landing page must not
+// be pinned for a client's live site too: each project in GUANO_PROJECTS has its
+// own `target`, and `syncProject` swaps this (and clears the session) when the
+// live project changes. With a bare single-project entry it stays ENV_TARGET.
+let envTarget = ENV_TARGET
+
+// Which project the per-project session state below belongs to. null until the
+// first call resolves one.
+let activeProjectKey = null
+
+/**
+ * Adopt the live project, and DROP everything that belonged to the last one.
+ *
+ * `target`, the compare-and-swap baseline and the translation worklist are all
+ * addresses into one project's blob. Carrying any of them across a switch means
+ * a write built on project A's bytes, or aimed at a draft id that only exists
+ * there, landing in project B and reporting success — which is the whole reason
+ * the agent is never the one that picks the project.
+ */
+function syncProject(api) {
+  const key = api?.projectKey?.() ?? null
+  if (key === activeProjectKey) return
+  activeProjectKey = key
+  loadedRaw = null
+  loadedKey = null
+  worklistHandle = null
+  worklistItems = null
+  worklistLocale = null
+  envTarget = (api?.configuredTarget?.() ?? ENV_TARGET).trim()
+  // the same rule as at module load: `main` and a draft id need nothing from
+  // the server, so they ARE the target from the first call; `new:<Name>` stays
+  // lazy because finding or creating that draft needs one.
+  target = envTarget && !envTarget.startsWith('new:') ? envTarget : null
+}
 // `main` and a draft ID need nothing from the server to be a target, so they
 // ARE the target from the first call: the operator already decided, and
 // get_status answering `targetSet: false` beside `configuredTarget` sent every
@@ -701,8 +736,8 @@ const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
 // finding or creating that draft needs the server, and set_target does it.
 // A stale draft id surfaces on the first load (loadTargetProject names the
 // env var), never as a crash here.
-if (ENV_TARGET && ENV_TARGET !== 'main' && !ENV_TARGET.startsWith('new:')) target = ENV_TARGET
-if (ENV_TARGET === 'main') target = 'main'
+if (envTarget && envTarget !== 'main' && !envTarget.startsWith('new:')) target = envTarget
+if (envTarget === 'main') target = 'main'
 
 /** set once a dialog comes back unanswerable — reported by get_status, so
  *  "the client supports dialogs" stops meaning "declared" alone */
@@ -752,9 +787,9 @@ async function withMainPolicy(result) {
 
 /** why a tool that needs a target has none yet, naming the configured one */
 const targetMissingMessage = () =>
-  ENV_TARGET
+  envTarget
     ? `no target set yet — call set_target (it needs no question: the human configured ` +
-      `GUANO_MCP_TARGET="${ENV_TARGET}")`
+      `GUANO_MCP_TARGET="${envTarget}")`
     : 'no target set — call set_target first (ask the user: Main or a draft?)'
 
 /**
@@ -894,7 +929,7 @@ async function loadTargetProject() {
   if (store && !store.lock) store.lock = await acquireProjectLock()
   const raw = await storeGetRaw(projectKey(target))
   if (raw === null) {
-    if (target !== MAIN_ID && target === ENV_TARGET) {
+    if (target !== MAIN_ID && target === envTarget) {
       throw new Error(
         `GUANO_MCP_TARGET names draft "${target}", which has no stored project — it was deleted ` +
         `or belongs to another instance. Ask the human to fix the MCP config (or set it to ` +
@@ -5330,7 +5365,7 @@ const tools = [
           message: e?.message ?? String(e),
           target: target ?? null,
           targetSet: !!target,
-          ...(ENV_TARGET ? { configuredTarget: ENV_TARGET } : {}),
+          ...(envTarget ? { configuredTarget: envTarget } : {}),
         }
       }
       const drafts = meta.branches
@@ -5370,7 +5405,7 @@ const tools = [
         // advice into a refusal on the first try.
         fileRoot: FILE_ROOT ?? null,
         ...(FILE_ROOT ? {} : { fileRootNote: 'unset — any absolute path this process can read' }),
-        ...(ENV_TARGET ? { configuredTarget: ENV_TARGET } : {}),
+        ...(envTarget ? { configuredTarget: envTarget } : {}),
         serverVersion,
         // what this token may actually DO. Without it an agent reads a healthy
         // status, sets Main as its target, works, and only then learns that
@@ -5513,10 +5548,10 @@ const tools = [
       // and the one channel no prompt-injected agent can reach. It needs
       // neither a dialog nor an attestation, and it is what unblocks a client
       // that declares elicitation and then answers without showing anything.
-      if (ENV_TARGET) {
+      if (envTarget) {
         const mainProject = await storeGetJson(projectKey(MAIN_ID))
         const stats = mainProject ? projectStats(mainProject) : null
-        if (ENV_TARGET === MAIN_ID) {
+        if (envTarget === MAIN_ID) {
           target = MAIN_ID
           return await withMainPolicy({
             ok: true,
@@ -5526,7 +5561,7 @@ const tools = [
           })
         }
         const meta = await readBranchesMeta()
-        const wanted = ENV_TARGET.startsWith('new:') ? ENV_TARGET.slice(4).trim() : null
+        const wanted = envTarget.startsWith('new:') ? envTarget.slice(4).trim() : null
         if (wanted) {
           // by NAME, so a restart (the client respawns this process on every
           // launch) reuses the draft instead of piling up a new one per session
@@ -5534,10 +5569,10 @@ const tools = [
           if (existing) return { ...(await selectDraft(existing)), chosenVia: 'config' }
           return { ...(await createDraftTarget(wanted || 'Draft')), chosenVia: 'config' }
         }
-        const draft = meta.branches.find((b) => b.id === ENV_TARGET)
+        const draft = meta.branches.find((b) => b.id === envTarget)
         if (!draft) {
           throw new Error(
-            `GUANO_MCP_TARGET is "${ENV_TARGET}", which is neither "main", "new:<name>", nor a ` +
+            `GUANO_MCP_TARGET is "${envTarget}", which is neither "main", "new:<name>", nor a ` +
               `draft that exists (${meta.branches
                 .filter((b) => b.id !== MAIN_ID)
                 .map((b) => `${b.name} = ${b.id}`)
@@ -10929,7 +10964,17 @@ const tools = [
   // out — see serializeHandler. Wrapped HERE, once, so both callers (the stdio
   // server and the in-process test harness, which reach for toolMap directly)
   // get the guarantee and no tool can be left out of it.
-  const guarded = tools.map((t) => ({ ...t, handler: serializeHandler(t.handler) }))
+  // Adopt the live project before the handler runs, and drop the last one's
+  // session state if it changed. First, because every address the handler is
+  // about to use — the target, the compare-and-swap baseline, a worklist
+  // handle — belongs to one project's blob.
+  const guarded = tools.map((t) => ({
+    ...t,
+    handler: serializeHandler(async (args) => {
+      syncProject(api)
+      return await t.handler(args)
+    }),
+  }))
   const toolMap = new Map(guarded.map((t) => [t.name, t]))
 
   return {

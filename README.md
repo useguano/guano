@@ -317,7 +317,9 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 | `STORE_QUOTA` | 512 MiB | project storage ceiling, in bytes |
 | `SNAPSHOT_MAX_BYTES` | 512 MiB | refuses a snapshot above this — the zip is built in memory |
 | `PORT_STRICT` | unset | `1` refuses to walk to the next free port when `PORT` is busy. Worth setting on a real deploy: a silent walk means everything addressing the default port reaches something else |
-| `GUANO_URL` | `http://localhost:4174` | `guano mcp` / `guano connect`: which instance to talk to |
+| `GUANO_PROJECTS` | unset | `guano mcp`: the projects this one client entry serves, as `{"<slug>":{url,token,instance,target}}`. Written by `guano connect`, which folds every project into ONE entry — Claude Desktop starts a process per entry, so a per-project entry meant an alert for every project you were not running |
+| `GUANO_MCP_PROJECT` | unset | `guano mcp`: pin the live project by slug. Unset, the sole project whose server is answering is used — so switching projects is starting the one you want, with no restart. Two running and nothing pinned is refused by name rather than guessed |
+| `GUANO_URL` | `http://localhost:4174` | `guano mcp` / `guano connect`: which instance to talk to (the single-project form; `GUANO_PROJECTS` supersedes it) |
 | `GUANO_INSTANCE` | unset | `guano mcp`: the project this client entry was connected to. Written by `guano connect`; a mismatch against the server's own id is refused by name rather than failing with a 401 |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. `warn` drops the per-request access line and keeps the warnings |
 | `LOG_JSON` | unset | `1` emits one JSON object per line, for a log shipper |
