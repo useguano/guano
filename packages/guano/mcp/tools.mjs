@@ -341,6 +341,36 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     : null
 
   /**
+   * Files no path argument may ever name, root or no root.
+   *
+   * The fence alone is not enough, for two reasons. An entry written by hand
+   * has no root at all. And `guano connect` now sets the root to the PROJECT
+   * FOLDER — which contains `data/`, so the fence would happily allow
+   * `<project>/data/api-tokens.json`: every token on the instance, read by a
+   * tool whose whole purpose is reading a payload file. The MCP server is
+   * designed never to touch the data dir (it goes through the authed HTTP API
+   * precisely so that it cannot), and these names are the product's own, so
+   * refusing them by name costs nothing legitimate.
+   *
+   * `claude_desktop_config.json` is in here for the same reason one level up:
+   * it holds every project's token for every project connected on this
+   * machine, which is the one file that turns a single injected agent into
+   * access to all of them.
+   *
+   * This is defence in depth, NOT a substitute for the root — a denylist can
+   * only name what someone thought of.
+   */
+  const NEVER_READ = new Set([
+    'api-tokens.json',
+    'users.json',
+    'sessions.json',
+    'invites.json',
+    'publish.json',
+    'claude_desktop_config.json',
+    '.connect-nonce',
+  ])
+
+  /**
    * Resolve a caller-supplied path, enforcing the root fence when one is set.
    * Resolves symlinks first — otherwise a link inside the root would walk
    * straight back out of it.
@@ -349,11 +379,22 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     const path = String(file)
     if (!isAbsolute(path)) throw new Error(`${label} must be absolute: "${path}"`)
     let full = resolvePath(path)
+    // ...before the fence, so it holds whether or not a root is set
+    if (NEVER_READ.has(basename(full))) {
+      throw new Error(
+        `${label} names a credential file this tool may never touch ("${basename(full)}"). ` +
+          'Tokens, users and sessions are the instance\'s own; nothing an agent needs is in them.',
+      )
+    }
     if (FILE_ROOT) {
       try {
         full = await realpath(full)
       } catch {
         /* missing file — the read below reports it properly */
+      }
+      // ...and again on the resolved path, in case a symlink pointed at one
+      if (NEVER_READ.has(basename(full))) {
+        throw new Error(`${label} resolves to a credential file ("${basename(full)}")`)
       }
       if (full !== FILE_ROOT && !full.startsWith(FILE_ROOT + sep)) {
         throw new Error(

@@ -280,6 +280,41 @@ test('GUANO_MCP_FILE_ROOT confines path arguments', async () => {
   }
 })
 
+test('a credential file is refused by name, root or no root', async () => {
+  // The fence is not enough on its own, twice over. A hand-written entry sets
+  // no root at all. And `guano connect` now sets the root to the PROJECT
+  // FOLDER, which contains data/ — so the fence would allow
+  // `<project>/data/api-tokens.json`: every token on the instance, read by a
+  // tool whose job is reading a payload file. claude_desktop_config.json is
+  // the same hole one level up, holding every token for every project
+  // connected on this machine.
+  const { api } = fixture()
+  const runtime = await runtimePromise
+  test.skip(!runtime, 'runtime bundle missing')
+
+  const set = createToolSet({ api, runtime })
+  set.setTarget('main')
+  const probes = [
+    '/Users/me/site/data/api-tokens.json',
+    '/Users/me/site/data/users.json',
+    '/Users/me/site/data/sessions.json',
+    '/Users/me/Library/Application Support/Claude/claude_desktop_config.json',
+    '/Users/me/site/data/.connect-nonce',
+  ]
+  for (const path of probes) {
+    await expect(
+      set.toolMap.get('upload_media')!.handler({ path, name: 'x' }),
+      path,
+    ).rejects.toThrow(/credential file/)
+  }
+
+  // ...and an ordinary payload path is NOT refused for this reason — it fails
+  // on the read, which is what a missing file should do
+  await expect(
+    set.toolMap.get('upload_media')!.handler({ path: '/Users/me/site/logo.png', name: 'x' }),
+  ).rejects.not.toThrow(/credential file/)
+})
+
 // set_target consent: with an elicitation channel the HUMAN's dialog answer is
 // the decision — the agent's own args are only a suggestion. Without one, the
 // old chosenByUser/acknowledgeMain attestation flow still gates everything.
