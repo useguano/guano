@@ -17,11 +17,13 @@ Never changed. `/api/health` reports it, which is safe on the one unauthenticate
 
 An entry written before this existed carries no id, so the bare 401 is also given the sentence it was missing. An older instance reports no `instance` at all and must keep working, which is why **a missing field is never a mismatch**.
 
-## `port`/`previewPort` — written after `listen` resolves
+## `port` — written after `listen` resolves
 
 Because the port a project owns is the one it actually got: recording what it asked for would remember a number that was already taken.
 
 `boot()` then prefers the remembered port over the 4174 default whenever `PORT` is unset. The record is also why the walk warning can distinguish "something took the default" from "something took MY address" — the case where a client config has gone stale.
+
+A `previewPort` sat beside it until the preview moved onto this server under `/_guano/preview` (see `docs/export.md`). **A project owns one port now**, which is also why `npm create @useguano` steps by one when it picks a free one rather than by two.
 
 ## The config entry is per project
 

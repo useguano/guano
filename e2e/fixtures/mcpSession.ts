@@ -25,7 +25,11 @@ export const pageHtml = (body: string) => `<body>\n${body}\n</body>`
 /** the token shape the server mints: `<expiry>.<hmac>`. The preview tool must
  *  hand this back untouched — a character appended to it is a 401. */
 export const PREVIEW_TOKEN = '9999999999999.dd636db5c0a14f1a9b3e7c2d8f5a6f461435'
-export const PREVIEW_LINK = `http://localhost:4175/?t=${PREVIEW_TOKEN}`
+/** the shape the server hands back: this origin, under the preview mount. The
+ *  tool appends a route to that PATH — it used to assign `pathname` and threw
+ *  the mount away. */
+export const PREVIEW_MOUNT = '/_guano/preview'
+export const PREVIEW_LINK = `http://localhost:4174${PREVIEW_MOUNT}/?t=${PREVIEW_TOKEN}`
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 
@@ -124,7 +128,13 @@ export async function mcpSession(
     publish: async () => publishStats,
     // what POST /api/preview answers: the stats plus the WHOLE link, token
     // query and all (`previewLink` in server/index.mjs)
-    preview: async () => ({ ok: true, routes: 1, bytes: 1, url: PREVIEW_LINK }),
+    preview: async () => ({
+      ok: true,
+      routes: 1,
+      bytes: 1,
+      url: PREVIEW_LINK,
+      routeUrls: [PREVIEW_LINK],
+    }),
     mediaIndex: async () => ({ assets: [], folders: [] }),
     mediaUpload: async () => ({ id: 'm1' }),
   }

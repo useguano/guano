@@ -42,10 +42,9 @@ RUN mkdir -p /data && chown -R node:node /data
 VOLUME ["/data"]
 USER node
 
+# One port: the preview is served by this same server under /_guano/preview,
+# so there is no second listener to publish (or to forget to publish).
 EXPOSE 4174
-# the preview server, which is token-gated but still worth not exposing by
-# accident — publish it only if you use the MCP preview tool from elsewhere
-EXPOSE 4175
 
 # Reports draining during a graceful shutdown, so an orchestrator takes the
 # container out of rotation before the socket closes rather than racing it.

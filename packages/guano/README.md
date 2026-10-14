@@ -36,7 +36,6 @@ Your published site is at `http://localhost:4174/`.
 | `STORE_QUOTA` | 512 MiB | project storage ceiling, bytes |
 | `TRUST_PROXY` | unset | set `1` **only behind a reverse proxy** — every rate limit then keys on the last `X-Forwarded-For` hop instead of the socket address |
 | `PORT_STRICT` | unset | `1` refuses to walk to the next free port when `PORT` is busy |
-| `GUANO_PREVIEW_PORT` | `PORT + 1` | the preview site's port |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`; `warn` drops the per-request access line |
 | `LOG_JSON` | unset | `1` emits one JSON object per line, for a log shipper |
 | `SHUTDOWN_GRACE_MS` | `0` | how long to keep failing health checks before the socket closes, so a load balancer can drain first |

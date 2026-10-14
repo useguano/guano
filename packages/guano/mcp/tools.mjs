@@ -10781,11 +10781,13 @@ const tools = [
   {
     name: 'preview',
     description:
-      'Render the CURRENT TARGET to the PREVIEW site and return its url — then OPEN it and ' +
-      'look. This is how you see your own work: it touches nothing live, needs no publish ' +
-      'permission, and includes DRAFT pages. Re-run after any change; the last render wins. ' +
-      'Use it after each page and publish once at the end. Returns the same `warnings` publish ' +
-      'does. Requires a target.',
+      'Render the CURRENT TARGET to the PREVIEW site and return its urls — then OPEN one in ' +
+      'your browser tool, if you have one, and LOOK: scroll it, click it, check it at a phone ' +
+      'width. Fetching the HTML tells you what shipped, not whether it looks right. It touches ' +
+      'nothing live, needs no publish permission, and includes DRAFT pages. Re-run after any ' +
+      'change; the last render wins. `routeUrls` has every page, so navigate straight to one ' +
+      'rather than hunting for a link. Returns the same `warnings` publish does. Requires a ' +
+      'target.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
       if (!preview) {
@@ -10800,9 +10802,16 @@ const tools = [
       // the HMAC check failed on the slash, and every url the tool returned —
       // including the home one — answered 401 "preview link missing or
       // expired". Path first, then the query it came with.
+      //
+      // A route is appended to the link's OWN path rather than replacing it:
+      // the preview is served under a mount (`/_guano/preview/`) on the
+      // studio's origin, and assigning `pathname` threw the mount away. An
+      // older server answers with a bare `/`, for which this is a no-op — so
+      // the same build talks to both.
       const previewUrl = (path) => {
         const u = new URL(String(stats.url ?? ''))
-        u.pathname = path
+        const root = u.pathname.replace(/\/+$/, '')
+        u.pathname = path === '/' ? `${root}/` : `${root}${path}`
         return u.toString()
       }
       const localeUrls = { [defaultLocale]: previewUrl('/') }
@@ -10819,12 +10828,19 @@ const tools = [
         target,
         url: previewUrl('/'),
         localeUrls,
+        // every route, straight from the export's own list of what it wrote —
+        // so a page is reached by navigating to it rather than by clicking
+        // around looking for a link to it
+        ...(Array.isArray(stats.routeUrls) && stats.routeUrls.length
+          ? { routeUrls: stats.routeUrls }
+          : {}),
         routes: stats.routes,
         bytes: stats.bytes,
         ...(warnings.length ? { warnings } : {}),
         note:
           'Nothing live changed. Open a url EXACTLY as returned — the ?t= token serves the ' +
-          'page directly, so fetching it yourself returns the HTML; add nothing after it. ' +
+          'page directly and sets the cookie the page\'s own assets ride on, so a browser ' +
+          'tool can scroll and click it; add nothing after it. ' +
           'Draft pages are included here and are NOT in a publish.' +
           (warnings.length
             ? ' `warnings` are the same design checks publish runs — fix them here, before you ship.'

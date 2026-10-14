@@ -41,7 +41,7 @@ import {
 } from './media.mjs'
 import { pushSiteToGitHub } from './github.mjs'
 import { createZip, readZip } from './zip.mjs'
-import { relativizeSite } from './relative.mjs'
+import { relativizeSite, mountSite } from './relative.mjs'
 import { slugify } from '../src/lib/shared/slug.js'
 import {
   mergeBranchesMeta,
@@ -155,12 +155,22 @@ if (!process.env.GUANO_DATA_DIR && process.env.SB_DATA_DIR) {
 }
 const SNAPSHOT = join(DATA_DIR, 'published.json')
 const SITE = join(DATA_DIR, 'site')
-// The PREVIEW export: the same exporter, a different directory, served on its
-// own port. An agent (and a human) can look at what they built WITHOUT putting
-// it on the live origin — which was the only way to see anything, so a review
-// session published six times just to look, each one replacing the live site
-// with a half-built draft.
+// The PREVIEW export: the same exporter, a different directory, served by THIS
+// server under PREVIEW_MOUNT. An agent (and a human) can look at what they
+// built WITHOUT putting it on the live origin — which was the only way to see
+// anything, so a review session published six times just to look, each one
+// replacing the live site with a half-built draft.
 const PREVIEW = join(DATA_DIR, 'preview')
+// Where the preview is served. It used to be a second HTTP server on PORT+1,
+// because the export emits root-absolute URLs and a sub-path would have meant
+// threading a base path through every one of them. That port bound every
+// interface, spoke plain HTTP while the studio is HTTPS, needed its own token
+// gate, rate-limit buckets and form handler — and behind a proxy or on a VPS it
+// was unreachable, so the `preview` tool handed out a url that hangs and the
+// one workflow it exists for ("open it and look") could never run. The URLs are
+// rewritten to the mount instead (`mountSite`), which costs one pass over the
+// exported HTML and buys the studio's own origin, scheme and certificate.
+const PREVIEW_MOUNT = '/_guano/preview'
 const MEDIA_DIR = join(DATA_DIR, 'media')
 // server-managed publish config — the GitHub token lives here, NEVER in the
 // /api/store project blob (which any authed user can read)
@@ -1193,7 +1203,6 @@ async function handleHealth(res) {
       uptime: Math.round((Date.now() - bootState.startedAt) / 1000),
       migrated: bootState.migrated,
       port,
-      previewPort,
       // Opaque and stable: it names WHICH project is answering this port
       // without disclosing a path, a name or anything derived from a secret,
       // which is what keeps this route safe to leave unauthenticated.
@@ -1567,12 +1576,22 @@ async function handlePreview(req, res) {
       )
       await writeFormsManifest(PREVIEW_FORMS_MANIFEST, s.forms, parsed)
       await writeRedirectsManifest(PREVIEW_REDIRECTS_MANIFEST, s.redirects)
+      // Served from this origin under PREVIEW_MOUNT, so every root-absolute URL
+      // the exporter emitted has to be moved into it. Done to the files on disk
+      // rather than per request: a preview is exported once and then browsed,
+      // clicked through and screenshotted many times.
+      await mountPreviewDir()
       return s
     })
+    const link = await previewLink(req)
     return send(
       res,
       200,
-      JSON.stringify({ ok: true, ...stats, url: await previewLink(req) }),
+      // `routes` is a count; `routeUrls` is where to actually go. An agent
+      // handed one url for the home page either guesses the rest or clicks
+      // around hunting for them — and clicking is for checking navigation, not
+      // for reaching a page.
+      JSON.stringify({ ok: true, ...stats, url: link, routeUrls: previewRouteUrls(stats, link) }),
     )
   } catch (err) {
     // Same rule as the publish catch, which this did not follow: a raw
@@ -1588,33 +1607,75 @@ async function handlePreview(req, res) {
  * visible. `status` is restored nowhere else: this is a copy. */
 const previewPublished = (page) => (page.status === 'published' ? page : { ...page, status: 'published' })
 
-/** The whole preview LINK — same host, PREVIEW_PORT, and the access token in
+/**
+ * Move the freshly exported preview onto PREVIEW_MOUNT, in place.
+ *
+ * Only `.html` and `.css` carry URLs, so only those are rewritten and written
+ * back; everything else (media, the runtimes, fonts) is already addressed by a
+ * path the rewrite produces. Runs inside the same `withCritical('preview')`
+ * section as the export, so a request can never be served a half-rewritten
+ * directory.
+ */
+async function mountPreviewDir() {
+  const files = await readDirFiles(PREVIEW)
+  for (const file of mountSite(files, PREVIEW_MOUNT)) {
+    if (!file.path.endsWith('.html') && !file.path.endsWith('.css')) continue
+    await writeFile(join(PREVIEW, file.path), file.data)
+  }
+}
+
+/** Every route's preview url, carrying the same token as the entry link. */
+function previewRouteUrls(stats, link) {
+  const [base, query] = link.split('?')
+  const root = base.replace(/\/$/, '')
+  return (stats.routePaths ?? []).map((route) => {
+    const path = route === '/' ? '/' : route.replace(/\/$/, '')
+    return `${root}${path === '/' ? '/' : path}?${query}`
+  })
+}
+
+/**
+ * The whole preview LINK — this origin, PREVIEW_MOUNT, and the access token in
  * the query. Not an origin, whatever it used to be called: the MCP tool treated
  * it as one and appended route paths after the query string, so every url it
- * handed out carried `t=<token>/<route>/` and answered 401. */
+ * handed out carried `t=<token>/<route>/` and answered 401.
+ *
+ * Built from the request rather than configured, because the studio's public
+ * address is whatever the person reached it on — and behind a proxy that is the
+ * forwarded scheme and host, not the socket's.
+ */
+async function previewLink(req) {
+  const fwdHost = TRUST_PROXY ? String(req.headers['x-forwarded-host'] ?? '').split(',')[0].trim() : ''
+  const host = fwdHost || String(req.headers.host ?? `localhost:${port}`)
+  const proto = TRUST_PROXY
+    ? String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim() || 'http'
+    : 'http'
+  return `${proto}://${host}${PREVIEW_MOUNT}/?t=${await mintPreviewToken()}`
+}
+
 /**
- * Access control for the preview port.
+ * Access control for the preview.
  *
- * The preview server binds every interface and authenticated nothing, so on
- * any host without a firewall in front of it every unpublished draft was
- * public — the one surface in the product that renders work explicitly not
- * ready to ship.
+ * The preview renders work explicitly not ready to ship, so reaching it cold
+ * must not work. On its own port it bound every interface and authenticated
+ * nothing, which made every unpublished draft public on any host without a
+ * firewall; on this origin it is one path among many and needs its own gate.
  *
- * A session cookie cannot be the credential here: it is `Secure` by default,
- * and the preview is plain HTTP on another port, so in the hosted setup (admin
- * behind HTTPS at a proxy) the browser would never send it. So POST
- * /api/preview — which already needs a session — mints a short-lived signed
- * token, the returned URL carries it, and the preview server exchanges it for
- * a cookie scoped to itself. Opening a preview from the editor keeps working
- * in every topology; reaching the port cold does not.
+ * The signed token in the url is that gate, and it stays even though the
+ * session cookie now reaches here (same origin, so the `Secure` problem that
+ * ruled it out is gone). It stays because the agent's BROWSER is a different
+ * browser profile with no Guano session at all — Claude's in-app pane
+ * especially — and opening the link is how it gets a short-TTL cookie that
+ * every subsequent asset request, click and screenshot rides on. A session-only
+ * gate would mean the one workflow this exists for is the one that cannot run.
  *
  * This is NOT the agent publish policy, which the preview deliberately
  * ignores: seeing your own work should never require shipping it.
  */
 const PREVIEW_COOKIE = 'guano_preview'
 // An hour to open the link, then eight to work in. The link is handed to a
-// person (the MCP `preview` tool returns it for them to click), so the window
-// has to survive them finishing the sentence they were reading.
+// person or to an agent's browser, so the window has to survive them finishing
+// the sentence they were reading.
 const PREVIEW_TOKEN_TTL_MS = 60 * 60 * 1000
 const PREVIEW_COOKIE_TTL = 8 * 60 * 60 // ...then a working session
 
@@ -1654,11 +1715,6 @@ const previewCookie = (secret) => sign(secret, 'preview-cookie')
 async function previewUnlocked(req) {
   const have = parseCookies(req)[PREVIEW_COOKIE] ?? ''
   return !!have && timingSafeEqualStr(have, previewCookie(await previewSecret()))
-}
-
-async function previewLink(req) {
-  const host = String(req.headers.host ?? `localhost:${port}`).split(':')[0]
-  return `http://${host}:${previewPort}/?t=${await mintPreviewToken()}`
 }
 
 async function handlePost(req, res, params) {
@@ -2954,9 +3010,13 @@ function redirectMapOf(manifest) {
   return map
 }
 
-async function serveSiteDir(req, res, root, { private: isPrivate = false } = {}) {
+async function serveSiteDir(req, res, root, { private: isPrivate = false, mount = '' } = {}) {
   const url = new URL(req.url, 'http://x')
-  const path = normalize(decodeURIComponent(url.pathname))
+  const full = normalize(decodeURIComponent(url.pathname))
+  // The site's own path, with the mount taken off: the directory on disk, the
+  // redirect manifest's `from` values and the export's 404 page all address
+  // routes as the site sees them, not as it happens to be served.
+  const path = mount && full.startsWith(mount) ? full.slice(mount.length) || '/' : full
   const NOSNIFF = { 'x-content-type-options': 'nosniff' }
   const preview = root === PREVIEW
 
@@ -2974,7 +3034,10 @@ async function serveSiteDir(req, res, root, { private: isPrivate = false } = {})
   // character guard is defense in depth, not the check — a header value with
   // whitespace in it is header injection
   if (to && !/[\s<>"]/.test(to)) {
-    const location = url.search && !/^https?:/i.test(to) ? `${to}${url.search}` : to
+    // a site-relative target has to be moved onto the mount, or a preview
+    // redirect would send the visitor to the LIVE route of the same name
+    const target = mount && to.startsWith('/') && !to.startsWith('//') ? `${mount}${to}` : to
+    const location = url.search && !/^https?:/i.test(target) ? `${target}${url.search}` : target
     // plain text: a 301 body is shown by almost nothing, and text needs no
     // escaping to be safe
     return send(res, 301, `Moved to ${location}\n`, 'text/plain', {
@@ -3044,6 +3107,12 @@ const server = createServer(async (req, res) => {
         })
       }
       return await handleFormPost(req, res, path)
+    }
+    // The preview, before the site gate: it carries its own token, and a
+    // private site's visitor password has nothing to do with looking at your
+    // own drafts.
+    if (path === PREVIEW_MOUNT || path.startsWith(`${PREVIEW_MOUNT}/`)) {
+      return await handlePreviewMount(req, res, normalize(decodeURIComponent(path)))
     }
     // Unauthenticated on purpose, and placed here so a probe at 1Hz costs one
     // string compare rather than a walk down the whole chain. After the public
@@ -3122,69 +3191,63 @@ const server = createServer(async (req, res) => {
 
 // When PORT wasn't explicitly chosen, a busy default port walks to the next
 // free one (another guano/dev instance is usually what's squatting on it).
-// An explicit PORT is a contract: fail with one clear line, no stack trace.
-// The preview site answers on its own port, not a sub-path: the export uses
-// root-absolute URLs (/assets/…), so serving it under /preview/ would mean
-// threading a base path through every emitted URL.
-const PREVIEW_PORT = Number(process.env.GUANO_PREVIEW_PORT) || 0
-let previewPort = 0
-
-const previewServer = createServer(async (req, res) => {
-  beginRequest(req, res, newRequestId(), clientIp(req))
-  try {
-    const url = new URL(req.url, 'http://x')
-    const path = normalize(decodeURIComponent(url.pathname))
-    // never the editor, and never the API, token or no token
-    if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/api/')) {
-      return fail(res, 404, 'the preview server serves the exported site only')
-    }
-    // The link from the editor (or the MCP `preview` tool): a valid token sets
-    // the cookie the page's own asset requests ride on AND serves the page in
-    // the same response. It used to answer a 303 to the bare path, which a
-    // browser follows with the cookie — and which curl, fetch and every agent
-    // without a cookie jar follow WITHOUT it, landing on the 401 below. The
-    // one tool whose whole purpose is "look at your work" could never look.
+/**
+ * The preview, under PREVIEW_MOUNT on this origin.
+ *
+ * A valid `?t=` token sets the cookie the page's own asset requests ride on AND
+ * serves the page in the same response. It used to answer a 303 to the bare
+ * path, which a browser follows with the cookie — and which curl, fetch and
+ * every agent without a cookie jar follow WITHOUT it, landing on the 401 below.
+ * The one tool whose whole purpose is "look at your work" could never look.
+ *
+ * The cookie's Path is the mount, so it is never sent with a request for the
+ * published site, the editor or the API.
+ */
+async function handlePreviewMount(req, res, path) {
+  const url = new URL(req.url, 'http://x')
+  // Without the trailing slash the browser resolves nothing relative to the
+  // mount, and a bare `/_guano/preview` would 404 on index.html anyway.
+  if (path === PREVIEW_MOUNT) {
+    return send(res, 302, '', 'text/plain', {
+      location: `${PREVIEW_MOUNT}/${url.search}`,
+      'cache-control': 'no-store',
+    })
+  }
+  const token = url.searchParams.get('t')
+  const tokenOk = !!token && (await previewTokenValid(token))
+  if (tokenOk) {
+    const secret = await previewSecret()
     // setHeader, not writeHead: serveSiteDir's own headers merge over it. The
     // token stays in the query of this one request only (no-store, and nothing
-    // on this server echoes a URL back).
-    const token = url.searchParams.get('t')
-    const tokenOk = !!token && (await previewTokenValid(token))
-    if (tokenOk) {
-      const secret = await previewSecret()
-      res.setHeader(
-        'set-cookie',
-        `${PREVIEW_COOKIE}=${previewCookie(secret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
-      )
-      res.setHeader('cache-control', 'no-store')
-    } else if (!(await previewUnlocked(req))) {
-      return send(
-        res,
-        401,
-        JSON.stringify({
-          error:
-            'preview link missing or expired — open a fresh preview from the editor ' +
-            '(Publish → Preview) or call the `preview` tool again, and use the whole url ' +
-            'including its ?t= token',
-        }),
-        'application/json',
-        { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
-      )
-    }
-    // the preview's own form endpoint: it validates exactly as the live one
-    // does and then stores and sends NOTHING, so a draft form can be tried out
-    // without putting a row in the real list
-    if (isFormPath(path)) return await handlePreviewFormPost(req, res, path)
-    await serveSiteDir(req, res, PREVIEW)
-  } catch (err) {
-    log.error(err, { rid: req.rid })
-    // The expose convention lived only in the publish catch, so an exporter or
-    // github error thrown from any other route was flattened into "internal
-    // error". The id is in the body so a user's screenshot can be joined to the
-    // stack trace in the log.
-    if (err?.expose) return fail(res, 502, err.message)
-    fail(res, 500, `internal error (ref ${req.rid})`)
+    // here echoes a URL back).
+    res.setHeader(
+      'set-cookie',
+      `${PREVIEW_COOKIE}=${previewCookie(secret)}; Path=${PREVIEW_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
+    )
+  } else if (!(await previewUnlocked(req))) {
+    return send(
+      res,
+      401,
+      JSON.stringify({
+        error:
+          'preview link missing or expired — open a fresh preview from the editor ' +
+          '(Publish → Preview) or call the `preview` tool again, and use the whole url ' +
+          'including its ?t= token',
+      }),
+      'application/json',
+      { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
+    )
   }
-})
+  // the preview's own form endpoint — `mountSite` rewrote the exported
+  // `action` into the mount so it lands here. It validates exactly as the live
+  // one does and then stores and sends NOTHING, so a draft form can be tried
+  // out without putting a row in the real list.
+  const inner = path.slice(PREVIEW_MOUNT.length) || '/'
+  if (inner.startsWith('/forms/')) {
+    return await handlePreviewFormPost(req, res, `/_guano${inner}`)
+  }
+  await serveSiteDir(req, res, PREVIEW, { mount: PREVIEW_MOUNT })
+}
 
 // Walking to the next free port is a convenience that can cost a whole
 // debugging session, so it is opt-out (`PORT_STRICT=1`) and it is LOUD. An
@@ -3395,26 +3458,7 @@ async function main() {
     log.error(`server error: ${err.message}`)
   })
 
-  // the preview site, on its own port. A failure here is never fatal: it is a
-  // convenience, and the editor and the live site must come up regardless.
-  // Registered BEFORE listen, or an immediate EADDRINUSE would be unhandled.
-  previewServer.once('error', (err) => {
-    if (isShuttingDown()) return
-    log.warn(`preview server unavailable (${err.message}) — /api/preview will still export`)
-    previewPort = 0
-  })
-  // Awaited, so the recorded previewPort is the one it actually got rather
-  // than the 0 the callback has not yet replaced. Either outcome settles it —
-  // the error handler above has already logged and zeroed it.
-  await new Promise((done) => {
-    previewServer.once('error', () => done())
-    previewServer.listen(PREVIEW_PORT || port + 1, () => {
-      previewPort = previewServer.address().port
-      done()
-    })
-  })
-
-  installShutdown({ servers: [server, previewServer], beforeClose: closeEventClients })
+  installShutdown({ servers: [server], beforeClose: closeEventClients })
 
   // Remember the address BEFORE the banner, because the port this project owns
   // is the one it actually got — recording the one it asked for would remember
@@ -3424,7 +3468,6 @@ async function main() {
   try {
     instance = await updateInstance({
       port,
-      previewPort: previewPort || null,
       name: (await currentProjectName()) || instance?.name || '',
     })
   } catch (err) {
@@ -3441,7 +3484,7 @@ function printBanner() {
 
   ➜ editor:  ${base}/admin
   ➜ site:    ${base}/
-  ➜ preview: http://localhost:${PREVIEW_PORT || port + 1}/
+  ➜ preview: ${base}${PREVIEW_MOUNT}/ (needs a token — Publish → Preview)
   ➜ data:    ${DATA_DIR}
   ➜ project: ${label}${instance?.id ? `(${instance.id.slice(0, 8)})` : ''}
 ${

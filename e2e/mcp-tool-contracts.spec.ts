@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { mcpSession, pageHtml, PREVIEW_TOKEN } from './fixtures/mcpSession'
+import { mcpSession, pageHtml, PREVIEW_TOKEN, PREVIEW_MOUNT } from './fixtures/mcpSession'
 import { motionTriggers } from './fixtures/fxWire'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
@@ -1415,7 +1415,9 @@ test.describe('preview', () => {
     const res = await s.call('preview')
 
     const u = new URL(res.url)
-    expect(u.pathname).toBe('/')
+    // under the mount, not at the origin root: the preview is served by the
+    // studio itself now, and assigning `pathname` discarded the mount
+    expect(u.pathname).toBe(`${PREVIEW_MOUNT}/`)
     expect(tokenOf(res.url)).toBe(PREVIEW_TOKEN)
     // the failure mode in one assertion: nothing after the token
     expect(res.url.endsWith(PREVIEW_TOKEN)).toBe(true)
@@ -1430,9 +1432,9 @@ test.describe('preview', () => {
     s.writeStore('guano-project:main', JSON.stringify(project))
 
     const { localeUrls } = await s.call('preview')
-    expect(new URL(localeUrls.en).pathname).toBe('/')
-    expect(new URL(localeUrls.fr).pathname).toBe('/fr/')
-    expect(new URL(localeUrls.de).pathname).toBe('/de/')
+    expect(new URL(localeUrls.en).pathname).toBe(`${PREVIEW_MOUNT}/`)
+    expect(new URL(localeUrls.fr).pathname).toBe(`${PREVIEW_MOUNT}/fr/`)
+    expect(new URL(localeUrls.de).pathname).toBe(`${PREVIEW_MOUNT}/de/`)
     for (const [code, url] of Object.entries(localeUrls as Record<string, string>)) {
       expect(tokenOf(url), code).toBe(PREVIEW_TOKEN)
     }
@@ -1443,6 +1445,15 @@ test.describe('preview', () => {
     const res = await s.call('preview')
     expect(res.note).toContain('EXACTLY as returned')
     expect(res.previewed).toBe(true)
+  })
+
+  test('the description sends the agent to its browser, not to the HTML', async () => {
+    const s = await mcpSession()
+    // Reading the markup tells you what shipped, never whether it looks right.
+    // The whole point of making the preview reachable on the studio's origin
+    // was that a browser tool can open it.
+    expect(s.tool('preview').description).toMatch(/browser tool/i)
+    expect((await s.call('preview')).routeUrls).toBeTruthy()
   })
 })
 

@@ -2512,21 +2512,26 @@ is a capability the server runs, not something an agent writes into a page.
 
 ## Looking at your work
 
-`preview` renders the current target to a **separate site on its own port** and returns the
-url. Open it and look. It touches nothing live, needs no publish permission, and includes
-DRAFT pages — which a publish drops and which are exactly what you need while building.
+`preview` renders the current target to a **separate site under `/_guano/preview/` on the
+studio's own origin** and returns the urls. It touches nothing live, needs no publish
+permission, and includes DRAFT pages — which a publish drops and which are exactly what you
+need while building.
 
-The url carries an **access token good for an hour**: the preview port renders unpublished
-work, so it is not readable without it. The token hit serves the page directly (and sets a
-cookie for the page's own assets), so you can fetch the url yourself to read the HTML, and
-a person can open it in a browser.
+**Open one and LOOK.** If you have a browser tool, use it: scroll the page, click through
+it, check it at a phone width. Fetching the HTML tells you what shipped; it does not tell
+you the hero is sitting on top of the nav. Reading the markup is the fallback, not the job.
+
+The url carries an **access token good for an hour**, because the preview renders
+unpublished work. The token hit serves the page directly AND sets a cookie for the page's
+own assets, so a fresh browser profile with no Guano session — which is what a browser tool
+has — can open it and keep clicking.
 
 **Use a url exactly as returned.** The token is the last thing in it, so anything you add
 to the end — a route, a trailing `/`, an `#anchor` — lands inside the token value and the
-check fails with a 401 that reads as "expired". To look at another route, take
-`localeUrls` or build it the way the response does: the path first, then the `?t=` query
-(`http://host:4175/docs?t=<token>` — never `…?t=<token>/docs`). A trimmed url gets the
-same 401. Expired, just call `preview` again.
+check fails with a 401 that reads as "expired". To reach another route, take one from
+`routeUrls` (every page) or `localeUrls`, or build it the way the response does: the path
+first, then the `?t=` query (`https://host/_guano/preview/docs?t=<token>` — never
+`…?t=<token>/docs`). A trimmed url gets the same 401. Expired, just call `preview` again.
 
 **Use it after every page.** Publishing is the only other way to render anything, and it
 puts bytes on the live origin: a half-built draft goes live every time you want to check a

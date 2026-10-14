@@ -1,7 +1,13 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
 
-// POST /api/preview renders the posted snapshot to its OWN site, on its own
-// port, and touches nothing live.
+// POST /api/preview renders the posted snapshot to its OWN site, served by the
+// same server under /_guano/preview, and touches nothing live.
+//
+// It used to be a second HTTP server on PORT+1, which bound every interface,
+// spoke plain HTTP while the studio is HTTPS, and behind a proxy or on a VPS
+// was simply unreachable — so the `preview` tool handed back a url that hangs
+// and the workflow it exists for could never run. One origin fixes that; the
+// signed token stays, because an agent's browser has no Guano session.
 //
 // Without it publishing was the only way to render anything, so the Cocoapp
 // review session published six of its seven times purely to look — each one
@@ -13,6 +19,8 @@ import { test, expect, request as pwRequest, type APIRequestContext } from '@pla
 // depend on ordering beyond sorting after smoke.spec.ts.
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
+/** where the preview is served on the studio's own origin */
+const MOUNT = '/_guano/preview'
 
 const login = (ctx: APIRequestContext, creds = ADMIN) =>
   ctx.post('/api/auth/login', { data: creds })
@@ -68,7 +76,7 @@ const snapshot = () => ({
   },
 })
 
-test('a preview renders to its own site, includes drafts, and leaves the live one alone', async ({
+test('a preview renders under the mount, includes drafts, and leaves the live one alone', async ({
   baseURL,
 }) => {
   const admin = await pwRequest.newContext({ baseURL })
@@ -83,30 +91,47 @@ test('a preview renders to its own site, includes drafts, and leaves the live on
 
   res = await admin.post('/api/preview', { data: snapshot() })
   expect(res.ok()).toBeTruthy()
-  const body = (await res.json()) as { routes: number; bytes: number; url: string }
+  const body = (await res.json()) as {
+    routes: number
+    bytes: number
+    url: string
+    routeUrls?: string[]
+  }
   expect(body.routes).toBe(2) // the draft is rendered too
-  // the url now carries a one-time access token (see below)
-  expect(body.url).toMatch(/^http:\/\/[^/]+:\d+\/\?t=\d+\.[a-f0-9]{64}$/)
+  // the studio's own origin, under the mount, with a one-time access token
+  expect(body.url).toMatch(/^http:\/\/[^/]+\/_guano\/preview\/\?t=\d+\.[a-f0-9]{64}$/)
 
-  // the preview answers on its own port. Opening the link the editor was
-  // handed trades the token for a cookie, which the page's own asset requests
-  // then carry.
-  const previewCtx = await pwRequest.newContext({ baseURL: body.url.split('?')[0] })
+  // every route, so an agent navigates straight to a page instead of hunting
+  // for a link to click
+  expect(body.routeUrls).toEqual(
+    expect.arrayContaining([expect.stringContaining('/_guano/preview/draft')]),
+  )
+  expect(body.routeUrls!.every((u) => u.includes('?t='))).toBe(true)
+
+  // Opening the link the editor was handed trades the token for a cookie,
+  // which the page's own asset requests then carry.
+  const previewCtx = await pwRequest.newContext({ baseURL })
   expect((await previewCtx.get(body.url)).ok()).toBeTruthy()
-  const home = await previewCtx.get('/')
+  const home = await previewCtx.get(`${MOUNT}/`)
   expect(home.ok()).toBeTruthy()
   expect(await home.text()).toContain('Live home')
   // unfinished work is never indexed
   expect(home.headers()['x-robots-tag']).toContain('noindex')
 
+  // the exported URLs were moved onto the mount, or every asset on the page
+  // would 404 against the LIVE site's assets
+  expect(await home.text()).toContain(`${MOUNT}/assets/`)
+
   // the DRAFT page renders here, which a publish would have dropped
-  const draft = await previewCtx.get('/draft/')
+  const draft = await previewCtx.get(`${MOUNT}/draft/`)
   expect(draft.ok()).toBeTruthy()
   expect(await draft.text()).toContain('Work in progress')
 
-  // the editor is not reachable from the preview port
-  expect((await previewCtx.get('/admin/')).status()).toBe(404)
-  expect((await previewCtx.get('/api/preview')).status()).toBe(404)
+  // a bare mount keeps its trailing slash, or the browser resolves every
+  // relative URL one directory up
+  const bare = await previewCtx.get(MOUNT, { maxRedirects: 0 })
+  expect(bare.status()).toBe(302)
+  expect(bare.headers()['location']).toBe(`${MOUNT}/`)
 
   // and the live site is exactly as it was
   expect(await (await admin.get('/')).text()).toBe(liveBefore)
@@ -123,17 +148,16 @@ test('a preview needs a session', async ({ baseURL }) => {
 })
 
 /**
- * The preview port is not a public mirror of unpublished work.
+ * The preview is not a public mirror of unpublished work.
  *
- * It binds every interface and authenticated nothing, so on any host without a
- * firewall in front of it every draft page was readable by anyone who guessed
- * the port — the one surface in the product that renders work explicitly not
- * ready to ship. A session cookie cannot be the credential, because it is
- * Secure by default and the preview is plain HTTP on another port, so in the
- * hosted setup the browser would never send it. Hence a signed token in the
- * URL the editor is handed, traded for a cookie scoped to the preview.
+ * It renders work explicitly not ready to ship, so reaching it cold must not
+ * work. The signed token in the url the editor is handed is the gate, traded on
+ * first hit for a cookie scoped to the mount — and it stays even now that the
+ * session cookie could reach here, because the agent's BROWSER is a different
+ * profile with no Guano session at all. A session-only gate would mean the one
+ * workflow this exists for is the one that cannot run.
  */
-test('the preview port is reachable only from the editor', async ({ baseURL }) => {
+test('the preview is reachable only with the token the editor was handed', async ({ baseURL }) => {
   const admin = await pwRequest.newContext({ baseURL })
   let res = await login(admin)
   if (!res.ok()) {
@@ -143,25 +167,26 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   res = await admin.post('/api/preview', { data: snapshot() })
   expect(res.ok()).toBeTruthy()
   const { url } = (await res.json()) as { url: string }
-  const origin = url.split('?')[0]!
 
   // cold, with no token and no cookie
-  const stranger = await pwRequest.newContext({ baseURL: origin })
-  const cold = await stranger.get('/')
+  const stranger = await pwRequest.newContext({ baseURL })
+  const cold = await stranger.get(`${MOUNT}/`)
   expect(cold.status()).toBe(401)
   expect(await cold.text()).toContain('preview link missing or expired')
   // ...including the assets, or the markup would leak through a stylesheet
-  expect((await stranger.get('/assets/style.css')).status()).toBe(401)
+  expect((await stranger.get(`${MOUNT}/assets/style.css`)).status()).toBe(401)
   // ...and a draft route, which is the content that matters here
-  expect((await stranger.get('/draft/')).status()).toBe(401)
+  expect((await stranger.get(`${MOUNT}/draft/`)).status()).toBe(401)
   // a forged token is not enough
-  expect((await stranger.get(`/?t=${Date.now() + 60_000}.${'0'.repeat(64)}`)).status()).toBe(401)
+  expect(
+    (await stranger.get(`${MOUNT}/?t=${Date.now() + 60_000}.${'0'.repeat(64)}`)).status(),
+  ).toBe(401)
   // nor is an expired one, however well signed it was
-  expect((await stranger.get('/?t=1.' + '0'.repeat(64))).status()).toBe(401)
+  expect((await stranger.get(`${MOUNT}/?t=1.` + '0'.repeat(64))).status()).toBe(401)
 
   // the editor's own link works, and leaves a cookie behind that the page's
   // asset requests ride on
-  const visitor = await pwRequest.newContext({ baseURL: origin })
+  const visitor = await pwRequest.newContext({ baseURL })
   const opened = await visitor.get(url)
   expect(opened.ok()).toBeTruthy()
   expect(await opened.text()).toContain('Live home')
@@ -171,15 +196,18 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   // cookie jar (curl, fetch, an MCP agent) followed cookieless into the 401 —
   // so the `preview` tool's "open the url and look" could never be done by
   // the agent itself.
-  const cookieless = await pwRequest.newContext({ baseURL: origin })
+  const cookieless = await pwRequest.newContext({ baseURL })
   const direct = await cookieless.get(url, { maxRedirects: 0 })
   expect(direct.status()).toBe(200)
   expect(await direct.text()).toContain('Live home')
   expect(direct.headers()['set-cookie']).toContain('guano_preview=')
+  // scoped to the mount, so it is never sent with a request for the published
+  // site, the editor or the API
+  expect(direct.headers()['set-cookie']).toContain(`Path=${MOUNT}`)
   expect(direct.headers()['cache-control']).toContain('no-store')
   // a token on a deeper route serves THAT route, not the home page
   const token = url.split('?t=')[1]
-  const deep = await cookieless.get(`/draft/?t=${token}`, { maxRedirects: 0 })
+  const deep = await cookieless.get(`${MOUNT}/draft/?t=${token}`, { maxRedirects: 0 })
   expect(deep.status()).toBe(200)
 
   // a '/' or a '#anchor' AFTER the token value is trimmed before the mac is
@@ -194,23 +222,30 @@ test('the preview port is reachable only from the editor', async ({ baseURL }) =
   // from there is unlocked by the cookie whatever its token says — which would
   // make all three of these pass without reading the token at all.
   const probe = async (path: string) => {
-    const ctx = await pwRequest.newContext({ baseURL: origin })
+    const ctx = await pwRequest.newContext({ baseURL })
     try {
       return (await ctx.get(path, { maxRedirects: 0 })).status()
     } finally {
       await ctx.dispose()
     }
   }
-  expect(await probe(`/?t=${token}/`)).toBe(200)
-  expect(await probe(`/?t=${token}%23editor`)).toBe(200)
-  expect(await probe(`/?t=${token}x`)).toBe(401)
+  expect(await probe(`${MOUNT}/?t=${token}/`)).toBe(200)
+  expect(await probe(`${MOUNT}/?t=${token}%23editor`)).toBe(200)
+  expect(await probe(`${MOUNT}/?t=${token}x`)).toBe(401)
   await cookieless.dispose()
-  expect((await visitor.get('/assets/style.css')).ok()).toBeTruthy()
-  expect((await visitor.get('/draft/')).ok()).toBeTruthy()
+  expect((await visitor.get(`${MOUNT}/assets/style.css`)).ok()).toBeTruthy()
+  expect((await visitor.get(`${MOUNT}/draft/`)).ok()).toBeTruthy()
 
-  // the editor and the API stay unreachable from here, cookie or not
-  expect((await visitor.get('/admin/')).status()).toBe(404)
-  expect((await visitor.get('/api/preview')).status()).toBe(404)
+  // The preview cookie unlocks the preview and NOTHING else. It is one path on
+  // the studio's origin now, so this is the assertion that replaces "the
+  // editor is not reachable from the preview port": an unauthenticated caller
+  // holding only a preview cookie still gets nowhere near the API.
+  expect((await visitor.get('/api/store?keys=guano-project:main')).status()).toBe(401)
+  // ...and a route under the mount that is not in the export is the export's
+  // own miss, never the editor
+  const notInExport = await visitor.get(`${MOUNT}/admin/`)
+  expect(notInExport.status()).toBe(404)
+  expect(await notInExport.text()).not.toContain('<div id="app">')
 
   await stranger.dispose()
   await visitor.dispose()

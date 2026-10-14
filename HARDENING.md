@@ -215,7 +215,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
 - [x] **I-3 Docs.** Fix the package README's claims of a bundled component
       library, `npm create @useguano` and the two MCP tools that do not exist, and the
       seven real tools it omits. Drop "DSL editor" from the package description.
-      Document `STORE_QUOTA`, `GUANO_PREVIEW_PORT`, `PORT_STRICT` and everything
+      Document `STORE_QUOTA`, `PORT_STRICT` and everything
       this branch adds. State that HSTS is the proxy's job and that
       `store.pre-v2/` is deletable once an upgrade is verified.
 - [x] **I-4 Release.** `.nvmrc` and `CHANGELOG.md` are in. The tag waits for

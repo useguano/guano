@@ -2144,6 +2144,15 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
       await write(redirectStubPath(r.from), redirectStubHtml(r.to, escapeHtml))
     }
 
-    return { routes: written.size, bytes, forms: manifest, redirects }
+    // `routes` is the count every caller already reports; `routePaths` is the
+    // list, which the preview needs so it can hand back a url per route instead
+    // of only the home page. Sorted, so the order is the same on every export.
+    return {
+      routes: written.size,
+      routePaths: [...new Set([...written].map(routeUrlOf))].sort(),
+      bytes,
+      forms: manifest,
+      redirects,
+    }
   })
 }

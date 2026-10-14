@@ -81,3 +81,78 @@ export function relativizeSite(files) {
     return file
   })
 }
+
+// ---------- mounted preview: root-absolute → mount-prefixed ----------
+//
+// The preview is served from the MAIN server under `/_guano/preview/`, not from
+// a second port on PORT+1. That port bound every interface, spoke plain HTTP
+// while the studio is HTTPS, needed its own token gate, its own rate-limit
+// buckets and its own form handler — and behind any proxy, or on a VPS, it is
+// simply unreachable, so the `preview` tool handed out a URL that hangs. One
+// origin fixes all of it.
+//
+// Root-absolute URLs are what made a sub-path impossible, so they are rewritten
+// here, the way the zip rewrite does it — but to the mount rather than to a
+// relative depth. Keeping them absolute means a route stays a clean directory
+// URL (`/_guano/preview/pricing`) that the server resolves to its index.html,
+// and it is the form of URL an agent can navigate to directly.
+//
+// Three paths are NOT the site's and must survive untouched: `//cdn…`, and
+// anything under `/_guano/` or `/media/` (instance routes, not export paths).
+// The one exception is the form endpoint, which is remapped INTO the mount so a
+// draft form posts to the preview's own handler — it validates exactly as the
+// live one does and then stores and sends nothing. Without that remap a form
+// tried out in the preview would put a row in the real list.
+const FORMS_PREFIX = '/_guano/forms/'
+
+/** One root-absolute URL → the same path under `mount`. */
+export function mountUrl(url, mount) {
+  if (!url.startsWith('/') || url.startsWith('//')) return url
+  if (url.startsWith(FORMS_PREFIX)) return `${mount}/forms/${url.slice(FORMS_PREFIX.length)}`
+  if (url.startsWith('/_guano/') || url.startsWith('/media/')) return url
+  return mount + url
+}
+
+const mountHtml = (html, mount) =>
+  html
+    .replace(ATTR_RE, (whole, name, quote, value) => {
+      if (name === 'srcset') {
+        const next = value
+          .split(',')
+          .map((candidate) => {
+            const trimmed = candidate.trim()
+            const space = trimmed.search(/\s/)
+            const url = space === -1 ? trimmed : trimmed.slice(0, space)
+            const descriptor = space === -1 ? '' : trimmed.slice(space)
+            return mountUrl(url, mount) + descriptor
+          })
+          .join(', ')
+        return `${name}=${quote}${next}${quote}`
+      }
+      return `${name}=${quote}${mountUrl(value, mount)}${quote}`
+    })
+    // the runtime reads this as a root-relative route and navigates to it
+    // itself, so it is rewritten here where the zip leaves it alone
+    .replace(/\bdata-form-redirect=("|')([^"']*)\1/g, (whole, quote, value) =>
+      `data-form-redirect=${quote}${mountUrl(value, mount)}${quote}`,
+    )
+
+const mountCss = (css, mount) =>
+  css.replace(CSS_URL_RE, (whole, quote, url) => `url(${quote}${mountUrl(url, mount)}${quote})`)
+
+/**
+ * Rewrite an exported site's file list to be served under `mount`.
+ * @param {{path: string, data: Buffer}[]} files  as `readDirFiles` returns them
+ * @param {string} mount  no trailing slash, e.g. `/_guano/preview`
+ */
+export function mountSite(files, mount) {
+  return files.map((file) => {
+    if (file.path.endsWith('.html')) {
+      return { ...file, data: Buffer.from(mountHtml(file.data.toString('utf8'), mount)) }
+    }
+    if (file.path.endsWith('.css')) {
+      return { ...file, data: Buffer.from(mountCss(file.data.toString('utf8'), mount)) }
+    }
+    return file
+  })
+}

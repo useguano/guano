@@ -157,12 +157,14 @@ A second signal exits immediately. Give the process ~45s to stop.
 ### The preview port
 
 `PORT + 1` serves the preview site, which renders UNPUBLISHED pages. It is
-token-gated — the url `POST /api/preview` returns carries a signed token, good
-for an hour; the first request with it is answered directly and sets a cookie
-for the rest, so a plain `fetch` or an agent can read the page too — but do not
-publish the port unless you need to reach previews from another machine. A
-bare `http://localhost:4175/` answers "preview link missing or expired": open
-a fresh preview from the editor or the `preview` tool and use the whole url.
+token-gated and served by the same server, at `/_guano/preview/` — so it rides
+your studio's own host, scheme and certificate, and works unchanged behind a
+proxy or on a VPS. The url `POST /api/preview` returns carries a signed token,
+good for an hour; the first request with it is answered directly and sets a
+cookie (scoped to that path) for the rest, so a plain `fetch`, an agent, or an
+agent's browser can read, scroll and click the page. A bare
+`/_guano/preview/` answers "preview link missing or expired": open a fresh
+preview from the editor or the `preview` tool and use the whole url.
 
 ### HSTS
 
@@ -315,7 +317,6 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 | `STORE_QUOTA` | 512 MiB | project storage ceiling, in bytes |
 | `SNAPSHOT_MAX_BYTES` | 512 MiB | refuses a snapshot above this — the zip is built in memory |
 | `PORT_STRICT` | unset | `1` refuses to walk to the next free port when `PORT` is busy. Worth setting on a real deploy: a silent walk means everything addressing the default port reaches something else |
-| `GUANO_PREVIEW_PORT` | `PORT + 1` | the preview site's port |
 | `GUANO_URL` | `http://localhost:4174` | `guano mcp` / `guano connect`: which instance to talk to |
 | `GUANO_INSTANCE` | unset | `guano mcp`: the project this client entry was connected to. Written by `guano connect`; a mismatch against the server's own id is refused by name rather than failing with a 401 |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. `warn` drops the per-request access line and keeps the warnings |

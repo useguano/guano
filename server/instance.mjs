@@ -17,10 +17,12 @@
 // is the one unauthenticated route, and an id carries no path and no secret,
 // while the human-readable `name` is served only to an authed caller.
 //
-// `port`/`previewPort` are the second half: the port this project landed on
-// last time. An unset PORT prefers it over the 4174 default, so a project
-// keeps its address across restarts and two projects stop trading one port
-// back and forth depending on boot order.
+// `port` is the second half: the port this project landed on last time. An
+// unset PORT prefers it over the 4174 default, so a project keeps its address
+// across restarts and two projects stop trading one port back and forth
+// depending on boot order. (There was a `previewPort` beside it until the
+// preview moved onto this server under /_guano/preview — a record of a second
+// listener that no longer exists.)
 import { readFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
@@ -28,7 +30,7 @@ import { DATA_DIR, writeAtomic } from './util.mjs'
 
 const INSTANCE_FILE = join(DATA_DIR, 'instance.json')
 
-/** Shape: { id, name, port, previewPort, createdAt } */
+/** Shape: { id, name, port, createdAt } */
 function sanitize(parsed) {
   if (!parsed || typeof parsed !== 'object') return null
   const id = typeof parsed.id === 'string' && /^[0-9a-f]{8,64}$/.test(parsed.id) ? parsed.id : null
@@ -38,7 +40,6 @@ function sanitize(parsed) {
     id,
     name: typeof parsed.name === 'string' ? parsed.name : '',
     port: portOf(parsed.port),
-    previewPort: portOf(parsed.previewPort),
     createdAt: Number.isFinite(parsed.createdAt) ? parsed.createdAt : null,
   }
 }
@@ -66,7 +67,6 @@ export async function ensureInstance() {
     id: randomBytes(16).toString('hex'),
     name: '',
     port: null,
-    previewPort: null,
     createdAt: Date.now(),
   }
   await writeAtomic(INSTANCE_FILE, JSON.stringify(fresh))

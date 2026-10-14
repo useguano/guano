@@ -95,9 +95,10 @@ if ((await readdir(target)).length) {
  * 4174 is still preferred, so a first project looks exactly as documented.
  */
 async function pickPort(first = 4174, tries = 40) {
-  // A site needs its own port AND the preview port above it, so step by two.
-  for (let port = first; port < first + tries * 2; port += 2) {
-    if ((await free(port)) && (await free(port + 1))) return port
+  // One port per site: the preview is served by the same server under
+  // /_guano/preview, so there is no second port to keep free above it.
+  for (let port = first; port < first + tries; port += 1) {
+    if (await free(port)) return port
   }
   return first
 }

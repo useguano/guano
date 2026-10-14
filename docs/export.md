@@ -106,21 +106,27 @@ Three details are load-bearing. The unlock limiter keys on **`clientIp`** — it
 
 ## Preview without publishing
 
-`POST /api/preview` → `handlePreview` in `server/index.mjs`. It runs the same `exportSite` into `server/data/preview` and serves it from a **second HTTP server on `PORT + 1`** (`GUANO_PREVIEW_PORT` overrides). A separate port rather than a sub-path, because the export emits root-absolute URLs — serving it under `/preview/` would mean threading a base path through every one.
+`POST /api/preview` → `handlePreview` in `server/index.mjs`. It runs the same `exportSite` into `server/data/preview` and serves it **from this same server, under `/_guano/preview/`**.
 
-It renders **draft pages too** (the live export drops them), sends `X-Robots-Tag: noindex`, refuses `/admin` and `/api`, and is deliberately NOT gated on the agent publish policy: seeing your own work should never require shipping it. A contributor's snapshot goes through the same `mergeContributorProject` as a publish, so a preview cannot render structure they may not write. Its own rate limit (30/min) means looking never spends the publish budget. `serveSiteDir` is the shared static handler for the live site and the preview.
+It renders **draft pages too** (the live export drops them), sends `X-Robots-Tag: noindex`, and is deliberately NOT gated on the agent publish policy: seeing your own work should never require shipping it. A contributor's snapshot goes through the same `mergeContributorProject` as a publish, so a preview cannot render structure they may not write. Its own rate limit (30/min) means looking never spends the publish budget. `serveSiteDir` is the shared static handler for the live site and the preview, and takes a `mount` it strips before the file lookup.
 
 MCP exposes it as the `preview` tool; the review session that prompted this published six of seven times purely to look. Coverage: `e2e/store-preview.spec.ts`.
 
-## The preview port is token-gated
+## It used to be a second server on `PORT + 1`
 
-It binds every interface and authenticated nothing, so every unpublished draft was public on any host without a firewall.
+That is the thing to understand before changing any of this. The export emits **root-absolute** URLs (`/assets/style.css`, `/fr`), so a sub-path would have meant threading a base path through every emitted URL — and a separate port sidesteps that.
 
-A session cookie cannot be the credential (it is `Secure`, and the preview is plain HTTP on another port), so `POST /api/preview` mints a signed token, the returned `url` carries it, and the preview server **serves the requested page directly on a valid token hit** while setting the short-TTL `guano_preview` cookie that the page's own asset requests ride on.
+What the separate port cost: it bound every interface and authenticated nothing (so every unpublished draft was public on any host without a firewall), spoke plain HTTP while the studio is HTTPS, needed its own token gate, its own rate-limit buckets and its own form handler, and **behind a proxy or on a VPS it was simply unreachable** — so the `preview` tool handed back a url that hangs, and the one workflow it exists for ("open it and look") could never run. `previewLink` built `http://${req.headers.host}:${previewPort}/`, which off localhost is a port nothing forwards.
 
-It used to answer a 303 to the bare path. A browser follows that with the cookie; curl, fetch and every MCP agent without a cookie jar followed it WITHOUT one — so the `preview` tool's "open the url and look" was something the agent itself could never do, and the 401 read as "requires an editor session" when nothing checks a session, a referer or an origin. An hour to open the link, eight to work in. The MCP `preview` tool hands the whole url over, query string included, and an agent may fetch it.
+**`mountSite` (`server/relative.mjs`) is what replaced it**: one pass over the exported HTML and CSS moving every root-absolute URL onto the mount, run on the files on disk inside the same `withCritical('preview')` section as the export. A preview is exported once and then browsed, so the cost is paid once.
 
-`/admin` and `/api` 404 ahead of the gate. The preview's form endpoint has its own rate-limit buckets — it shared the live ones, so a flood on the preview port spent the published site's submission budget.
+Three paths are deliberately NOT rewritten, because they are the instance's and not the site's: `//cdn…`, anything under `/_guano/` and anything under `/media/`. The one exception is the form endpoint, remapped from `/_guano/forms/:id` into `<mount>/forms/:id` so a draft form posts to the preview's own handler — it validates exactly as the live one does and then stores and sends nothing. Without that remap, trying out a form in the preview would put a row in the real list. `data-form-redirect` is rewritten too (the zip rewrite leaves it alone), or a form's success redirect would send you to the LIVE route of that name.
+
+**The signed `?t=` token stays, even though the session cookie now reaches here.** Same origin removed the reason it couldn't be the credential (the cookie is `Secure`, the preview was plain HTTP elsewhere) — but the agent's BROWSER is a different browser profile with no Guano session at all, and opening the link is how it gets the short-TTL cookie that every later asset request, click and screenshot rides on. A session-only gate would mean the one workflow this exists for is the one that cannot run. The cookie's `Path` is the mount, so it is never sent to the published site, the editor or the API.
+
+`/_guano/preview` without its trailing slash answers a 302 to the slashed form: without it the browser resolves every relative URL one directory up.
+
+`routePaths` on the export's return (and `routeUrls` on the API response and the `preview` tool) is every route's url, carrying the same token — so an agent navigates straight to a page instead of clicking around hunting for a link to it. Clicking is for checking navigation, not for reaching a page.
 
 ## Project package export/import
 
