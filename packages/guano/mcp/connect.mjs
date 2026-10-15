@@ -697,9 +697,21 @@ export async function main(args = [], opts = {}) {
     const foldedIn = Object.keys(servers).filter((k) => k !== ENTRY_KEY && k.startsWith('guano-'))
     const named = await identifyInherited(inherited)
 
-    // This project's own key: its slug, unless another project already holds it
-    // (two sites both called "Site" would otherwise overwrite each other).
-    slug = uniqueSlug(projectSlug(projectName, dataDir ?? hostSlug(base)), inherited, identity.id)
+    // This project's own key. One INSTANCE is one key: an entry already
+    // carrying our id is this project under an older name — the slug it was
+    // written with (a data-dir folder, before the project was named) is not
+    // the slug we would choose today — so we take that key over and overwrite
+    // it, instead of adding a second entry for one site. Skipping this is how
+    // a reconnect manufactured the ambiguity the map exists to end: two keys,
+    // one instance, both reachable, and `resolve()` refusing to guess
+    // between them. `identifyInherited` above is what makes it detectable,
+    // having just proved the legacy entry's identity with its own token.
+    // Any further duplicates go, for the same reason.
+    const mine = identity.id ? Object.keys(inherited).filter((s) => inherited[s].instance === identity.id) : []
+    for (const dup of mine.slice(1)) delete inherited[dup]
+    slug =
+      mine[0] ??
+      uniqueSlug(projectSlug(projectName, dataDir ?? hostSlug(base)), inherited, identity.id)
     const projects = {
       ...inherited,
       [slug]: {
