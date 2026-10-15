@@ -15,7 +15,9 @@
 
 ## Hidden parts
 
-`node.hidden` — any element can be hidden — not rendered on the canvas, in Preview or in the export; it stays in the Layers tree, which is where it is shown again (the eye on a row, Hide/Show in the context menu). Inside an instance the flag is the instance's own. `setNodeHidden` writes it **only where it differs from what is inherited**, so hide-then-show leaves the node byte-identical. Not a structural edit (the code does not change) and not in the contributor allowlist.
+`node.hidden` — any element can be hidden — not rendered on the canvas, in Preview or in the export; it stays in the Layers tree. Inside an instance the flag is the instance's own. `setNodeHidden` writes it **only where it differs from what is inherited**, so hide-then-show leaves the node byte-identical. Not a structural edit (the code does not change) and not in the contributor allowlist.
+
+**It has no general-purpose editor entry point any more.** The eye on a Layers row and Hide/Show in the context menu used to write it, and a hide meant to get a box out of the way deleted the box from the published site — so both now write `node.editorHidden` instead (see `docs/rendering.md`). `node.hidden` is reached by the agent (`edit_elements { hidden }`) and, on an instance, by the hidden-parts toggles in the Content panel — which list only the parts some source in the chain already declares, so what a master or an agent marks hideable is what a human can show again. Hiding something **from visitors** is a style (`hidden`) or an interaction, not this flag.
 
 ## Variants
 

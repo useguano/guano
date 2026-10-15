@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 
 import { Copy, ClipboardPaste, CopyPlus, Trash2, Palette, Zap, Component, Unlink, Group, Eye, EyeOff, type LucideIcon } from 'lucide-vue-next'
 import { isComponentType } from '@/lib/components'
 import { useComponents } from '@/composables/useComponents'
+import { useElement } from '@/composables/useElement'
 import { useStructure } from '@/composables/useStructure'
 import { useModal } from '@/composables/useModal'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
@@ -10,9 +11,10 @@ import { useContextMenu } from '@/composables/useContextMenu'
 
 const CreateComponentModal = defineAsyncComponent(() => import('@/components/editor/canvas/CreateComponentModal.vue'))
 
-const { masterFor, detachComponent, isHidden, setHidden } = useComponents()
+const { masterFor, detachComponent } = useComponents()
+const { isEditorHidden, setEditorHidden } = useElement()
 
-const targetHidden = computed(() => !!target.value && isHidden(target.value))
+const targetHidden = computed(() => !!target.value && isEditorHidden(target.value))
 
 const { backend } = useStructure()
 const { openModal } = useModal()
@@ -63,7 +65,7 @@ const items = computed<Item[]>(() => [
   {
     label: targetHidden.value ? 'Show' : 'Hide',
     icon: targetHidden.value ? Eye : EyeOff,
-    run: () => target.value && setHidden(target.value, !targetHidden.value),
+    run: () => target.value && setEditorHidden(target.value, !targetHidden.value),
     disabled: targetIsBody.value,
   },
   { label: 'Copy style classes', icon: Palette, run: copyClasses, divider: true },

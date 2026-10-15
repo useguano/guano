@@ -106,6 +106,7 @@ export function useRenderNode(
     isAnyFired,
   } = useInteraction()
   const { masterFor } = useComponents()
+  const { isPreview } = useViewMode()
   const { pages, activePage } = usePage()
   const { project, liveBreakpointId } = useProject()
   const siteAppearMode = computed(() => project.value.settings?.motion?.appearMode)
@@ -323,9 +324,11 @@ export function useRenderNode(
     return v && SAFE_SRC.test(v) ? v : undefined
   })
 
-  const hidden = computed(
-    () => node.value.type !== 'body' && isNodeHidden(node.value, mapping.value),
-  )
+  const hidden = computed(() => {
+    if (node.value.type === 'body') return false
+    if (node.value.editorHidden === true && !isPreview.value) return true
+    return isNodeHidden(node.value, mapping.value)
+  })
 
   const iconInfo = computed(() => {
     if (node.value.type !== 'icon') return null
@@ -659,7 +662,6 @@ export function useRenderNode(
     return [...new Set([...triggered, ...targeted])]
   })
 
-  const { isPreview } = useViewMode()
   const modalKeys = computed(() => {
     const targeted = mapping.value
       ? scopedTargetStateKeys(

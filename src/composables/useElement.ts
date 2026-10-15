@@ -5,6 +5,7 @@ import type { ElementNode } from '@/types/editor'
 import { isChannelName } from '@/lib/shared/interactionKeys.js'
 import { isComponentType } from '@/lib/components'
 import { useProject } from './useProject'
+import { useAuth } from './useAuth'
 
 export type { DropPosition } from '@/lib/treeOps'
 import type { DropPosition } from '@/lib/treeOps'
@@ -83,6 +84,16 @@ export function useElement() {
   function updateElement(id: string, patch: Partial<Omit<ElementNode, 'id' | 'children'>>) {
     const node = findNode(elements.value, id)
     if (node) Object.assign(node, patch)
+  }
+
+  function isEditorHidden(node: ElementNode): boolean {
+    return node.type !== 'body' && node.editorHidden === true
+  }
+
+  function setEditorHidden(node: ElementNode, hidden: boolean): void {
+    if (node.type === 'body' || !useAuth().canBuild.value) return
+    if (hidden) node.editorHidden = true
+    else delete node.editorHidden
   }
 
   const REF_RE = /^[a-zA-Z][a-zA-Z0-9-]*$/
@@ -220,6 +231,8 @@ export function useElement() {
     dropTarget,
     getElement,
     updateElement,
+    isEditorHidden,
+    setEditorHidden,
     setElementRef,
     setElementChannel,
     selectElement,

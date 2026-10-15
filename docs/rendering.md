@@ -12,6 +12,15 @@ Inside a component instance, style and interactions come from the mapped master 
 
 `server/export.mjs` reimplements this same logic in plain JS to emit static HTML, and is the only renderer of the published site. **Keep the two in sync.**
 
+## `editorHidden` is a hide that never reaches a visitor
+
+Two hides, and only one of them ships:
+
+- **`node.editorHidden`** — the eye on a Layers row and Hide/Show in the context menu — a hide for the person editing, which is why it persists in the document: a full-screen curtain or an overlay is put away once and stays away while the content under it is built. `hidden` in `useRenderNode.ts` returns true for it **only when `isPreview` is false**, so it takes the node out of the Edit canvas and nothing else: Play renders it, and `server/export.mjs` does not read the flag at all. It is not serialized by `lib/html/`, so it is invisible to an agent and **does not move a page's `version`** — which is right, since no structure write can clobber it.
+- **`node.hidden`** — the real one, resolved along the instance chain and honoured by all three renderers. → `docs/components.md`
+
+It still lives in the project document, so it autosaves, undoes, and travels on a branch merge like any other node state; it is simply ignored by everything that ships bytes. The eye wrote `node.hidden` until it was split out: hiding a layer to get it out of the way deleted it from the published site, which is not what an eye in a tree means anywhere else. The row dims for **either** flag — a part a master or an agent hides is still shown as hidden — but the eye's icon and `data-layer-hidden` track `editorHidden` alone. Coverage: `e2e/ui-layers.spec.ts` ("the Layers eye hides a layer in the editor only").
+
 ## An empty container gets a box on the Build canvas, and NOWHERE else
 
 `emptyBox` in `ElementRenderer.vue`, `declaresOwnBox` in `canvas/emptyBox.ts`.

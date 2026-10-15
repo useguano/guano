@@ -142,6 +142,10 @@ export interface ElementNode {
 
   hidden?: boolean
 
+  /** editor-only: the Layers eye. Not rendered on the Edit canvas, ignored by
+   * Play and the export. */
+  editorHidden?: boolean
+
   slot?: boolean
 
   channel?: string

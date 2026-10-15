@@ -22,8 +22,9 @@ const surface = useLayerSurfaceRow()
 
 const {
   selectElement, highlightElement, isSelected, isHighlighted, dropPositionFor,
+  isEditorHidden, setEditorHidden,
 } = useElement()
-const { masterFor, isHidden, setHidden } = useComponents()
+const { masterFor, isHidden } = useComponents()
 const { canBuild } = useAuth()
 const { openMenu } = useContextMenu()
 const { pickingFor, pickTarget } = useInteraction()
@@ -60,7 +61,8 @@ const kindClass = computed(() =>
   : kind.value === 'cms' ? 'text-layer-cms'
   : '',
 )
-const hidden = computed(() => isHidden(props.node))
+const hidden = computed(() => isEditorHidden(props.node))
+const dimmed = computed(() => hidden.value || isHidden(props.node))
 const canHide = computed(() => canBuild.value && props.node.type !== 'body')
 
 const label = computed(() => layerLabel(props.node, masterFor))
@@ -131,7 +133,7 @@ function commitRef() {
 </script>
 
 <template>
-  <div v-if="visible" :class="hidden && 'opacity-50'">
+  <div v-if="visible" :class="dimmed && 'opacity-50'">
     <div
       :data-layer-row="node.id"
       :data-layer-hidden="hidden || undefined"
@@ -197,7 +199,7 @@ function commitRef() {
           :class="hidden ? 'flex' : 'hidden group-hover/row:flex'"
           :aria-label="hidden ? 'Show' : 'Hide'"
           :aria-pressed="hidden"
-          @click.stop="setHidden(node, !hidden)"
+          @click.stop="setEditorHidden(node, !hidden)"
           @dblclick.stop
         >
           <component :is="hidden ? EyeOff : Eye" class="size-3" />

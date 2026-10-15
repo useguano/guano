@@ -308,7 +308,7 @@ test('an icon is picked from the grid and publishes as an inline svg', async ({ 
   )
 })
 
-test('one instance hides a part of its component; the other keeps it', async ({ page }) => {
+test('the Layers eye hides a layer in the editor only; the export keeps it', async ({ page }) => {
   await openEditor(page)
   await openLayers(page)
 
@@ -331,12 +331,15 @@ test('one instance hides a part of its component; the other keeps it', async ({ 
   await rows(page).first().hover()
   await expect(headings.first().locator('[data-layer-eye]')).toBeVisible()
 
-  // the canvas shows what the site will: one heading left per frame
+  // the Edit canvas drops it — one heading left per frame — and it is the
+  // hidden instance's own, not both
   const frames = await page.locator('[data-node-id]', { hasText: /^Heads up$/ }).count()
+  expect(frames).toBeGreaterThan(0)
 
+  // the site does NOT drop it: the eye never reaches the export
   await publish(page)
   const html = await (await page.request.get('/')).text()
-  expect(html.match(/Heads up/g)!).toHaveLength(1)
+  expect(html.match(/Heads up/g)!).toHaveLength(2)
   await page.keyboard.press('Escape')
 
   // showing it again leaves no trace: the flag is dropped, not set to false
