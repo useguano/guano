@@ -989,6 +989,28 @@ export function appearRootMargin(appearAt) {
   return `0px 0px -${round((1 - at) * 100)}% 0px`
 }
 
+/**
+ * Does a box sit where `appearRootMargin(appearAt)` would have the observer
+ * report it intersecting? The same threshold, read from a rect instead of
+ * handed to the browser — which is what lets the published runtime's fail-safe
+ * ask "should this already have fired?" rather than firing everything.
+ *
+ * An element with NO BOX (`display: none`, so every edge is 0) counts as in
+ * view: it can never intersect anything, so the observer is never going to
+ * report it and the fail-safe is the only thing that will ever play it.
+ * @param {{top: number, bottom: number, left: number, right: number}} rect
+ * @param {number} vh viewport height
+ * @param {number} vw viewport width
+ * @param {number|undefined} appearAt
+ * @returns {boolean}
+ */
+export function appearInView(rect, vh, vw, appearAt) {
+  if (!rect.top && !rect.bottom && !rect.left && !rect.right) return true
+  const at = typeof appearAt === 'number' ? Math.max(0, Math.min(1, appearAt)) : APPEAR_AT_DEFAULT
+  const edge = at ? vh * at : vh
+  return rect.top < edge && rect.bottom > 0 && rect.left < vw && rect.right > 0
+}
+
 export function scrubProgress(top, vh, scrub) {
   const p = scrubProgressRaw(top, vh, scrub)
   return p < 0 ? 0 : p > 1 ? 1 : p

@@ -10,6 +10,7 @@ import {
   foldReverseTime,
   motionBreakpointId,
   appearRootMargin,
+  appearInView,
   scrubProgressRaw,
   mouseProgressRaw,
   approach,
@@ -401,6 +402,8 @@ if (Object.keys(lib).length || siteFx) {
   const appearOnce = new Set<string>()
   const appearing: { meta: BindingMeta; el: HTMLElement }[] = []
   const observers = new Map<number, IntersectionObserver>()
+  const hasIO = typeof IntersectionObserver !== 'undefined'
+  const appearAt = (meta: BindingMeta) => (meta.o && meta.o.at) || 0
 
   const observerFor = (at: number) => {
     let observer = observers.get(at)
@@ -435,7 +438,14 @@ if (Object.keys(lib).length || siteFx) {
         start(meta, false, hiddenAtBoot)
       } else if (meta.t === 'appear') {
         appearing.push({ meta, el })
-        observerFor((meta.o && meta.o.at) || 0).observe(el)
+        // no IntersectionObserver (and `new IntersectionObserver` would throw):
+        // the trigger cannot exist, so it degrades to `load` rather than
+        // leaving the element on a primed first frame forever
+        if (hasIO) observerFor(appearAt(meta)).observe(el)
+        else if (!still) {
+          appearOnce.add(meta.k)
+          start(meta, false, hiddenAtBoot)
+        }
       } else if (meta.t === 'scrub') {
         scrubs.push({ meta, el })
       } else if (meta.t === 'mouse') {
@@ -752,15 +762,40 @@ if (Object.keys(lib).length || siteFx) {
     })
   }
 
-  if (appearing.length && !still) {
-    setTimeout(() => {
-      const hiddenNow = document.visibilityState === 'hidden'
-      for (const { meta } of appearing) {
-        if (!appearOnce.has(meta.k)) {
-          appearOnce.add(meta.k)
-          start(meta, false, hiddenNow)
-        }
-      }
-    }, 3000)
+  // The fail-safe. An appear binding sits on its primed first frame (usually
+  // opacity 0) until the observer reports, so an element the observer never
+  // reports on would stay invisible — a printed page, a prerender, a browser
+  // whose IO misses the initial notification. 3s after boot, anything still
+  // unfired is played.
+  //
+  // It only plays what is ALREADY IN VIEW, which is the set the observer
+  // should have reported and the only set that can be stuck invisible in front
+  // of someone. It used to play all of them: on a long page every reveal below
+  // the fold fired at t=3s without a single scroll, so a visitor arriving
+  // there found every entrance finished and the site read as having no scroll
+  // animations at all. The rest stay observed and play on entry — and
+  // `appearOnce` is only stamped for the ones actually played, or the observer
+  // would skip them later.
+  function playRemaining(onlyInView: boolean, settle?: boolean) {
+    const settled = settle === undefined ? document.visibilityState === 'hidden' : settle
+    const vh = window.innerHeight
+    const vw = window.innerWidth
+    // measure everything first, then play: `start` writes inline styles, so
+    // reading the next rect in the same pass forces a layout per binding
+    const due: BindingMeta[] = []
+    for (const { meta, el } of appearing) {
+      if (appearOnce.has(meta.k)) continue
+      if (onlyInView && !appearInView(el.getBoundingClientRect(), vh, vw, appearAt(meta))) continue
+      appearOnce.add(meta.k)
+      due.push(meta)
+    }
+    for (const meta of due) start(meta, false, settled)
+  }
+
+  if (appearing.length && !still && hasIO) {
+    setTimeout(() => playRemaining(true), 3000)
+    // printing never scrolls the page past the observer, so the whole document
+    // has to be revealed at once — settled, not animated
+    window.addEventListener('beforeprint', () => playRemaining(false, true))
   }
 }

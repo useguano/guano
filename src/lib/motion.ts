@@ -30,6 +30,7 @@ import {
   foldReverseTime as foldReverseTimeRaw,
   hasInfinite as hasInfiniteRaw,
   appearRootMargin,
+  appearInView as appearInViewRaw,
   parseTrackValue as parseTrackValueRaw,
   lerpColor,
   parseColor,
@@ -237,6 +238,12 @@ export const validateMotionSettings = validateMotionSettingsRaw as (
   motion: unknown,
   ctx?: { animationIds?: string[] },
 ) => ValidationResult
+export const appearInView = appearInViewRaw as (
+  rect: { top: number; bottom: number; left: number; right: number },
+  vh: number,
+  vw: number,
+  appearAt: number | undefined,
+) => boolean
 export {
   animationBindingKey,
   appearRootMargin,

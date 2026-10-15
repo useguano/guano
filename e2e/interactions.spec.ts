@@ -735,3 +735,116 @@ test.describe('a modal interaction', () => {
     await expect.poll(scrollY).toBeGreaterThan(0)
   })
 })
+
+// An `appear` CLASS TOGGLE, which is the interaction half of the same
+// fail-safe the tween runtime has: a reveal sits on its base class (here
+// `hidden`) until the observer reports, and 3s after boot anything still
+// unfired used to be turned on — every reveal on the page, at once, with the
+// visitor still at the top. Below the fold it must stay on its base class and
+// wait to be scrolled to.
+const REVEAL = 'i-reveal'
+const BLOCK = 'i-block'
+
+function appearFixture() {
+  return {
+    pages: [
+      {
+        id: 'p1',
+        name: 'Home',
+        path: '/',
+        status: 'published',
+        elements: [
+          node('body', 'body', {
+            children: [
+              node('apTop', 'div', {
+                htmlId: 'ap-top',
+                classes: 'size-32 opacity-0',
+                interactions: [
+                  { id: 'ab1', interactionId: REVEAL, trigger: 'appear', targetId: null },
+                ],
+              }),
+              node('apTall', 'div', { htmlId: 'ap-tall', classes: 'h-[300vh]' }),
+              node('apLow', 'div', {
+                htmlId: 'ap-low',
+                classes: 'size-32 opacity-0',
+                interactions: [
+                  { id: 'ab2', interactionId: REVEAL, trigger: 'appear', targetId: null },
+                ],
+              }),
+              // the one reveal that CANNOT be scroll-triggered: display:none
+              // has no box, so the observer never reports it
+              node('apNone', 'div', {
+                htmlId: 'ap-none',
+                classes: 'hidden',
+                interactions: [
+                  { id: 'ab3', interactionId: BLOCK, trigger: 'appear', targetId: null },
+                ],
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+    components: [],
+    collections: [],
+    interactions: [
+      {
+        id: REVEAL,
+        name: 'Reveal',
+        toClasses: 'opacity-100',
+        duration: 'duration-200',
+        easing: 'ease-out',
+      },
+      { id: BLOCK, name: 'Block', toClasses: 'flex', duration: 'duration-200', easing: 'ease-out' },
+    ],
+    animations: [],
+    breakpoints: [],
+    comments: [],
+    locales: ['en'],
+    defaultLocale: 'en',
+    settings: {
+      publishing: { method: 'server', github: { repo: '', branch: '' } },
+      seo: { siteName: 'T', titleTemplate: '%s', description: '' },
+      domain: '',
+      smtp: {},
+      integrations: { stripe: {}, mailing: {} },
+      tokens: [],
+      customCode: { head: '' },
+      fonts: { family: 'sans' },
+    },
+  }
+}
+
+test.describe('an appear class toggle', () => {
+  test.beforeAll(async () => {
+    await exportSite(appearFixture(), SITE)
+  })
+
+  test('the fail-safe reveals what is in view, and leaves the rest to the scroll', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    // in view at load: the observer fires on registration
+    await expect.poll(() => classesOf(page, 'ap-top')).toContain('opacity-100')
+
+    // three viewports down, past the fail-safe, never scrolled to
+    await page.waitForTimeout(3600)
+    expect(await classesOf(page, 'ap-low')).toContain('opacity-0')
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+
+    // the boxless one is turned on by the net, wherever it sits: nothing else
+    // ever will be able to
+    expect(await classesOf(page, 'ap-none')).toContain('flex')
+
+    await page.locator('#ap-low').scrollIntoViewIfNeeded()
+    await expect.poll(() => classesOf(page, 'ap-low')).toContain('opacity-100')
+  })
+
+  test('printing reveals the whole page, scrolled to or not', async ({ page }) => {
+    await page.goto('/')
+    expect(await classesOf(page, 'ap-low')).toContain('opacity-0')
+    // the one case with no scroll to wait for: every appear state goes on
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')))
+    expect(await classesOf(page, 'ap-low')).toContain('opacity-100')
+  })
+})

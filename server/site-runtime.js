@@ -449,15 +449,21 @@
 
   // ---------- triggers ----------
 
-  var appear = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (!entry.isIntersecting) return
-      appear.unobserve(entry.target)
-      ;(els[+entry.target.getAttribute('data-fx')].c || []).forEach(function (i) {
-        if (i.t === 'appear') set(i.s, true) // fire once, never unfires
+  // no IntersectionObserver at all: `new IntersectionObserver` throws, which
+  // took every other trigger on the page down with it, and the trigger cannot
+  // exist anyway — so an appear state simply starts on
+  var hasIO = typeof IntersectionObserver !== 'undefined'
+  var appear =
+    hasIO &&
+    new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return
+        appear.unobserve(entry.target)
+        ;(els[+entry.target.getAttribute('data-fx')].c || []).forEach(function (i) {
+          if (i.t === 'appear') set(i.s, true) // fire once, never unfires
+        })
       })
     })
-  })
 
   var appearMetas = []
   var scrolledMetas = []
@@ -499,8 +505,9 @@
         set(i.s, i.a === 'on' ? true : i.a === 'off' ? false : !fired.has(i.s))
       })
     } else if (i.t === 'appear') {
-      appearMetas.push(i)
-      appear.observe(el)
+      appearMetas.push({ i: i, el: el })
+      if (hasIO) appear.observe(el)
+      else set(i.s, true)
     } else if (i.t === 'load') {
       // on as soon as the page renders, and never off — appear without the
       // wait, for a state the page simply starts in
@@ -532,17 +539,48 @@
 
   // safety net: appear content starts at its base state (often opacity-0).
   // The observer reveals it on scroll, but if the element never intersects
-  // (hidden tab, print, prerender, a crawler that ignores IO) it would stay
-  // invisible. Force every appear state on with ?noanim, and otherwise after a
-  // 3s fallback timeout — content is in the DOM either way, this only
-  // guarantees it actually renders (and makes screenshots deterministic).
-  var revealAll = function () {
-    appearMetas.forEach(function (i) {
-      set(i.s, true)
+  // (hidden tab, print, prerender, a browser whose IO misses the initial
+  // notification) it would stay invisible. Content is in the DOM either way;
+  // this only guarantees it actually renders.
+  //
+  // The 3s timeout reveals ONLY what is in the viewport already — the set the
+  // observer should have reported, and the only set that can be stuck
+  // invisible in front of someone. It used to reveal every appear state on the
+  // page, so on a long page they all fired at t=3s without a scroll and every
+  // reveal below the fold was over before a visitor reached it. ?noanim and
+  // printing still reveal the whole document, since neither scrolls it past
+  // the observer.
+  var revealAll = function (onlyInView) {
+    var vh = window.innerHeight
+    var vw = window.innerWidth
+    // measure first, then set: `set` writes classes, so reading the next rect
+    // in the same pass forces a layout per binding
+    var due = []
+    appearMetas.forEach(function (m) {
+      if (onlyInView) {
+        var r = m.el.getBoundingClientRect()
+        // every edge 0 means no box at all (display:none), which can never
+        // intersect — so the observer will never report it and this net is the
+        // only thing that will ever turn it on. The common `hidden` → `flex`
+        // reveal is exactly that, and cannot be scroll-triggered.
+        var boxless = !r.top && !r.bottom && !r.left && !r.right
+        if (!boxless && !(r.top < vh && r.bottom > 0 && r.left < vw && r.right > 0)) return
+      }
+      due.push(m.i.s)
+    })
+    due.forEach(function (key) {
+      set(key, true)
     })
   }
-  if (noanim) revealAll()
-  else if (appearMetas.length) setTimeout(revealAll, 3000)
+  if (noanim) revealAll(false)
+  else if (appearMetas.length && hasIO) {
+    setTimeout(function () {
+      revealAll(true)
+    }, 3000)
+    window.addEventListener('beforeprint', function () {
+      revealAll(false)
+    })
+  }
 
   apply()
 })()

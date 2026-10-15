@@ -227,6 +227,31 @@ test.describe('site-wide motion', () => {
         .toBe('')
     })
 
+    // THE FAIL-SAFE MUST NOT BECOME THE TRIGGER. The runtime plays any appear
+    // binding still unfired 3s after boot so nothing is left invisible to a
+    // visitor whose IntersectionObserver never reports (print, prerender). It
+    // used to do that unconditionally, which played every reveal on the page at
+    // t=3s without a single scroll: by the time a visitor got there every
+    // entrance had finished, and the site read as having no scroll animations.
+    test('an appear binding below the fold is still primed after the fail-safe timeout', async ({
+      page,
+    }) => {
+      await exportSite(fixture({}), SITE)
+      await page.goto('/')
+      const opacity = () =>
+        page.evaluate(() => document.querySelector<HTMLElement>('#inherit')!.style.opacity)
+
+      // #inherit sits past a 300vh spacer: three viewports down, never seen
+      await expect.poll(opacity).toBe('0')
+      await page.waitForTimeout(3600)
+      expect(await opacity()).toBe('0')
+      expect(await page.evaluate(() => window.scrollY)).toBe(0)
+
+      // and it plays on entry, which is the whole point of the trigger
+      await page.locator('#inherit').scrollIntoViewIfNeeded()
+      await expect.poll(opacity, { timeout: 3000 }).toBe('1')
+    })
+
     test('?noanim navigates natively and never hides the page', async ({ page }) => {
       await page.goto('/?noanim')
       await expect(page.locator('html')).not.toHaveClass(/gt-enter/)
