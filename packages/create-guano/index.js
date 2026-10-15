@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @useguano/create: scaffold a project dir that runs Guano via npm scripts,
-// install it, and connect Claude Desktop — all in this one command, so what
+// install it, and connect Claude — all in this one command, so what
 // is left afterwards is `cd my-site && npm run dev`. Zero dependencies —
 // prompts with node:readline.
 //
@@ -9,7 +9,8 @@
 //
 // The MCP connect runs through the just-installed package's own
 // `guano connect --offline`: it mints a PENDING API token into <dir>/data,
-// writes the two agent permissions there, and writes Claude Desktop's config.
+// writes the two agent permissions there, and writes the config of every
+// Claude client on the machine (Claude Code and Claude Desktop).
 // The server binds the token to the first admin at /admin setup, and the
 // setup form shows the permissions instead of asking them again.
 import { spawnSync } from 'node:child_process'
@@ -43,7 +44,7 @@ if (!dir) {
   dir = rl ? (await ask(`Project folder (${DEFAULT_DIR}): `)).trim() || DEFAULT_DIR : DEFAULT_DIR
 }
 
-// Connect Claude Desktop? Flags decide non-interactively (CI never asks and
+// Connect Claude? Flags decide non-interactively (CI never asks and
 // never connects); a terminal asks, default yes.
 let connect = false
 let policyFlags = []
@@ -52,7 +53,7 @@ if (flag('--no-connect')) {
 } else if (flag('--connect') || flag('--main') || flag('--publish')) {
   connect = true
 } else if (rl) {
-  connect = await yes('Connect Claude Desktop to this site over MCP?', true)
+  connect = await yes('Connect Claude (Code and Desktop) to this site over MCP?', true)
 }
 if (connect) {
   if (flag('--main')) policyFlags.push('--main')
@@ -197,14 +198,14 @@ site. Your published site is served at http://localhost:${port}/.
 This project runs on port ${port} (set in \`.env\`). Each Guano site on a
 machine needs its own, so two of them never answer for one address.
 
-If you said yes to Claude Desktop when scaffolding, it is already connected:
+If you said yes to Claude when scaffolding, it is already connected:
 the agent token is bound to the admin account you create, and the permissions
 you chose (edit the live project, publish) show on the setup form and stay
 editable in Settings → MCP → Agent permissions.
 
 - \`npm run start\` — production server (\`NODE_ENV=production\`)
 - \`npm run build\` — export the site as static files to \`./dist-site\`
-- \`npm run connect\` — connect Claude Desktop later, or from another machine (quit Claude first; \`--main\` / \`--publish\` grant the agent permissions, or it asks)
+- \`npm run connect\` — connect Claude later, or from another machine (writes Claude Code's \`~/.claude.json\` and Claude Desktop's config; quit Desktop first; \`--main\` / \`--publish\` grant the agent permissions, or it asks)
 - everything lives in \`./data\` — **backing up = copying that directory**
 
 See the @useguano/guano package README for deploy notes and environment variables.
@@ -226,7 +227,7 @@ if (install) {
   if (!installed) console.error('\nnpm install failed — run it yourself in the project folder.')
 }
 
-// ---- connect Claude Desktop, through the installed package ----
+// ---- connect Claude, through the installed package ----
 // GUANO_CREATE_LOCAL_PKG is a dev-only escape hatch: with --no-install there
 // is no node_modules, so a repo checkout names its own packages/guano here.
 let connected = false
@@ -235,7 +236,7 @@ if (connect) {
     ? join(target, 'node_modules', '@useguano', 'guano')
     : process.env.GUANO_CREATE_LOCAL_PKG
   if (!pkgDir) {
-    console.error('\nClaude Desktop not connected: guano is not installed yet — run `npm run connect` inside the project later.')
+    console.error('\nClaude not connected: guano is not installed yet — run `npm run connect` inside the project later.')
   } else {
     try {
       // the package resolves its data dir from this env at import time
@@ -245,7 +246,7 @@ if (connect) {
       const { main } = await import(pathToFileURL(join(pkgDir, 'mcp', 'connect.mjs')).href)
       const connectArgs = [...policyFlags, '--offline', '--yes']
       if (opt('--config')) connectArgs.push('--config', resolve(opt('--config')))
-      console.log('\nConnecting Claude Desktop…')
+      console.log('\nConnecting Claude…')
       await main(connectArgs, {
         whenClaudeRunning: async () => {
           if (!rl) return 'skip'
@@ -257,7 +258,7 @@ if (connect) {
       })
       connected = true
     } catch (e) {
-      console.error(`\n✗ ${e?.message ?? e}\n  Claude Desktop not connected — run \`npm run connect\` inside the project later.`)
+      console.error(`\n✗ ${e?.message ?? e}\n  Claude not connected — run \`npm run connect\` inside the project later.`)
     }
   }
 }
@@ -267,4 +268,4 @@ console.log(`
 Next:
   cd ${dir}${installed || !install ? '' : '\n  npm install'}
   npm run dev   → http://localhost:4174/admin  (create your admin account)
-${connected ? '\nThen open Claude Desktop — guano is connected; the agent token is bound to the admin you create.\n' : ''}`)
+${connected ? '\nThen open Claude — guano is connected; the agent token is bound to the admin you create.\n' : ''}`)

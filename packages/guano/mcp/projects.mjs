@@ -26,10 +26,11 @@
 //      projects is how "which site am I editing" becomes a question nobody can
 //      answer from the outside, which is the bug docs/instance.md exists to end.
 //
-// A reachable project is one whose health answers AND whose `instance` matches
-// the id `connect` baked in. That is what stops another project squatting the
-// port from being mistaken for this one — the same check `guano mcp` makes
-// before presenting a token.
+// A reachable project is one whose health answers AND which that answer
+// identifies as THIS project: by the `instance` id `connect` baked in, or,
+// when either side has no id to compare, by the instance accepting its token.
+// That is what stops another project squatting the port from being mistaken
+// for this one — the same check `guano mcp` makes before presenting a token.
 import { createApi } from './api.mjs'
 
 /** how long a health probe is trusted. Short enough that starting a project is
@@ -100,16 +101,45 @@ export function createProjectRouter({
     return clients.get(slug)
   }
 
+  /**
+   * Does the instance on this address accept this project's token?
+   *
+   * The identity test when either side carries no instance id. "A missing id
+   * is never a mismatch" is right for an old SERVER and wrong for an old
+   * ENTRY: every entry written before ids existed says :4174, because that was
+   * the only default there was, so each one matched whatever project held that
+   * port and five dead projects all read as running at one address — the
+   * ambiguity the map exists to end, manufactured by the fold.
+   *
+   * A token is minted into ONE data dir, so an instance that ACCEPTS it is
+   * that project, as surely as the id says so. Only a plain 401 is a no. A
+   * PENDING token is this instance's token already (the scaffolder mints one
+   * before the admin exists, and the first admin binds it), and anything else
+   * — 403, a 404 from an older build, a 5xx — is not an answer about identity
+   * and must not exclude a project that is plainly up.
+   */
+  async function tokenAccepted(api) {
+    if (!api.token) return false
+    try {
+      await api.whoami()
+      return true
+    } catch (e) {
+      return !(e?.status === 401 && !e?.needsSetup)
+    }
+  }
+
   /** does this project answer, and is it the project we were connected to? */
   async function reachable(slug) {
     const cached = probes.get(slug)
     if (cached && now() - cached.at < PROBE_TTL_MS) return cached.ok
-    const h = await clientFor(slug).health()
+    const api = clientFor(slug)
+    const h = await api.health()
     const want = projects[slug].instance
-    // A missing `instance` on either side is never a mismatch: an older server
-    // does not report one, and an entry written before ids existed carries
-    // none. Refusing those would break setups that work.
-    const ok = !!h && (!want || typeof h.instance !== 'string' || !h.instance || h.instance === want)
+    const got = h && typeof h.instance === 'string' ? h.instance : ''
+    let ok = !!h
+    // Both sides know an id: compare them, which costs no extra request.
+    // Either side does not: ask the token instead of waving it through.
+    if (ok) ok = want && got ? got === want : await tokenAccepted(api)
     probes.set(slug, { at: now(), ok })
     return ok
   }

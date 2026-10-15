@@ -32,13 +32,16 @@ Usage:
   guano start            start the server for production
   guano build [--out d]  export the published project as a static site
                          (default ./dist-site)
-  guano connect          set up Claude Desktop automatically: mints an API
-                         token, settles what the agent may do (--main lets it
-                         edit the live project, --publish lets it publish;
-                         with neither it asks, --yes skips) and writes the MCP
-                         config (quit Claude first; --print emits the snippet
-                         for other MCP clients). Every project goes into ONE
-                         entry, so Claude stops reporting "could not connect"
+  guano connect          set up Claude automatically: mints an API token,
+                         settles what the agent may do (--main lets it edit
+                         the live project, --publish lets it publish; with
+                         neither it asks, --yes skips) and writes the MCP
+                         config of every Claude client here — Claude Code
+                         (~/.claude.json) and Claude Desktop (quit Desktop
+                         first; --config <file> writes one named file,
+                         --print emits the snippet for any other MCP
+                         client). Every project goes into ONE entry, so
+                         Claude stops reporting "could not connect"
                          for the ones you are not running. Works before /admin
                          setup too — the token is bound to the first admin.
                          --offline never talks to a server (what
