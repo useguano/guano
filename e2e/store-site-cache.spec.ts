@@ -148,6 +148,13 @@ test('a private site is never stored by a shared cache', async ({ baseURL }) => 
   const media = await visitor.get(src!)
   expect(media.headers()['cache-control']).toBe('private, max-age=31536000, immutable')
 
-  // put it back, so the shared instance is public for whatever runs next
-  expect((await admin.put('/api/site-password', { data: { enabled: false } })).ok()).toBeTruthy()
+  // Put it back, so the shared instance is public for whatever runs next —
+  // and CLEAR the password, not just the switch. `enabled: false` alone left
+  // `passwordSet: true` behind, and store-site-password (which sorts right
+  // after this file) asserts it starts false: that one failure then left the
+  // gate ON for every later spec that visits `/`, so the whole ui-* tail
+  // failed on a private-site page it never asked for.
+  expect(
+    (await admin.put('/api/site-password', { data: { enabled: false, password: '' } })).ok(),
+  ).toBeTruthy()
 })
