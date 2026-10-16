@@ -20,7 +20,7 @@ These have no natural trigger point — nothing will remind you mid-task.
 - **Never a bare `console.*` in `server/`** — logging goes through `server/log.mjs` (levels, `LOG_JSON`, the request id).
 - **Every structural change goes through `lib/treeOps`**, parameterized by a `StructureHost`. Never mutate a tree by hand.
 - **Keep the three renderers in sync** — `ElementRenderer` (Edit), `PreviewRenderer` (Play), `server/export.mjs` (published). Anything that adds per-node or per-instance state must be read the same way in all three.
-- **Never animate one property with both motion systems.** Interactions write classes; animations write inline styles.
+- **Never animate one property with both motion systems.** Interactions write classes; animations write inline styles. **Actions** are the third engine and write DATA — never style.
 - **Reuse the UI primitives** in `src/components/ui/` — never hand-roll an input or a button, never render a modal or popover with a local `v-if`, and never use the native `title` attribute.
 - **Errors must have a surface** — `useNotice()`, never a silent catch.
 - **No prose comments in `src/`.** Keep directives and typed JSDoc, nothing else.
@@ -47,7 +47,7 @@ Vue `3.5`, vue-router `5`, Vite `8`, TypeScript `6`, Tailwind `4` (CSS-first, no
 | `npm run check:migrate` | The v2 schema migration (`src/lib/migrate.ts`). |
 | `npm run check:mcp` | What an MCP client actually receives; fails over the tool-list byte budget. |
 | `npm run check:cli` | The shipped CLI, invoked the way a user meets it. |
-| `build:motion` · `build:slider` · `build:icons` · `build:mcp-runtime` | Rebuild a committed artifact. Run after changing its source. |
+| `build:motion` · `build:slider` · `build:state` · `build:icons` · `build:mcp-runtime` | Rebuild a committed artifact. Run after changing its source. |
 
 **These are the only gates — there is no linter and no unit-test runner.** Each one has a trigger and a rule you cannot guess from its name: a `check:corpus` difference is a bug, never a re-baseline; the `check:mcp` budget is trimmed, never raised; `check:html` is mandatory after touching `src/lib/html/`. **Read `docs/gates.md` before running or changing a gate** — it also covers the dev-server port walk, which can cost a day.
 
@@ -72,7 +72,7 @@ Shared state is module-level `ref`s declared **outside** the exported composable
 - `usePersistence` — autosave + undo/redo + which branch is loaded (`docs/server.md`).
 - `useInteraction` (class toggles), `useAnimation` + `useMotion` (tween timelines), `useComments`, `useComponents`, `useCollections`, `useBranches`, `useLocale`, `useContextMenu`, `usePanel`, `useSettings`, `useThemeTokens` — one subsystem each.
 
-`Project` (`src/types/editor.ts`) is the whole serializable document: `pages`, `components`, `collections`, `interactions` + `animations` (the two shared motion libraries), `breakpoints`, `comments`, `locales` + `defaultLocale`, and `settings` (`ProjectSettings`: design `tokens`, seo, favicon, domain, smtp, custom code, fonts). Runtime-only state (selection, camera, open popover, fired interactions, **active locale**, active branch id) lives in composables and is intentionally **not** part of the project or its history.
+`Project` (`src/types/editor.ts`) is the whole serializable document: `pages`, `components`, `collections`, `interactions` + `animations` (the two shared motion libraries — **actions have no library: their ops live inline on the binding**), `breakpoints`, `comments`, `locales` + `defaultLocale`, and `settings` (`ProjectSettings`: design `tokens`, seo, favicon, domain, smtp, custom code, fonts). Runtime-only state (selection, camera, open popover, fired interactions, **active locale**, active branch id) lives in composables and is intentionally **not** part of the project or its history.
 
 ## The core invariant: the tree is the source of truth for structure
 
@@ -108,7 +108,7 @@ Nothing in `src/` imports it, so the parser never enters the browser bundle. **R
 
 `useRenderNode.ts` is the shared core for Build's `ElementRenderer.vue` and Preview's `PreviewRenderer.vue`; `server/export.mjs` reimplements the same logic in plain JS and is the only renderer of the published site. **Keep all three in sync** — anything that adds per-node or per-instance state must be read the same way in each.
 
-Content precedence: bound collection field → the node's own content → the mapped master's content → the element default. Inside an instance, style and interactions come from the master while content stays the node's own.
+Content precedence: bound collection field → the node's own content → the mapped master's content. **The element default is a Build-only placeholder and ships nowhere** — an empty `<span>` exports empty. A binding path may carry a display format (`due|date:long`, `status|label`) or be an aggregate over a list (`@count:task`), and a `fieldAttrs` key of `style:--x` binds a CSS custom property — the only way a number reaches a style. → `docs/content.md` Inside an instance, style and interactions come from the master while content stays the node's own.
 
 Two rules that cost a release each: **binding scope is decided by the TARGET, not the trigger**, and a **channel** (`targetId: "@name"`) is the one target with no scope at all. → `docs/rendering.md`
 
@@ -127,6 +127,7 @@ Two rules that cost a release each: **binding scope is decided by the TARGET, no
 
 - **`docs/components.md`** — masters and instances, the one instance resolver (`shared/instances.js`), hidden parts, variants, nesting and mirrors, slots, the drawer's whole-project ops, the board. Read it for any component work, and before adding per-instance state (it must resolve along the chain, in all three renderers).
 - **`docs/content.md`** — collections and field types, localization, the `@locale:` switcher, `list-empty`, attribute layers, `fieldAttrs`, reserved `data-*`, sliders, icons, `custom-code`. Read it for CMS content, a locale, an attribute, or a node's media.
+- **`docs/state.md`** — client-side entry state: actions (the data engine), the route store, the list reconciler, draft scopes, persistence. Read it for any action work, and before touching `src/lib/shared/state.js`, `src/state/runtime.ts` or the `ds` half of the exporter. **A route with no action ships not one byte of it.**
 - **`docs/motion.md`** — interactions (class toggles) and animations (tween timelines): two systems, one panel, all the math in `shared/motion.js` imported verbatim by editor, exporter and runtime. Read it for any trigger, tween or effect work. **Never animate one property with both.**
 - **`docs/theming.md`** — design tokens, a token's `dark` value, the `@theme` link sentinel, and why `dark:` is class-based here rather than `prefers-color-scheme`. Read it before "fixing" either.
 

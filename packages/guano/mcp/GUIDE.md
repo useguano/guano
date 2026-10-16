@@ -803,23 +803,25 @@ taste; they are the defects a review finds first.
   inline expander, a per-row confirm — targets an element inside the row, and each
   row then gets its own state automatically.)
   **When the row's trigger is a COMPONENT instance** (a `<Button />` inside a
-  `<ContactRow />`), it cannot carry that binding: a binding on an element inside an
-  instance is stored on the shared master, which every instance on every page renders,
-  so it cannot name one page's overlay. Wrap the instance in a page-owned
-  `<div class="contents">` — which renders no box of its own — and put the binding on
-  the wrapper:
+  `<ContactRow />`), bind it DIRECTLY — the instance line takes the binding, and the
+  renderer emits the layout-transparent wrapper itself. No `<div class="contents">` to
+  author, and no element per trigger:
 
   ```html
   <collection-list source="contact">
     <div data-ref="row" class="flex items-center justify-between">
       <span data-field="name"></span>
-      <div data-ref="row-open" class="contents"><Button /></div>
+      <Button data-ref="row-open" />
     </div>
   </collection-list>
   <div data-ref="sheet" class="fixed inset-0 hidden">…</div>
   ```
 
-  then `bind_interaction {ref: "row-open", trigger: "click", targetRef: "sheet"}`. The
+  then `bind_interaction {ref: "row-open", trigger: "click", targetRef: "sheet"}`. A
+  binding on an instance belongs to THAT placement: two `<Button>`s aimed at one sheet
+  drive one state, and the master's own bindings (if it has any) still fire on every
+  instance. A class, an attribute or a `data-field` on the instance line is still
+  refused — those really are the master's. The
   wrapper is an ordinary page node, so it can target the overlay; the Button stays one
   component.
 - Empty and loading states for every list. Placeholder copy reads like the product,
@@ -1082,6 +1084,22 @@ classes (`flex`, `grid`, `gap-*`) — the repeated children go inside it. A boun
 `<slider source="…">` does the same and wraps each entry in its own slide. A component
 instance is the one thing that renders NO element of its own.
 
+**Read THROUGH a reference with a dotted path — do not denormalise.**
+`data-field="assignee.initials"` renders the `initials` field of the entry `assignee`
+points at. Missing this costs you the whole schema: copying `assignee-initials`,
+`assignee-color`, `project-name` onto every task works around a binding that exists.
+
+```
+data-field="assignee"           → the referenced entry's NAME ("Ada Lovelace")
+data-field="assignee.initials"  → one field of it ("AL")
+```
+
+ONE hop only, and the head must be a single `reference`, not a `multi-reference` (a list —
+repeat it with a `collection-list`). For a whole card, `<collection-item source="assignee">`
+renders the referenced entry through its template page. To reuse one component across
+collections whose field names differ, see **Components**. For dates, choice labels, counts
+and binding a number to a style, see **Computed values**.
+
 **A `reference` / `multi-reference` value takes a SLUG or an entry id**, whichever you
 have: slugs are derived from the name, so seeding a graph (posts → authors, messages →
 conversations) needs no id transcription between calls. A value matching neither is
@@ -1226,6 +1244,281 @@ appended to the bottom of every page; **page titles/descriptions** localize via 
 (see Components) so a header translates once, not once per page; **code samples and
 brand names** get `attributes: {translate: "no"}` on their container so they leave
 the worklist instead of pinning `missingTranslatable` above 0 forever.
+
+## Computed values
+
+Four ways to render something the CMS does not literally store. All four are ordinary
+bindings, so the actions engine re-renders them and `publish` validates them.
+
+### A date or a choice as words — `|format` on the path
+
+```
+data-field="due|date:long"        → March 12, 2026   (locale-aware)
+data-field="due|date:month-day"   → Mar 12
+data-field="status|label"         → In progress
+data-field="status"               → in-progress      (the raw VALUE)
+```
+
+Date presets: `numeric`, `short`, `medium`, `long`, `month-day`, `month-year`, `time`,
+`datetime`. They go through `Intl`, so a `/fr/` route renders `12 mars 2026` with no extra
+work. A date-only value keeps the day it says it is — no timezone drift.
+
+`|label` needs the labels on the field, which pages never match on:
+
+```
+update_collection {collectionId, updateFields: [
+  {name: "status", optionLabels: {todo: "To do", "in-progress": "In progress"}}
+]}
+```
+
+Do **not** add a `due-label` text field beside a date, and do **not** build a pill out of
+one `<span>` per option. A format that does not suit its field is refused by name.
+
+### A number as a style — `style:--x` in `fieldAttrs`
+
+The only way a measurement reaches CSS. A `data-[…]:` variant matches a value it has to
+know in advance; a progress bar is a continuum.
+
+```
+edit_elements {edits: [{
+  ref: "bar",
+  fieldAttrs: {"style:--p": "progress"},
+  addClasses: ["w-[calc(var(--p)*1%)]"]
+}]}
+```
+
+renders `style="--p:60"` per row. Works for widths, heights, opacities, `rotate`, a
+`--delay` an animation reads — anything a Tailwind arbitrary value can do with
+`var(--p)`. In markup it is `data-bind-style:--p="progress"`.
+
+### Several conditions on a list — `listQuery.filters`
+
+`filter` is one condition; `filters` is a list of the same shape, ANDed with it and with
+each other. This is how a per-project kanban column exists at all:
+
+```
+edit_elements {edits: [{ref: "todoCol", listQuery: {
+  filter:  {field: "project", equalsCurrent: true},
+  filters: [{field: "status", equals: "todo"}]
+}}]}
+```
+
+Each condition takes `field` plus `equals` / `notEmpty` / `equalsCurrent`, and `not: true`
+inverts that one. Every condition is validated — a reference `equals` is resolved from a
+slug, and an `equalsCurrent` on a non-reference field is refused.
+
+### A count or a total — `@count:` / `@sum:` on the arg
+
+```
+data-field="@count:task"        → how many tasks
+data-field="@sum:task.points"   → their total
+```
+
+Ops: `count`, `sum`, `avg`, `min`, `max`. The source is a collection name, `@pages`, or a
+multi-reference field of the entry in scope — the same sources a `collection-list` takes.
+
+**It uses the element's own `listQuery`**, so a column header and the column it labels run
+the same query:
+
+```
+edit_elements {edits: [
+  {ref: "todoCount", arg: "@count:task", listQuery: {filter: {field: "status", equals: "todo"}}},
+  {ref: "todoCol",   listQuery: {filter: {field: "status", equals: "todo"}}}
+]}
+```
+
+An aggregate makes the route stateful on its own, so the header follows the card that just
+left it — a count that never updated would be the bug this exists for. `@sum` and friends
+need a `number` field; anything else is refused.
+
+## State and actions
+
+A collection is baked into the published HTML, so a prototype's "Mark as done" could
+restyle a pill and never change the status behind it. **Actions** are the third engine,
+beside class interactions and tween animations: they write **data**, in the browser,
+and every element bound to a field re-reads from it.
+
+```
+interactions  →  write CLASSES        (open a menu, flip a chevron)
+animations    →  write INLINE STYLES  (tween a panel in)
+actions       →  write DATA           (status = "done", create a subtask)
+```
+
+### What it can and cannot do
+
+It **can**: set, toggle and increment a field on an entry; create and delete entries;
+re-render every bound leaf and bound attribute; re-run a `collection-list`'s `listQuery`
+so a card migrates to the column that now matches it; two-way-bind an input to a field;
+collect a form's values in a **draft scope** and commit them as a new entry.
+
+It **cannot**: write to the CMS. **Nothing reaches the server.** The store lives in the
+visitor's browser, resets when they close the tab (`persist: "session"`, the default), and
+is never read back by you or by the editor. `get_collection` shows what was published,
+not what a visitor did. This is for prototypes that feel real, not for a backend.
+
+Two more limits worth knowing before you plan around them. A list can only re-render
+entries the ROUTE shipped, so a `listQuery` `limit` caps what any action can reveal. And a
+reference bound as **text** renders the referenced entry's *name*, which the store does not
+carry — so it will not re-render. Bind a reference through `data-bind-*` instead, or keep
+the displayed copy on the entry itself.
+
+### Every value is a string
+
+Exactly as the CMS stores it. `"12"`, not `12`. `"true"` / `"false"`, not a boolean. For a
+`select`, the option **value**. A write of the wrong shape is refused by name, because a
+page matches on the literal text: `data-[status=done]:` never matches `done ` or `Done`.
+
+### Which entry an op writes
+
+In this order:
+
+1. an explicit `entry: "<id>"` on the op;
+2. otherwise **the entry in scope where the binding sits** — the row's entry inside a
+   `collection-list`, the route's entry on a collection template page;
+3. otherwise the bind is **refused**, naming both ways out.
+
+This is the same rule that scopes an interaction's state key, so a "Done" checkbox inside
+a row writes **that row's** entry, and one outside every list writes the route's. You do
+not pass the row: there is no way to express "this row" and no need to.
+
+### Binding one
+
+`edit_elements {bindActions}`, batched like every other binding. There is no library and
+no `list_actions`: an op list is two fields long, so it lives inline on the binding.
+
+```
+edit_elements {pageId, version, edits: [{
+  ref: "markDone",
+  bindActions: [{ trigger: "click", ops: [{op: "set", field: "status", value: "done"}] }]
+}]}
+```
+
+| op | fields | what it does |
+|---|---|---|
+| `set` | `field`, `value` | set a field on the target entry |
+| `toggle` | `field` | flip a boolean ("true" ⇄ "false") |
+| `increment` | `field`, `by` (default 1) | add to a number; negative subtracts |
+| `create` | `collection`, `values`, `from` | make an entry |
+| `delete` | — | remove the target entry |
+
+Triggers are the interaction set (`click`, `change`, `hover`, `load`, …). `change` on a
+control passes the control's value. Remove one with `unbindActionIds`, read them back with
+`get_page {includeInteractions: true}`.
+
+### Recipe — mark as done
+
+The button writes the data; a `data-[…]:` variant does the styling. **Both halves are
+needed**: without the attribute binding nothing on the page would look different.
+
+```
+# the pill reads the status as an attribute, so classes can key on it
+edit_elements {edits: [
+  {ref: "pill", fieldAttrs: {"data-status": "status"}},
+  {ref: "pill", classes: "data-[status=done]:bg-green-100 data-[status=todo]:bg-stone-100"},
+
+  # the wrapper too, so the BUTTON can change its own words
+  {ref: "actions", fieldAttrs: {"data-status": "status"}},
+  {ref: "doneLabel", classes: "data-[status=done]:hidden"},
+  {ref: "reopenLabel", classes: "hidden data-[status=done]:inline"},
+
+  {ref: "markDone", bindActions: [
+    {trigger: "click", ops: [{op: "set", field: "status", value: "done"}]}
+  ]},
+  {ref: "reopen", bindActions: [
+    {trigger: "click", ops: [{op: "set", field: "status", value: "review"}]}
+  ]}
+]}
+```
+
+### Recipe — add a subtask
+
+A **draft scope** is a container whose controls bind to a collection's fields with no entry
+yet. `create {from}` commits them and clears the inputs.
+
+```
+# 1. the container collects, and the inputs bind with data-field as usual
+edit_elements {edits: [{ref: "addSubtask", draft: "subtask"}]}
+set_page_html / edit_structure:
+  <div data-ref="addSubtask">
+    <input data-field="title" placeholder="Add a subtask" />
+  </div>
+
+# 2. the trigger commits. `change` on the input means Enter submits it.
+edit_elements {edits: [{ref: "subtaskInput", bindActions: [
+  {trigger: "change", ops: [{op: "create", collection: "subtask", from: "subtask"}]}
+]}]}
+```
+
+You do **not** wire the link back to the task. When the created collection has exactly one
+reference field pointing at the collection in scope, it is filled with the current entry —
+which is what makes this one op. Two such fields and it is left to you: name it in `values`
+with `"@current"`.
+
+The counter beside the list is an `increment` in the same op list:
+
+```
+ops: [
+  {op: "create", collection: "subtask", from: "subtask"},
+  {op: "increment", field: "subtaskCount", by: 1}
+]
+```
+
+A subtask's own checkbox is a `toggle` inside the row, so it writes that row:
+
+```
+edit_elements {edits: [{ref: "subtaskCheck", bindActions: [
+  {trigger: "change", ops: [{op: "toggle", field: "done"}]}
+]}]}
+```
+
+### Recipe — a kanban move
+
+Nothing new: a column is a `collection-list` filtered by status, and the card's button
+`set`s that status. The card migrates because the lists re-run their own queries.
+
+```
+# four columns, one per status
+edit_elements {edits: [
+  {ref: "todoCol",  listQuery: {filter: {field: "status", equals: "todo"}}},
+  {ref: "doingCol", listQuery: {filter: {field: "status", equals: "doing"}}},
+  {ref: "doneCol",  listQuery: {filter: {field: "status", equals: "done"}}}
+]}
+
+# the card's own button — inside the row, so it writes that row's entry
+edit_elements {edits: [{ref: "cardAdvance", bindActions: [
+  {trigger: "click", ops: [{op: "set", field: "status", value: "doing"}]}
+]}]}
+```
+
+Give every column a `<list-empty>`. A column the visitor empties shows it, and a column
+with no entries at publish time still needs the markup to exist.
+
+### Persistence
+
+`update_settings {state: {persist}}`:
+
+- **`"session"`** (default) — survives a reload and follows the visitor across routes, so a
+  task set to done on its own page is in the Done column on the board. Gone with the tab.
+- **`"none"`** — forgets on every load. For a demo that must start clean each time.
+- **`"local"`** — survives the browser closing.
+
+`?resetstate` on any url clears it, which is how you start a walkthrough from the top.
+Only the **diff** is stored, keyed by entry id, so it applies on every route.
+
+### What `publish` will tell you about
+
+`action-target-unresolved` (an op with no entry in scope — the control does nothing),
+`action-create-empty` (a `create` with neither `values` nor `from`),
+`action-draft-uncommitted` (a draft scope no `create` points at, so what a visitor types
+goes nowhere), `state-store-heavy` (a route serializing more than 150 entries),
+`state-persistence-unused`.
+
+### The cost
+
+A route with no action ships **nothing** — no attributes, no store, no extra script. One
+with an action adds its store to the effects sidecar it already loads, plus
+`/assets/state.js` (~5.5 KB gzipped). Keep the store small by binding only the fields the
+route shows; it carries those, not the whole collection.
 
 ## Components
 
@@ -1406,6 +1699,19 @@ one-off, build it on the page.
   protects the save. Re-read with `list_components` before replacing a block you did
   not just write.
 
+**One PLACEMENT of a component can rebind its own parts**, so a shared `<Avatar>` serves
+collections whose field names differ:
+
+```
+# the master binds `initials`; this placement reads `assignee-initials` instead
+edit_elements {edits: [{ref: "av", part: "span", arg: "assignee-initials"}]}
+```
+
+`arg` is per-placement state, so the master keeps its own binding and every other instance
+is untouched — which means you do not need a second component, and you do not need the
+field names to match. Prefer the dotted path above where the data is a real reference;
+reach for this when it is not.
+
 ## Nesting
 
 A component may hold an instance of another: a `Card` holds the real `Button`, not a
@@ -1456,7 +1762,9 @@ Rules:
   ```html
   <div class="contents"><Button /></div>
   ```
-  then `bind_interaction` on that `<div>`.
+  then `bind_interaction` on that `<div>`. **This is a COMPONENT-only restriction.** On a
+  PAGE, bind the instance line directly (`<Button data-ref="opener" />`) — the renderer
+  emits the transparent wrapper for you.
 - **A host cannot restyle one placement.** There is no per-instance class: to make the
   button in a Card full-width, let the Card's layout stretch it (a `flex flex-col`
   parent), or give Button a variant option for it.
@@ -1803,6 +2111,21 @@ closed by `action: "off"`, still joinable by as many triggers as you like.
 
 `html[data-guano-modal]` is set while any modal is open, so a backdrop blur or a
 `filter` on the page behind it is one CSS rule away.
+
+**`scrim: true` adds the backdrop itself.** An overlay built from classes has no dimming
+layer of its own, so a channel-driven mobile sheet opened with nothing behind it — and the
+only way to add one was a second element, a second interaction and a second binding aimed
+at the same state. With the flag, the renderer inserts ONE layer behind the topmost open
+target, fades it in, and closes the effect when it is clicked:
+
+```
+create_interactions {items: [{name: "sheet", toClasses: "block", scrim: true}]}
+```
+
+It is a property of the EFFECT, like `modal` and `closeOn`, so any binding that drives the
+state gets it. Independent of `modal` — use both for a dialog, `scrim` alone for a sheet or
+a drawer. Two overlays open at once share one backdrop. The element is marked
+`data-guano-scrim`, so its look is one CSS rule away too.
 
 ### Site-wide overlays: channels
 
@@ -2669,25 +2992,22 @@ styled `<div>` containers instead. An SVG used as an `<img src>` cannot inherit
 `currentColor` — for a mark that should follow the text colour use an `<svg data-icon>`
 (see Icons). `href` in the markup is the supported way to set links.
 
-**No value formatting of any kind.** A `date` field renders its raw ISO value, a `number`
-renders the exact string stored ("1200", never "1,200" or "$1,200"), and there is no
-template, pattern or format argument anywhere. Store the string you want rendered (a
-text field holding "12 Mar 2026", or a second field for the display form), or render the
-parts as separate elements — do not promise a format you cannot produce.
+**Number formatting has no grouping or currency.** A `number` renders the exact string
+stored ("1200", never "1,200" or "$1,200"); put the symbol in a sibling element and the
+grouping in the stored string. Dates and choices DO format — `data-field="due|date:long"`,
+`data-field="status|label"` — see **Computed values**.
 
-**Rendering a single `reference` field.** A `collection-list` repeats a
-`multi-reference`; a single `reference` holds ONE id, so it is not a list. Two ways to
-render it: `data-field="owner.name"` reads a field THROUGH the reference in one hop (the
-dotted path `resolveBinding` understands), which is what you want for a name or an
-avatar; or a `<collection-item source="owner">` renders the referenced entry through its
-template page, for a whole card. A `<collection-list source="owner">` on a single
-reference is refused as an unknown collection, and `get_page`'s diagnostics say so.
+**Rendering a single `reference` field** is NOT a gap — see Data above for the dotted
+path (`data-field="owner.name"`) and `<collection-item source="owner">`. It is listed here
+only because it used to be: a `<collection-list source="owner">` on a single reference is
+refused as an unknown collection, and `get_page`'s diagnostics say so.
 
 **"The same field value as the current entry" is not expressible.**
 `filter.equalsCurrent` matches the entry ITSELF by id, which covers a child collection
 (messages whose `conversation` reference IS this conversation) and nothing else. There is
 no `equalsCurrentField` — a sibling list ("other posts in this category") cannot be built
 yet. Say so rather than approximating it with a literal filter that goes stale.
+(Several conditions at once IS expressible — `listQuery.filters` ANDs them.)
 
 **Verifying a `click` or a `change` effect needs real input events**, which no tool here
 produces: `preview` renders the page, it does not drive it. What you CAN verify without a

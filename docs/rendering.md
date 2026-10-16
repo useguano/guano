@@ -8,7 +8,7 @@
 
 `useRenderNode.ts` is used by two renderers: Build's `ElementRenderer.vue` (`components/editor/canvas/`) and Preview's `PreviewRenderer.vue` (`components/site/`). It resolves element type → tag, the component master mapping, collection/entry scope (`EntryScope` provide/inject), live interaction firing (hover/click/change via listeners, appear via IntersectionObserver, scrolled via a window listener), and class composition (`node.classes` + interaction classes).
 
-Inside a component instance, style and interactions come from the mapped master while content stays the node's own. **Content precedence**: bound collection field → the node's own content → the mapped master's content → the element default.
+Inside a component instance, style and interactions come from the mapped master while content stays the node's own. **Content precedence**: bound collection field → the node's own content → the mapped master's content. There is deliberately nothing after it — the element default is a Build-only placeholder (below).
 
 `server/export.mjs` reimplements this same logic in plain JS to emit static HTML, and is the only renderer of the published site. **Keep the two in sync.**
 
@@ -20,6 +20,16 @@ Two hides, and only one of them ships:
 - **`node.hidden`** — the real one, resolved along the instance chain and honoured by all three renderers. → `docs/components.md`
 
 It still lives in the project document, so it autosaves, undoes, and travels on a branch merge like any other node state; it is simply ignored by everything that ships bytes. The eye wrote `node.hidden` until it was split out: hiding a layer to get it out of the way deleted it from the published site, which is not what an eye in a tree means anywhere else. The row dims for **either** flag — a part a master or an agent hides is still shown as hidden — but the eye's icon and `data-layer-hidden` track `editorHidden` alone. Coverage: `e2e/ui-layers.spec.ts` ("the Layers eye hides a layer in the editor only").
+
+## An element's DEFAULT CONTENT is an editor placeholder, and ships nowhere
+
+`def.defaultContent` in `shared/elements.js` — "Lorem ipsum" on a heading, "Dolor sit amet" on a `span`/`paragraph`, "Option" on an `option`.
+
+It is the third Build-only affordance, beside the empty box and the Layers eye: a fresh element needs something to see and click, and a published page needs the words someone actually wrote. `contentInfo` in `useRenderNode.ts` returns `''` when `isPreview`, and `server/export.mjs` has no `defaultContent` fallback at all.
+
+It used to ship. An empty `<span>` is how a colour dot, a badge dot and a toggle knob are built — geometry with no words — and every one of them published **"Dolor sit amet"**, once per dot, with the canvas giving no hint that it would: the placeholder looked exactly like content someone had typed. The content precedence is therefore **bound collection field → the node's own content → the mapped master's content**, and nothing after it.
+
+This was the one change in this area that moved published bytes: one half-built page in the corpus went from `<h2>Lorem ipsum</h2><p>Dolor sit amet</p>` to `<h2></h2><p></p>`. The 600-odd other nodes that resolve only a default all sit inside component instances and take their text from a master, which still falls back as it always did. Coverage: `e2e/render-placeholders.spec.ts`.
 
 ## An empty container gets a box on the Build canvas, and NOWHERE else
 

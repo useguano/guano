@@ -29,6 +29,18 @@ export const isComponentType = (type) => /^[A-Z]/.test(type)
 export function isBareWrapper(node, master, state) {
   if (!node || !isComponentType(node.type)) return false
   if (((state && state.classes) || '').trim()) return false
+  // THIS PLACEMENT's own bindings keep the wrapper real.
+  //
+  // Everything else a wrapper could carry is read from the master, which is
+  // why a class on one renders nowhere and is refused. A binding is the
+  // exception: it has to fire on ONE placement ("open the modal from THIS
+  // Button"), and the master's own binding would fire on every instance on the
+  // site. Without this the wrapper emitted no element, so the binding had
+  // nowhere to land and an author had to wrap every opener in a
+  // `<div class="contents">` by hand — an element per modal trigger, which the
+  // renderer can supply itself (see wrapperIsTransparent).
+  if (node.interactions && node.interactions.length) return false
+  if (node.animations && node.animations.length) return false
   if (!master) return true
   if (master.background) return false
   if (master.interactions && master.interactions.length) return false
@@ -36,6 +48,29 @@ export function isBareWrapper(node, master, state) {
   if (typeof master.channel === 'string' && master.channel) return false
   if (state && state.targeted) return false
   return true
+}
+
+/**
+ * A wrapper that emits an element ONLY because this placement's own binding is
+ * on it gets `display: contents`, so it is layout-transparent: the instance's
+ * own root still decides every box, exactly as it did when the wrapper emitted
+ * nothing at all.
+ *
+ * Deliberately narrow. Every other reason a wrapper stays real — authored
+ * classes, a master background, a master binding, a channel — predates this and
+ * emits whatever it always emitted; widening the rule to "any wrapper with no
+ * classes" would quietly re-layout those, and the point of this is to add an
+ * element nobody has to write, not to move one that already ships.
+ *
+ * @param {{classes?: string, interactions?: unknown[], animations?: unknown[]}} node
+ * @returns {boolean}
+ */
+export function wrapperIsTransparent(node) {
+  if ((node?.classes ?? '').trim()) return false
+  const own =
+    (node?.interactions && node.interactions.length) ||
+    (node?.animations && node.animations.length)
+  return !!own
 }
 
 /**

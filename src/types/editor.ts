@@ -6,6 +6,11 @@ export interface Interaction {
   easing: string
 
   modal?: boolean
+
+  /** draw a dimming backdrop behind the target while the effect is on, and
+   *  close the effect when it is clicked. A property of the EFFECT, like
+   *  `modal`, `closeOn` and `group`. */
+  scrim?: boolean
 }
 
 export type InteractionAction = 'toggle' | 'on' | 'off'
@@ -121,6 +126,51 @@ export interface AnimationBinding {
   delay?: number
 }
 
+/** one condition on a list's entries; several are ANDed */
+export interface ListFilter {
+  field: string
+  equals?: string
+  notEmpty?: boolean
+
+  /** matches the entry in scope BY ID — reference fields only */
+  equalsCurrent?: boolean
+
+  /** invert this one condition */
+  not?: boolean
+}
+
+/** one mutation an action runs against the client-side entry store */
+export type ActionOp =
+  | { op: 'set'; field: string; value: string; entry?: string }
+  | { op: 'toggle'; field: string; entry?: string }
+  | { op: 'increment'; field: string; by?: number; entry?: string }
+  | {
+      op: 'create'
+      collection: string
+      values?: Record<string, string>
+
+      /** a `data-draft` scope whose inputs supply the remaining values */
+      from?: string
+    }
+  | { op: 'delete'; entry?: string }
+
+/**
+ * A data write bound to a trigger — the third engine, beside
+ * `InteractionBinding` (classes) and `AnimationBinding` (tweens).
+ *
+ * It carries its ops inline rather than an id into a project-level library,
+ * which is the one shape difference from the other two: a timeline and a class
+ * set are reused across a site, while an op list is one or two fields long and
+ * belongs to the element that writes it.
+ */
+export interface ActionBinding {
+  id: string
+  trigger: InteractionTrigger
+  ops: ActionOp[]
+
+  breakpoints?: string[]
+}
+
 export interface ElementNode {
   id: string
   type: string
@@ -129,6 +179,7 @@ export interface ElementNode {
   classes?: string
   interactions?: InteractionBinding[]
   animations?: AnimationBinding[]
+  actions?: ActionBinding[]
 
   attributes?: Record<string, string>
   htmlId?: string
@@ -172,19 +223,19 @@ export interface ElementNode {
     offset?: number
     sortField?: string
     sortDir?: 'asc' | 'desc'
-    filter?: {
-      field: string
-      equals?: string
-      notEmpty?: boolean
+    filter?: ListFilter
 
-      equalsCurrent?: boolean
-    }
+    /** further conditions, ANDed with `filter` and with each other */
+    filters?: ListFilter[]
     pick?: string[]
 
     excludeCurrent?: boolean
   }
 
   fieldAttrs?: Record<string, string>
+
+  /** a draft scope: the inputs under it collect values for a `create` op */
+  draft?: string
 
   instanceAttributes?: Record<string, string>
 
@@ -257,6 +308,11 @@ export interface CollectionField {
   refCollectionId?: string
 
   options?: string[]
+
+  /** a select's human labels, value → label. The VALUE is what pages match on,
+   *  so renaming a label never restyles an entry; `data-field="status|label"`
+   *  is what renders the words. */
+  optionLabels?: Record<string, string>
 
   localize?: boolean
 }
@@ -401,6 +457,16 @@ export interface ProjectSettings {
 
     /** what a first-time visitor gets, before they have chosen (default light) */
     colorMode?: 'light' | 'dark' | 'system'
+  }
+
+  /**
+   * Client-side entry state. `persist` decides whether an action's writes
+   * outlive the page that made them: `session` (the default) is what lets a
+   * status set on a task route show in the right column on the board, `none`
+   * forgets on every load, `local` survives the browser being closed.
+   */
+  state?: {
+    persist?: 'none' | 'session' | 'local'
   }
 
   motion?: {

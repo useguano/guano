@@ -11,7 +11,7 @@ import { useComponents } from './useComponents'
 import { useAnimation, animBindingActiveAt, scopedAnimBindings } from './useAnimation'
 import { COLOR_MODE_ATTR, isThemeLink, themeLinkAction } from '@/lib/shared/colorMode.js'
 import { bindingScope, entryScopePart } from '@/lib/shared/entryScope.js'
-import { resolveFieldAttrs } from '@/lib/shared/fields.js'
+import { resolveFieldAttrs, cssVarsFromFields, formatFieldValue } from '@/lib/shared/fields.js'
 import { useMotion, type RestBinding } from './useMotion'
 import {
   appearRootMargin,
@@ -25,7 +25,15 @@ import { useViewMode } from './useViewMode'
 import { FRAME_BREAKPOINT } from '@/components/editor/canvas/frameScope'
 import { VARIANT_PICKS } from '@/components/editor/canvas/variantScope'
 import { entryKey } from '@/components/shared/EntryScope.vue'
-import { refDisplay, resolveBinding, resolveListScope, applyListQuery, mediaUrls } from '@/lib/shared/fields.js'
+import {
+  refDisplay,
+  resolveBinding,
+  resolveListScope,
+  applyListQuery,
+  mediaUrls,
+  parseAggregate,
+  aggregateValue,
+} from '@/lib/shared/fields.js'
 import { isRich, sanitizeRich } from '@/lib/shared/richtext.js'
 import { backgroundRender, backgroundKindFromUrl } from '@/lib/shared/background.js'
 import { conflictingBaseClasses } from '@/lib/shared/interactionClasses.js'
@@ -54,7 +62,13 @@ import {
 import { useLocale } from './useLocale'
 import { SAFE_SRC } from '@/lib/shared/urls.js'
 import { DEFAULT_ICON_SVG, parseInlineSvg, sanitizeInlineSvg } from '@/lib/shared/svg.js'
-import { isBareWrapper, isNodeHidden, resolveInstanceValue } from '@/lib/instances'
+import {
+  isBareWrapper,
+  isNodeHidden,
+  resolveInstanceValue,
+  wrapperIsTransparent,
+} from '@/lib/instances'
+import { isComponentType } from '@/lib/components'
 import { variantClassesFor } from './useVariants'
 import type {
   AnimationBinding,
@@ -156,6 +170,37 @@ export function useRenderNode(
           : (scope?.entry ?? activeEntry.value)?.id,
     }),
   )
+
+  /**
+   * An AGGREGATE binding: a number over a list rather than a field of one
+   * entry. Resolved through the SAME resolveListScope + applyListQuery the list
+   * it labels uses, so a column header saying "3" and its column cannot
+   * disagree.
+   */
+  const aggregate = computed(() => parseAggregate(node.value.arg))
+  const aggregateText = computed(() => {
+    const agg = aggregate.value
+    if (!agg) return null
+    const list = resolveListScope(
+      collections.value,
+      scope?.collection ?? activeCollection.value,
+      scope?.entry ?? activeEntry.value,
+      agg.source,
+      pages.value,
+    )
+    if (!list) return ''
+    const entries = applyListQuery(
+      list.entries,
+      resolveInstanceValue(node.value, mapping.value, 'listQuery'),
+      {
+        currentEntryId:
+          list.collection.id === '@pages'
+            ? activePage.value.id
+            : (scope?.entry ?? activeEntry.value)?.id,
+      },
+    )
+    return aggregateValue(entries, agg.op, agg.field)
+  })
 
   const listTemplateChildren = computed(() =>
     node.value.children.filter((c) => c.type !== 'list-empty'),
@@ -262,6 +307,18 @@ export function useRenderNode(
     )
   })
 
+  /** CSS custom properties bound to fields — the one way a NUMBER reaches a
+   *  style. Merged into the style the renderers bind, beside the background. */
+  const boundVars = computed<Record<string, string>>(() => {
+    const bound = resolveInstanceValue(node.value, mapping.value, 'fieldAttrs') as
+      | Record<string, string>
+      | undefined
+    if (!bound || !scope?.entry) return {}
+    return cssVarsFromFields(bound, scope.collection, (field) =>
+      entryValue(scope.entry!, field as never).value ?? '',
+    )
+  })
+
   const backgroundInfo = computed(() => {
     const styleNode = mapping.value ? mapping.value.master : node.value
     const bg = styleNode.background || undefined
@@ -275,6 +332,9 @@ export function useRenderNode(
   })
 
   const contentInfo = computed<LocalizedDisplay>(() => {
+    if (aggregateText.value !== null) {
+      return { value: aggregateText.value, untranslated: false }
+    }
     if (boundField.value) {
       if (['reference', 'multi-reference'].includes(boundField.value.type)) {
         const names = boundEntry.value
@@ -287,13 +347,31 @@ export function useRenderNode(
         return { value: opts?.fieldPlaceholders ? `{${boundField.value.name}}` : '', untranslated: false }
       }
       const info = boundEntry.value ? entryValue(boundEntry.value, boundField.value) : null
-      if (info?.value) return { value: info.value, untranslated: !info.translated }
+      if (info?.value) {
+        // the `|format` suffix on the path, applied where the field resolves
+        return {
+          value: formatFieldValue(
+            info.value,
+            boundField.value,
+            binding.value?.format ?? null,
+            activeLocale.value || undefined,
+          ),
+          untranslated: !info.translated,
+        }
+      }
       return { value: opts?.fieldPlaceholders ? `{${boundField.value.name}}` : '', untranslated: false }
     }
     for (const source of chain.value) {
       const text = nodeContent(source)
       if (text.value) return { value: text.value, untranslated: !text.translated }
     }
+    // `defaultContent` is an EDITOR PLACEHOLDER, like the empty box and the
+    // Layers eye: it gives a fresh element something to see and click, and it
+    // ships nowhere. An empty <span> used as a colour dot, a badge dot or a
+    // toggle knob otherwise published "Dolor sit amet" on every one of them,
+    // and the canvas gave no hint that it would — the placeholder looked
+    // exactly like content someone had typed.
+    if (isPreview.value) return { value: '', untranslated: false }
     return { value: def.value?.defaultContent, untranslated: false }
   })
   const displayContent = computed(() => motionText.value ?? contentInfo.value.value)
@@ -455,6 +533,13 @@ export function useRenderNode(
     )
     return [
       node.value.type === 'body' && 'flex-1',
+      // `contents` whenever a component wrapper has no classes of its own —
+      // not only when it is BARE. A wrapper that emits an element purely
+      // because something is bound to it must still be layout-transparent, or
+      // binding a <Button> would wrap it in a real block and move the page.
+      isComponentType(node.value.type) &&
+        wrapperIsTransparent(node.value) &&
+        'contents',
       bareComponentRoot && 'contents',
       kept,
       interactionCls,
@@ -477,8 +562,34 @@ export function useRenderNode(
 
   const scopeOfTarget: ScopeOf = (ownerId) => scopeFor(ownerId, selfOwnerId.value)
 
-  const scopeOfOwn = (binding: { targetId?: string | null }) =>
-    scopeFor(selfOwnerId.value, binding.targetId ?? selfOwnerId.value)
+  /** the bindings this node declares ITSELF, as a page node would — only an
+   *  instance wrapper has any (see firedBindings) */
+  const ownWrapperBindingIds = computed(
+    () =>
+      new Set(
+        mapping.value && isComponentType(node.value.type)
+          ? (node.value.interactions ?? []).map((b) => b.id)
+          : [],
+      ),
+  )
+
+  /**
+   * A WRAPPER's own binding belongs to the PAGE, not to the component it
+   * holds, so it keys with no instance part — exactly as a plain page
+   * element's does. Scoped per instance (which is what every other binding
+   * inside an instance needs), the trigger wrote `X:target@<instanceId>` while
+   * a page target listened on `X:target`: the keys never matched and the click
+   * did nothing, with every tool reporting success.
+   */
+  const ownerOf = (binding: { id?: string }) =>
+    binding.id && ownWrapperBindingIds.value.has(binding.id)
+      ? node.value.id
+      : selfOwnerId.value
+
+  const scopeOfOwn = (binding: { id?: string; targetId?: string | null }) =>
+    binding.id && ownWrapperBindingIds.value.has(binding.id)
+      ? undefined
+      : scopeFor(selfOwnerId.value, binding.targetId ?? selfOwnerId.value)
 
   const selfScope = computed(() => scopeFor(selfOwnerId.value, selfOwnerId.value))
 
@@ -565,8 +676,19 @@ export function useRenderNode(
     const own = ownMotionValues.value
     const inherited = inheritedMotionValues.value
     const rest = restMotionValues.value
-    if (!own && !inherited && !rest) return undefined
-    return composeMotionStyle({ ...(rest ?? {}), ...(inherited ?? {}), ...(own ?? {}) })
+    const vars = boundVars.value
+    const hasVars = Object.keys(vars).length > 0
+    if (!own && !inherited && !rest) return hasVars ? { ...vars } : undefined
+    const composed = composeMotionStyle({
+      ...(rest ?? {}),
+      ...(inherited ?? {}),
+      ...(own ?? {}),
+    })
+    // field-bound custom properties ride the style object both renderers
+    // already bind at every call site, so one merge here reaches all of them
+    // — and they are LAST, since a bound measurement is data and a tween is
+    // presentation: nothing a timeline writes is a custom property.
+    return hasVars ? { ...(composed ?? {}), ...vars } : composed
   })
 
   const motionText = computed(() => {
@@ -601,17 +723,36 @@ export function useRenderNode(
     motion.clickAction(binding, animation, animTargetId(binding), scopeOfOwn(binding))
   }
 
-  const ofTrigger = (trigger: InteractionTrigger) =>
-    ((mapping.value ? mapping.value.master.interactions : node.value.interactions) ?? []).filter(
-      (i) => i.trigger === trigger,
-    )
+  /**
+   * The class bindings this node fires.
+   *
+   * Inside an instance they are the MASTER's — shared, so every instance fires
+   * them. An instance WRAPPER is the one exception: its own bindings belong to
+   * this placement alone ("open the modal from THIS Button"), while the master
+   * root's still fire everywhere, so a wrapper fires both. Mirrors the
+   * exporter's `triggers`.
+   */
+  const firedBindings = computed(() => {
+    const shared = (mapping.value ? mapping.value.master.interactions : node.value.interactions) ?? []
+    if (!mapping.value || !isComponentType(node.value.type)) return shared
+    return [...shared, ...(node.value.interactions ?? [])]
+  })
 
-  const interactionOwnerId = selfOwnerId
+  const ofTrigger = (trigger: InteractionTrigger) =>
+    firedBindings.value.filter((i) => i.trigger === trigger)
 
   const instanceScope = computed(() => mapping.value?.instanceId)
 
   function applyIn(binding: InteractionBinding, on?: boolean) {
-    applyBinding(binding, interactionOwnerId.value, scopeOfOwn(binding), instanceScope.value, on)
+    applyBinding(
+      binding,
+      ownerOf(binding),
+      scopeOfOwn(binding),
+      // an exclusive group on a wrapper's own binding is unscoped too, so one
+      // group can span a page trigger and a wrapper trigger
+      ownWrapperBindingIds.value.has(binding.id) ? undefined : instanceScope.value,
+      on,
+    )
   }
 
   const hoverHandlers = {
@@ -629,13 +770,17 @@ export function useRenderNode(
     for (const binding of animOf('click')) clickAnim(binding)
   }
 
+  /** the state a control's CURRENT value implies, independent of any event */
+  function controlState(target: HTMLInputElement | HTMLSelectElement) {
+    return 'checked' in target && (target.type === 'checkbox' || target.type === 'radio')
+      ? target.checked
+      : !!target.value
+  }
+
   function fireChangeInteractions(event: Event) {
     const target = event.target as HTMLInputElement | HTMLSelectElement | null
     if (!target) return
-    const on =
-      'checked' in target && (target.type === 'checkbox' || target.type === 'radio')
-        ? target.checked
-        : !!target.value
+    const on = controlState(target)
     for (const binding of ofTrigger('change')) applyIn(binding, on)
     for (const binding of animOf('change')) {
       if (on) playAnim(binding)
@@ -648,9 +793,9 @@ export function useRenderNode(
   const appeared = new Set<string>()
 
   const involvedStateKeys = computed(() => {
-    const triggered = (
-      (mapping.value ? mapping.value.master.interactions : node.value.interactions) ?? []
-    ).map((b) => bindingStateKey(b, interactionOwnerId.value, scopeOfOwn(b)))
+    const triggered = firedBindings.value.map((b) =>
+      bindingStateKey(b, ownerOf(b), scopeOfOwn(b)),
+    )
     const targeted = mapping.value
       ? scopedTargetStateKeys(
           mapping.value.master.id,
@@ -747,6 +892,19 @@ export function useRenderNode(
     for (const binding of animOf('load')) playAnim(binding)
     for (const binding of ofTrigger('load')) applyIn(binding, true)
 
+    // A `change` binding reflects its control's STATE, so it has to be read
+    // once at load and not only when something moves. A radio that ships
+    // `checked` fired nothing until you clicked elsewhere, so radio-driven
+    // tabs opened with every panel closed — the one arrangement the markup
+    // cannot be authored out of.
+    if (el.value && (ofTrigger('change').length || animOf('change').length)) {
+      const control = el.value as HTMLInputElement | HTMLSelectElement
+      if ('type' in control && controlState(control)) {
+        for (const binding of ofTrigger('change')) applyIn(binding, true)
+        for (const binding of animOf('change')) playAnim(binding)
+      }
+    }
+
     if (el.value && involvedStateKeys.value.length) {
       registeredKeys = involvedStateKeys.value
       registerInteractionEl(registeredKeys, el.value)
@@ -804,6 +962,7 @@ export function useRenderNode(
     boundField,
     boundEntry,
     customAttrs,
+    boundVars,
     backgroundInfo,
     contentInfo,
     displayContent,

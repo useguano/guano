@@ -206,6 +206,14 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     isValidClass,
     isComponentType,
     buildScopeRoots,
+    isCssVarBinding,
+    splitFieldFormat,
+    fieldFormatError,
+    parseAggregate,
+    aggregateError,
+    actionBindingError,
+    scopeCollectionFor,
+    STATE_OPS,
     isLeafElement,
     isInstancePart,
     fieldValueError,
@@ -712,6 +720,7 @@ const STALE_MESSAGE =
   'it changed since your last read/write. If the human has the editor open, their own ' +
   'edits advance the version between your calls — retrying with currentVersion is safe when ' +
   'you made the only changes since'
+
 
 /** the same, naming what actually moved — `edit_structure` and `edit_elements`
  * both take a componentId, and "the page changed" sent agents looking at a
@@ -2109,8 +2118,15 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
         ['background', edit.background !== undefined && edit.background !== ''],
         ['htmlId', edit.htmlId !== undefined && edit.htmlId !== ''],
         ['link', edit.link !== undefined && edit.link !== ''],
-        ['bindInteractions', edit.bindInteractions?.length],
-        ['bindAnimations', edit.bindAnimations?.length],
+        // bindInteractions / bindAnimations are NOT refused here any more.
+        //
+        // Everything else on this list is read from the master, so writing it
+        // on a wrapper renders nowhere. A binding is the exception: it has to
+        // fire on ONE placement ("open the modal from THIS Button"), and the
+        // master's own binding fires on every instance on the site. The
+        // wrapper now emits a `display: contents` element to carry it, which
+        // is exactly the `<div class="contents">` an author had to write by
+        // hand around every modal trigger.
         ['fieldAttrs', edit.fieldAttrs !== undefined],
       ]
         .filter(([, given]) => given)
@@ -2358,6 +2374,39 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
     // instance listens, which is what lets the modal BE a component. A mirror
     // cannot override it, and an instance wrapper cannot carry one at all —
     // it emits no element, so the effect's classes would land nowhere.
+    // A DRAFT SCOPE: the container whose controls collect values for a
+    // `create`. Shared state like a channel — written on the master inside an
+    // instance — but unlike a channel it may legitimately repeat, because the
+    // runtime resolves which scope a control belongs to with `closest()`: two
+    // placements of one "new task" component each collect their own values.
+    if (edit.draft !== undefined) {
+      if (typeof edit.draft !== 'string') {
+        errors.push('draft must be a string ("" clears it)')
+      } else if (isComponentType(node.type) && edit.draft !== '') {
+        errors.push(
+          `draft refused: <${node.type}> emits no element of its own, so there is no container ` +
+            `for a control to sit inside — set it on an element INSIDE ${node.type}`,
+        )
+      } else if (edit.draft !== '' && !/^[a-z][a-z0-9-]*$/.test(edit.draft)) {
+        errors.push(
+          `draft refused: '${edit.draft}' is not a scope name — lowercase letters, digits and ` +
+            'dashes, starting with a letter',
+        )
+      } else if (!sharedNode) {
+        errors.push('draft refused: this instance node has no master counterpart')
+      } else if (edit.draft === '') {
+        if (sharedNode.draft !== undefined) {
+          delete sharedNode.draft
+          applied.push(`draft cleared${onShared}`)
+          changed = true
+        }
+      } else if (sharedNode.draft !== edit.draft) {
+        sharedNode.draft = edit.draft
+        applied.push(`draft${onShared}`)
+        changed = true
+      }
+    }
+
     if (edit.channel !== undefined) {
       // the tree the channel is WRITTEN into: a master's own, the inner
       // component's when the node sits in an instance, else the page's
@@ -2486,6 +2535,7 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
     //     collection-list/item/slider) ---
     if (edit.arg !== undefined) {
       const value = String(edit.arg)
+      let argFormatError = null
       // an arg on a component's element is STRUCTURE: it changes the component,
       // and every instance follows (the push rewrites their blocks). Inside an
       // instance the component holds, it would be the inner component's — and
@@ -2501,10 +2551,48 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
             `show that field. Bind it on ${mapping.def.name} itself (edit_elements {componentId}) if that is ` +
             'wanted, or put a plain element in the host for a field only it shows.',
         )
-      } else if (!structural && node.line === undefined) {
-        errors.push('arg refused: this element\'s arg is not editable')
-      } else if (value && !/^@?[a-z0-9.+-]+$/.test(value)) {
-        errors.push('arg refused: lowercase field path ([a-z0-9.-], one dot max for a reference hop)')
+      } else if (
+        value &&
+        !parseAggregate(value) &&
+        !/^@?[a-z0-9.+-]+(\|[a-z0-9:-]+)?$/.test(value)
+      ) {
+        errors.push(
+          'arg refused: lowercase field path ([a-z0-9.-], one dot max for a reference hop), ' +
+            'optionally followed by |<format> ("due|date:long", "status|label") — or an ' +
+            'aggregate over a list ("@count:task", "@sum:task.points")',
+        )
+      } else if (
+        value &&
+        parseAggregate(value) &&
+        (() => {
+          const scope = page ? scopeCollectionFor(project, page, node.id) : null
+          const why = aggregateError(parseAggregate(value), {
+            collections: project.collections ?? [],
+            scopeCollection: scope?.collection ?? null,
+          })
+          if (why) argFormatError = `arg refused: ${why}`
+          return !!why
+        })()
+      ) {
+        errors.push(argFormatError)
+      } else if (
+        value &&
+        value.includes('|') &&
+        (() => {
+          // the format has to suit the FIELD, or the page renders a raw ISO
+          // string and nothing says why — the whole reason a prototype grew a
+          // `due-label` text field it did not need
+          const { path, format } = splitFieldFormat(value)
+          const scope = page ? scopeCollectionFor(project, page, node.id) : null
+          const head = path.split('.')[0]
+          const field = (scope?.collection?.fields ?? []).find((f) => f.name === head)
+          if (!field) return false
+          const why = fieldFormatError(format, field)
+          if (why) argFormatError = `arg refused: ${why}`
+          return !!why
+        })()
+      ) {
+        errors.push(argFormatError)
       } else if (
         (node.type === 'collection-list' || node.type === 'collection-item' || node.type === 'slider') &&
         (() => {
@@ -2593,7 +2681,6 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
             name === 'createdAt' || !col || (col.fields ?? []).some((f) => f.name === name)
           const bad = []
           if (q.sortField && q.sortField !== 'name' && !fieldOk(q.sortField)) bad.push(`sortField "${q.sortField}"`)
-          if (q.filter?.field && !fieldOk(q.filter.field)) bad.push(`filter.field "${q.filter.field}"`)
           if (Array.isArray(q.pick) && col) {
             const ids = new Set((col.entries ?? []).map((e) => e.id))
             const missing = q.pick.filter((id) => !ids.has(id))
@@ -2606,49 +2693,78 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
           // rendered blank by every renderer, unmentioned by publish, and with
           // no empty state on a bound slider to show for it. Resolve the slug
           // here, and refuse a value that names no entry.
+          //
+          // Run over `filter` AND every entry of `filters` — the same checks,
+          // because the conditions are the same shape and are ANDed. Written
+          // once for `filter` alone, a second condition in `filters` would
+          // have gone unvalidated: the slug that matches nothing and the
+          // equalsCurrent that can never match would both be back.
           let refusedFilter = null
-          const filterField = q.filter?.field
-            ? (col?.fields ?? []).find((f) => f.name === q.filter.field)
-            : null
-          if (
-            !bad.length &&
-            filterField &&
-            (filterField.type === 'reference' || filterField.type === 'multi-reference') &&
-            typeof q.filter.equals === 'string' &&
-            q.filter.equals
-          ) {
-            const refCol = (project.collections ?? []).find((c) => c.id === filterField.refCollectionId)
-            const entries = refCol?.entries ?? []
-            const hit =
-              entries.find((e) => e.id === q.filter.equals) ??
-              entries.find((e) => e.slug === q.filter.equals) ??
-              entries.find((e) => e.name === q.filter.equals)
-            if (!hit) {
-              refusedFilter =
-                `listQuery refused: filter.equals "${q.filter.equals}" names no entry of ` +
-                `"${refCol?.name ?? 'the referenced collection'}" — a reference filter matches ` +
-                'the entry ID, and a slug that names nothing would have rendered an empty list' +
-                (entries.length
-                  ? ` (slugs: ${entries.slice(0, 8).map((e) => e.slug || e.name).join(', ')})`
-                  : '')
-            } else if (hit.id !== q.filter.equals) {
-              q.filter = { ...q.filter, equals: hit.id }
+          const conditions = [
+            ...(q.filter ? [{ at: 'filter', get: () => q.filter, set: (v) => (q.filter = v) }] : []),
+            ...(Array.isArray(q.filters)
+              ? q.filters.map((_, n) => ({
+                  at: `filters[${n}]`,
+                  get: () => q.filters[n],
+                  set: (v) => (q.filters[n] = v),
+                }))
+              : []),
+          ]
+          for (const { at, get, set } of conditions) {
+            const cond = get()
+            if (!cond || typeof cond !== 'object') continue
+            if (cond.field && !fieldOk(cond.field)) {
+              bad.push(`${at}.field "${cond.field}"`)
+              continue
             }
-          }
-          // `equalsCurrent` compares the field's value against the current
-          // entry's ID (shared/fields.js), so on anything but a reference it
-          // can only ever match nothing: the list rendered empty on every
-          // route while this tool reported success. The feature an agent
-          // reaching for it on a text field actually wants is
-          // `equalsCurrentField`, which does not exist yet.
-          if (!bad.length && !refusedFilter && q.filter?.equalsCurrent && filterField) {
-            const kind = filterField.type
-            if (kind !== 'reference' && kind !== 'multi-reference') {
-              refusedFilter =
-                `listQuery refused: filter.equalsCurrent matches the entry in scope by its ID, so ` +
-                `it only works on a reference field — "${q.filter.field}" is a ${kind}, and the ` +
-                'list would have rendered empty on every route. Add a reference field pointing at ' +
-                'the parent collection and filter on that.'
+            const condField = cond.field
+              ? (col?.fields ?? []).find((f) => f.name === cond.field)
+              : null
+            if (bad.length || refusedFilter) continue
+            // A REFERENCE field stores the target entry's ID, while
+            // `upsert_entries` accepts a slug when WRITING one. So a filter
+            // written with that same slug compared a slug against an id,
+            // matched nothing, and shipped an empty list — accepted by this
+            // tool, rendered blank by every renderer, unmentioned by publish,
+            // and with no empty state on a bound slider to show for it.
+            // Resolve the slug here, and refuse a value that names no entry.
+            if (
+              condField &&
+              (condField.type === 'reference' || condField.type === 'multi-reference') &&
+              typeof cond.equals === 'string' &&
+              cond.equals
+            ) {
+              const refCol = (project.collections ?? []).find((c) => c.id === condField.refCollectionId)
+              const entries = refCol?.entries ?? []
+              const hit =
+                entries.find((e) => e.id === cond.equals) ??
+                entries.find((e) => e.slug === cond.equals) ??
+                entries.find((e) => e.name === cond.equals)
+              if (!hit) {
+                refusedFilter =
+                  `listQuery refused: ${at}.equals "${cond.equals}" names no entry of ` +
+                  `"${refCol?.name ?? 'the referenced collection'}" — a reference filter matches ` +
+                  'the entry ID, and a slug that names nothing would have rendered an empty list' +
+                  (entries.length
+                    ? ` (slugs: ${entries.slice(0, 8).map((e) => e.slug || e.name).join(', ')})`
+                    : '')
+                continue
+              }
+              if (hit.id !== cond.equals) set({ ...cond, equals: hit.id })
+            }
+            // `equalsCurrent` compares the field's value against the current
+            // entry's ID (shared/fields.js), so on anything but a reference it
+            // can only ever match nothing: the list rendered empty on every
+            // route while this tool reported success.
+            if (cond.equalsCurrent && condField) {
+              const kind = condField.type
+              if (kind !== 'reference' && kind !== 'multi-reference') {
+                refusedFilter =
+                  `listQuery refused: ${at}.equalsCurrent matches the entry in scope by its ID, ` +
+                  `so it only works on a reference field — "${cond.field}" is a ${kind}, and the ` +
+                  'list would have rendered empty on every route. Add a reference field pointing ' +
+                  'at the parent collection and filter on that.'
+              }
             }
           }
           if (bad.length) {
@@ -2775,6 +2891,61 @@ function applyPageEdits(project, page, edits, locale, defaultLocale, scopeDef = 
           bindTargetNode.interactions.push(binding)
           bindingIds.push(binding.id)
           applied.push(`bind${onShared}`)
+          changed = true
+        }
+      }
+    }
+
+    // --- action bindings (the data engine; same master/locale rules) ---
+    //
+    // An action's ops live INLINE on the binding rather than in a project-level
+    // library, which is the one shape difference from the two engines beside
+    // it: a timeline and a class set are reused across a site, while
+    // `set status=done` is two fields long and belongs to the button that
+    // writes it. There is therefore no `actionId` to resolve, and no
+    // list_actions to read first.
+    if (edit.bindActions?.length || edit.unbindActionIds?.length) {
+      const bindTargetNode = sharedNode
+      if (localized) {
+        errors.push('actions are not localizable — omit locale for binding edits')
+      } else if (inMirror && edit.bindActions?.length) {
+        errors.push(HOST_BIND_REFUSED(masterDef.name, mapping.def.name))
+      } else if (!bindTargetNode) {
+        errors.push('actions refused: this instance node has no master counterpart (structure diverged)')
+      } else {
+        for (const bindingId of edit.unbindActionIds ?? []) {
+          const before = bindTargetNode.actions?.length ?? 0
+          bindTargetNode.actions = (bindTargetNode.actions ?? []).filter((b) => b.id !== bindingId)
+          if (bindTargetNode.actions.length === before) {
+            errors.push(`no action binding "${bindingId}" on this element`)
+          } else {
+            applied.push('unbind action')
+            changed = true
+          }
+          if (!bindTargetNode.actions.length) delete bindTargetNode.actions
+        }
+        // The entry in scope is resolved from the PAGE, not the component: an
+        // action inside a master has no entry until the master is placed, so a
+        // component-only write is checked for shape and left to the placement.
+        const scope = page ? scopeCollectionFor(project, page, node.id) : null
+        for (const bind of edit.bindActions ?? []) {
+          const shape = actionBindingError(bind, {
+            collection: scope?.collection ?? null,
+            collections: project.collections ?? [],
+            triggers: INTERACTION_TRIGGERS,
+          })
+          if (shape) {
+            // the validator's message already names WHAT refused ("set
+            // refused: …"), so only a bare shape complaint takes the prefix
+            errors.push(shape.includes('refused') ? shape : `action refused: ${shape}`)
+            continue
+          }
+          bindTargetNode.actions = bindTargetNode.actions ?? []
+          const binding = { id: randomUUID(), trigger: bind.trigger, ops: bind.ops }
+          if (bind.breakpoints?.length) binding.breakpoints = bind.breakpoints
+          bindTargetNode.actions.push(binding)
+          bindingIds.push(binding.id)
+          applied.push(`bind action${onShared}`)
           changed = true
         }
       }
@@ -3841,6 +4012,7 @@ const interactionView = (it) => ({
   duration: it.duration,
   easing: it.easing,
   ...(it.modal ? { modal: true } : {}),
+  ...(it.scrim ? { scrim: true } : {}),
 })
 
 /** the parent of a page node, or null for the body */
@@ -5125,7 +5297,145 @@ function designWarnings(project) {
         'node ids.',
     })
   }
+  warnings.push(...stateWarnings(project, published, components))
   return warnings
+}
+
+/**
+ * What the client-state engine gets wrong quietly.
+ *
+ * Every one of these is a shape the tools ACCEPT — a blob can arrive by import,
+ * by a 3-way merge or from an agent without passing a writer — and whose
+ * failure mode on the published page is a control that does nothing. That is
+ * the one outcome this codebase has learned to report rather than ship.
+ */
+function stateWarnings(project, published, components) {
+  const warnings = []
+  const collections = project.collections ?? []
+  const trees = [
+    ...published.map((page) => ({ page, tree: page.elements ?? [] })),
+    ...components.map((c) => ({ page: null, tree: [c.root] })),
+  ]
+
+  const unresolved = []
+  const emptyCreates = []
+  const drafts = new Map()
+  const createsFrom = new Set()
+  let actionCount = 0
+
+  for (const { page, tree } of trees) {
+    walkNodes(tree, (node) => {
+      if (node.draft) drafts.set(node.draft, page ? `page "${page.name}"` : 'a component')
+      for (const binding of node.actions ?? []) {
+        actionCount += 1
+        const scope = page ? scopeCollectionFor(project, page, node.id) : null
+        for (const op of binding.ops ?? []) {
+          if (op.op === 'create') {
+            if (op.from) createsFrom.add(op.from)
+            if (!op.from && !op.values) {
+              emptyCreates.push(
+                `${op.collection ?? '?'} on ${page ? `page "${page.name}"` : 'a component'}`,
+              )
+            }
+            continue
+          }
+          // a write with no entry to write: the element sits outside every
+          // repeat and the route is not a collection template, so "@current"
+          // resolves to nothing and the click does nothing
+          if (!op.entry && page && !scope) {
+            unresolved.push(`${node.id} (${op.op} ${op.field ?? ''}) on page "${page.name}"`)
+          }
+        }
+      }
+    })
+  }
+
+  if (unresolved.length) {
+    warnings.push({
+      kind: 'action-target-unresolved',
+      where: unresolved.slice(0, 6),
+      message:
+        `${unresolved.length} action op(s) have no entry to write on their route: they sit ` +
+        'outside every collection-list and the page is not a collection template, so ' +
+        '"@current" resolves to nothing and the control does nothing when clicked. Move the ' +
+        'trigger into a row, put it on a template page, or name an entry with `entry: "<id>"`.',
+    })
+  }
+  if (emptyCreates.length) {
+    warnings.push({
+      kind: 'action-create-empty',
+      where: emptyCreates.slice(0, 6),
+      message:
+        `${emptyCreates.length} create op(s) carry neither \`values\` nor \`from\`, so each one ` +
+        'makes a blank entry. Give it literal values, or `from: "<draft name>"` naming a ' +
+        'container you set `draft` on, whose inputs supply them.',
+    })
+  }
+  const orphanDrafts = [...drafts.entries()].filter(([name]) => !createsFrom.has(name))
+  if (orphanDrafts.length) {
+    warnings.push({
+      kind: 'action-draft-uncommitted',
+      where: orphanDrafts.map(([name, at]) => `"${name}" on ${at}`).slice(0, 6),
+      message:
+        `${orphanDrafts.length} draft scope(s) have no create op pointing at them, so whatever ` +
+        'a visitor types in them is collected and never committed. Bind a trigger with ' +
+        '`bindActions: [{trigger: "click", ops: [{op: "create", collection: "…", from: "<name>"}]}]`.',
+    })
+  }
+  const persist = project.settings?.state?.persist
+  if (!actionCount && (persist === 'session' || persist === 'local')) {
+    // deliberately NOT warned when persist is absent: session is the default,
+    // so every stateless site would carry this
+    if (persist === 'local') {
+      warnings.push({
+        kind: 'state-persistence-unused',
+        message:
+          'settings.state.persist is "local" but no element carries an action, so there is no ' +
+          'client state to remember. Bind one with edit_elements {bindActions}, or set persist ' +
+          'to "none".',
+      })
+    }
+  }
+
+  // the store a route ships. Measured as the entries a route renders times the
+  // fields it binds, which is what the `ds` section of the sidecar carries.
+  const STORE_LIMIT = 150
+  const heavy = []
+  for (const page of published) {
+    if (!routeUsesClientState(project, page, components)) continue
+    const seen = new Set()
+    for (const collection of collections) {
+      walkNodes(page.elements ?? [], (node) => {
+        if (node.type !== 'collection-list' && !(node.type === 'slider' && node.arg)) return
+        if (node.arg !== collection.name) return
+        for (const entry of collection.entries ?? []) seen.add(entry.id)
+      })
+    }
+    if (seen.size > STORE_LIMIT) heavy.push(`page "${page.name}" — ${seen.size} entries`)
+  }
+  if (heavy.length) {
+    warnings.push({
+      kind: 'state-store-heavy',
+      where: heavy.slice(0, 6),
+      message:
+        `${heavy.length} stateful route(s) serialize more than ${STORE_LIMIT} entries into the ` +
+        'page, which the browser parses before anything is interactive. Narrow the lists with ' +
+        'a listQuery `limit`, or split the route — the store only has to hold what the route ' +
+        'can show.',
+    })
+  }
+  return warnings
+}
+
+/** does any node a route renders carry an action or a draft scope */
+function routeUsesClientState(project, page, components) {
+  let used = false
+  const look = (n) => {
+    if (n.actions?.length || n.draft) used = true
+  }
+  walkNodes(page.elements ?? [], look)
+  if (!used) for (const c of components) walkNodes([c.root], look)
+  return used
 }
 
 /** for each component MASTER node, how many instances render it vs shadow it
@@ -8317,7 +8627,10 @@ const tools = [
                 description:
                   'bind ATTRIBUTE VALUES to collection fields: {"<attribute>": "<field>"}, ' +
                   'resolved against the surrounding entry scope, falling back to the static ' +
-                  '`attributes` value. Per instance. Replaces the whole set; {} or null clears.',
+                  '`attributes` value. A key of "style:--x" binds a CSS CUSTOM PROPERTY ' +
+                  'instead — the only way a NUMBER reaches a style: {"style:--p": "progress"} ' +
+                  'plus a class of w-[calc(var(--p)*1%)] is a progress bar. Per instance. ' +
+                  'Replaces the whole set; {} or null clears.',
                 additionalProperties: { type: 'string' },
               },
               arg: {
@@ -8336,7 +8649,8 @@ const tools = [
                 type: ['object', 'null'],
                 description:
                   'collection-list or bound slider: which entries it repeats. Applied in order ' +
-                  'pick → excludeCurrent → filter → sort → offset → limit; null or {} clears.',
+                  'pick → excludeCurrent → filter+filters (ANDed) → sort → offset → limit; ' +
+                  'null or {} clears.',
                 properties: {
                   limit: { type: 'integer', minimum: 1 },
                   offset: { type: 'integer', minimum: 0, description: 'skip the first N after sort, before limit' },
@@ -8356,12 +8670,36 @@ const tools = [
                         type: 'boolean',
                         description:
                           'match the ENTRY BEING RENDERED rather than a literal: the field is a ' +
-                          'reference pointing back at it (the child-collection pattern). Matches ' +
-                          'nothing outside entry scope.',
+                          'reference pointing back at it. Matches nothing outside entry scope.',
                       },
+                      not: { type: 'boolean', description: 'invert this one condition' },
                     },
                     required: ['field'],
                     additionalProperties: false,
+                  },
+                  filters: {
+                    type: 'array',
+                    description:
+                      'further conditions, ANDed with `filter` and with each other — this is how ' +
+                      'a per-project kanban column is expressed (project = current AND status = ' +
+                      'todo). One condition alone could only ever be a global board.',
+                    items: {
+                    type: 'object',
+                    properties: {
+                      field: { type: 'string' },
+                      equals: { type: 'string' },
+                      notEmpty: { type: 'boolean' },
+                      equalsCurrent: {
+                        type: 'boolean',
+                        description:
+                          'match the ENTRY BEING RENDERED rather than a literal: the field is a ' +
+                          'reference pointing back at it. Matches nothing outside entry scope.',
+                      },
+                      not: { type: 'boolean', description: 'invert this one condition' },
+                    },
+                    required: ['field'],
+                    additionalProperties: false,
+                  },
                   },
                   pick: {
                     type: 'array',
@@ -8546,6 +8884,80 @@ const tools = [
                 },
               },
               unbindAnimationIds: { type: 'array', items: { type: 'string' } },
+              bindActions: {
+                type: 'array',
+                description:
+                  'client-state writes (the data engine) to bind — batch these here. The ops are ' +
+                  'inline: there is no library and no list_actions to read first. See ' +
+                  'get_guide {section: "state"}.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    trigger: { type: 'string', enum: INTERACTION_TRIGGERS },
+                    ops: {
+                      type: 'array',
+                      minItems: 1,
+                      description: 'what this trigger writes, in order',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          op: { type: 'string', enum: STATE_OPS },
+                          field: {
+                            type: 'string',
+                            description: 'set/toggle/increment: the field on the target entry',
+                          },
+                          value: {
+                            type: 'string',
+                            description:
+                              'set: the new value. Always a STRING — "12" for a number, ' +
+                              '"true"/"false" for a boolean, the option VALUE for a choice.',
+                          },
+                          by: {
+                            type: 'number',
+                            description: 'increment: how much to add (default 1; negative subtracts)',
+                          },
+                          collection: { type: 'string', description: 'create: which collection' },
+                          values: {
+                            type: 'object',
+                            description: 'create: literal field values',
+                            additionalProperties: { type: 'string' },
+                          },
+                          from: {
+                            type: 'string',
+                            description:
+                              'create: a draft scope (edit_elements {draft}) whose inputs supply ' +
+                              'the remaining values, and which is cleared once the entry is made',
+                          },
+                          entry: {
+                            type: 'string',
+                            description:
+                              'the entry to write, if not the one in scope. Omit for "@current": ' +
+                              'the row\'s entry inside a collection-list, the route\'s entry on a ' +
+                              'collection template page.',
+                          },
+                        },
+                        required: ['op'],
+                        additionalProperties: false,
+                      },
+                    },
+                    breakpoints: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'breakpoint ids this binding is active on; omit for all',
+                    },
+                  },
+                  required: ['trigger', 'ops'],
+                  additionalProperties: false,
+                },
+              },
+              unbindActionIds: { type: 'array', items: { type: 'string' } },
+              draft: {
+                type: 'string',
+                description:
+                  'make this container a DRAFT SCOPE under that name: the controls inside it bind ' +
+                  'with data-field to a collection\'s fields with no entry yet, and a `create` op ' +
+                  'with `from: "<name>"` commits them. "" clears.',
+              },
             },
             additionalProperties: false,
           },
@@ -9393,6 +9805,13 @@ const tools = [
                 description:
                   'while on, the target is a dialog: scroll locked, focus trapped, aria-modal set',
               },
+              scrim: {
+                type: 'boolean',
+                description:
+                  'draw a dimming backdrop behind the target while on, and close the effect ' +
+                  'when it is clicked. An overlay built from classes has no backdrop of its ' +
+                  'own, so a channel-driven sheet opened with nothing dimming the page.',
+              },
             },
             required: ['name', 'toClasses'],
             additionalProperties: false,
@@ -9430,6 +9849,7 @@ const tools = [
           // omitted when false, so an ordinary effect stays byte-identical
           // for the merge signature
           ...(item.modal ? { modal: true } : {}),
+          ...(item.scrim ? { scrim: true } : {}),
         }
         pending.push(interaction)
         created.push(interactionView(interaction))
@@ -9467,6 +9887,12 @@ const tools = [
           description:
             'while on, the target is a dialog: scroll locked, focus trapped, aria-modal set',
         },
+        scrim: {
+          type: 'boolean',
+          description:
+            'draw a dimming backdrop behind the target while on, and close the effect when it ' +
+            'is clicked. An overlay built from classes has no backdrop of its own.',
+        },
       },
       required: ['interactionId'],
       additionalProperties: false,
@@ -9497,6 +9923,10 @@ const tools = [
       if (args.modal !== undefined) {
         if (args.modal) interaction.modal = true
         else delete interaction.modal
+      }
+      if (args.scrim !== undefined) {
+        if (args.scrim) interaction.scrim = true
+        else delete interaction.scrim
       }
       await saveTargetProject(project)
       return { saved: true, interaction: interactionView(interaction) }
@@ -10188,13 +10618,21 @@ const tools = [
           type: 'array',
           description:
             'change flags on EXISTING fields in place (values and bindings survive — no ' +
-            'remove/re-add dance): `localize` on text fields, `options` on a select',
+            'remove/re-add dance): `localize` on text fields, `options` / `optionLabels` on a select',
           items: {
             type: 'object',
             properties: {
               name: { type: 'string' },
               localize: { type: 'boolean', description: 'text fields: false = non-translatable' },
               options: { type: 'array', items: { type: 'string' }, description: 'select: the WHOLE list' },
+              optionLabels: {
+                type: 'object',
+                description:
+                  'select: the human words per value, {"in-progress": "In progress"}. Pages match ' +
+                  'on the VALUE, so a label is only ever display — render it with ' +
+                  'data-field="status|label" instead of one span per option. Replaces the set.',
+                additionalProperties: { type: 'string' },
+              },
             },
             required: ['name'],
             additionalProperties: false,
@@ -10214,6 +10652,29 @@ const tools = [
         if (!field) {
           errors.push(`no field named "${u.name}" to update`)
           continue
+        }
+        if (u.optionLabels !== undefined) {
+          if (field.type !== 'select') {
+            errors.push(`field "${u.name}": optionLabels only apply to a select field`)
+            continue
+          }
+          const labels = {}
+          const unknown = []
+          for (const [value, label] of Object.entries(u.optionLabels ?? {})) {
+            // a label for a value the field does not offer is a typo that
+            // would render nowhere — named rather than stored
+            if (!(field.options ?? []).includes(value)) unknown.push(value)
+            else if (String(label)) labels[value] = String(label)
+          }
+          if (unknown.length) {
+            errors.push(
+              `field "${u.name}": no option ${unknown.map((v) => `"${v}"`).join(', ')} to label ` +
+                `(options: ${(field.options ?? []).join(', ')})`,
+            )
+            continue
+          }
+          if (Object.keys(labels).length) field.optionLabels = labels
+          else delete field.optionLabels
         }
         if (u.options !== undefined) {
           if (field.type !== 'select') {

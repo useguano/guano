@@ -25,6 +25,12 @@ import {
   applyListQuery,
   mediaUrls,
   resolveFieldAttrs,
+  cssVarsFromFields,
+  formatFieldValue,
+  splitFieldFormat,
+  parseAggregate,
+  aggregateValue,
+  isRefType,
 } from '../src/lib/shared/fields.js'
 import {
   resolveNodeAttributes,
@@ -39,10 +45,17 @@ import { DEFAULT_ICON_SVG, parseInlineSvg, sanitizeInlineSvg } from '../src/lib/
 import {
   buildInstanceMap,
   isBareWrapper,
+  wrapperIsTransparent,
   isNodeHidden,
   resolveInstanceValue,
 } from '../src/lib/shared/instances.js'
-import { conflictingBaseClasses } from '../src/lib/shared/interactionClasses.js'
+import {
+  conflictingBaseClasses,
+  scrimCandidateClasses,
+  SCRIM_CLASSES,
+  SCRIM_ON_CLASS,
+  SCRIM_OFF_CLASS,
+} from '../src/lib/shared/interactionClasses.js'
 import { buildScopeRoots, entryScopePart, bindingScope } from '../src/lib/shared/entryScope.js'
 import {
   DEFAULT_SCROLL_AT,
@@ -102,6 +115,22 @@ import {
   createInternTable,
   stripTimeline,
 } from '../src/lib/shared/fxWire.js'
+import {
+  STATE_ATTR,
+  STATE_LIST_ATTR,
+  STATE_ROW_ATTR,
+  STATE_ROW_ENTRY_ATTR,
+  STATE_EMPTY_ATTR,
+  STATE_ACTION_ATTR,
+  STATE_AGG_ATTR,
+  STATE_DRAFT_ATTR,
+  STATE_DRAFT_FIELD_ATTR,
+  BIND_TEXT,
+  BIND_ATTR,
+  BIND_VALUE,
+  BIND_AGG,
+  isTruthyValue,
+} from '../src/lib/shared/state.js'
 import { SAFE_HREF, SAFE_SRC } from '../src/lib/shared/urls.js'
 import {
   collectFormFields,
@@ -123,6 +152,8 @@ const RUNTIME = join(ROOT, 'server', 'site-runtime.js')
 const MOTION_RUNTIME = join(ROOT, 'server', 'motion-runtime.js')
 // built from src/slider/runtime.ts by `npm run build:slider` (committed)
 const SLIDER_RUNTIME = join(ROOT, 'server', 'slider-runtime.js')
+// built from src/state/runtime.ts by `npm run build:state` (committed)
+const STATE_RUNTIME = join(ROOT, 'server', 'state-runtime.js')
 
 // SiteView.vue wrapper / PublicRenderer body classes (keep in sync)
 // the published <body> IS the page's body node — its classes are user-owned.
@@ -151,6 +182,9 @@ const NOTFOUND_CLASSES =
 
 /** slugify each path segment so a user-typed slug/locale/name can't escape
  * the output dir (`..` → '' → dropped) while legitimate nesting survives */
+/** types whose `arg` names a SOURCE (a whole list), never one field to read */
+const LIST_TYPES = new Set(['collection-list', 'collection-item', 'slider'])
+
 const safePath = (path) => String(path ?? '').split('/').map(slugify).filter(Boolean).join('/')
 
 function escapeHtml(value) {
@@ -322,6 +356,323 @@ function routeTrees(page, project) {
 }
 
 /**
+ * The route's client-state accumulator, filled as the page renders.
+ *
+ * Shapes are interned the way `fxWire`'s keys are: an element's `data-ds` is
+ * `[shapeIndex, …one entry index per read]`, so the 16 cards of a board share
+ * ONE read shape and differ only in which entry each read points at. Spelled
+ * out per element instead, a row's `{field, kind, attr}` triple would be
+ * repeated once per row.
+ *
+ * `fields` is collected per COLLECTION rather than per entry, deliberately: a
+ * task rendered in the "To do" column can be re-rendered into "Done" from that
+ * column's `<template>`, whose row may read fields the first render never
+ * touched. Per entry, the move would blank them.
+ */
+function createDsCtx(on) {
+  return {
+    on,
+    /** collection id → {collection, fields: Set<string>} */
+    cols: new Map(),
+    /** entry id → {entry, collectionId} — every entry the route rendered */
+    entries: new Map(),
+    /** JSON(reads) → index into shapeList */
+    shapes: new Map(),
+    shapeList: [],
+    /** data-ds index → [shapeIdx, …entry ids, resolved to indices at serialize] */
+    binds: [],
+    lists: [],
+    actions: [],
+    /** `data-ds-agg` index → the aggregate to recompute from the store */
+    aggs: [],
+  }
+}
+
+/** register a COLLECTION (and the fields read of it) and hand back its index —
+ *  an aggregate needs the collection without naming any one entry */
+function dsCollection(ctx, collection, fields) {
+  const ds = ctx.ds
+  if (!ds?.on || !collection) return -1
+  let col = ds.cols.get(collection.id)
+  if (!col) {
+    col = { collection, fields: new Set() }
+    ds.cols.set(collection.id, col)
+  }
+  for (const name of fields ?? []) col.fields.add(name)
+  return [...ds.cols.keys()].indexOf(collection.id)
+}
+
+/**
+ * Remember an entry (and the fields its collection is read for) in the store,
+ * and return its index.
+ *
+ * The index is the insertion position in `ds.entries`, which never moves once
+ * assigned — so an element can carry it as an attribute while the render is
+ * still discovering entries further down the page.
+ */
+function dsEntry(ctx, collection, entry, fields) {
+  const ds = ctx.ds
+  if (!ds?.on || !collection || !entry) return undefined
+  let col = ds.cols.get(collection.id)
+  if (!col) {
+    col = { collection, fields: new Set() }
+    ds.cols.set(collection.id, col)
+  }
+  for (const name of fields ?? []) col.fields.add(name)
+  // A synthetic blank entry exists only so an empty list has row markup. Its
+  // FIELDS are registered (nothing else on the route would register them), but
+  // the entry itself must never enter the store, or every list query would
+  // offer a blank row as a candidate.
+  if (ctx.dsSynthetic) return undefined
+  const found = ds.entries.get(entry.id)
+  if (found) return found.index
+  const index = ds.entries.size
+  ds.entries.set(entry.id, { entry, collectionId: collection.id, index })
+  return index
+}
+
+/**
+ * Register one element's reads and return the `data-ds` attribute for it.
+ * Returns '' when the route ships no store, so nothing is emitted.
+ * @param {{f: string, k: string, n?: string, entry: object, collection: object}[]} reads
+ */
+function dsBind(ctx, reads) {
+  const ds = ctx.ds
+  if (!ds?.on || !reads.length) return ''
+  // `h` marks a read whose entry is NOT the one its element's row renders — a
+  // `data-field="author.name"` that hopped one reference. A row the runtime
+  // re-points at another entry must leave those alone, or a task moving column
+  // would redirect its author's name at the task.
+  const shape = reads.map((r) => {
+    const read = { f: r.f, k: r.k }
+    if (r.n) read.n = r.n
+    if (ctx.scope?.entry && r.entry.id !== ctx.scope.entry.id) read.h = 1
+    // the display FORMAT travels with the read, and a select's labels with it:
+    // an action that changes `status` would otherwise re-render the raw value
+    // over the label the first paint showed, so the pill read "in-progress"
+    // from the second click onward
+    if (r.fmt) {
+      read.fmt = r.fmt
+      if (r.field?.optionLabels) read.lbl = r.field.optionLabels
+    }
+    return read
+  })
+  const slot = JSON.stringify(shape)
+  let shapeIdx = ds.shapes.get(slot)
+  if (shapeIdx === undefined) {
+    shapeIdx = ds.shapeList.length
+    ds.shapeList.push(shape)
+    ds.shapes.set(slot, shapeIdx)
+  }
+  for (const read of reads) dsEntry(ctx, read.collection, read.entry, [read.f])
+  const index = ds.binds.length
+  ds.binds.push([shapeIdx, ...reads.map((r) => r.entry.id)])
+  return `${STATE_ATTR}="${index}"`
+}
+
+/**
+ * The entries an aggregate counts, resolved exactly as a `collection-list`
+ * resolves the entries it repeats — same source rules, same `listQuery`.
+ *
+ * That identity is the point: a column header that says "3" and the column it
+ * labels must never disagree, and they can only be guaranteed not to if they
+ * run the same two calls.
+ */
+function aggregateEntries(node, ctx, agg) {
+  const list = resolveListScope(
+    ctx.project.collections,
+    ctx.scope?.collection ?? null,
+    ctx.scope?.entry ?? null,
+    agg.source,
+    ctx.project.pages,
+  )
+  if (!list) return null
+  const currentEntryId = list.collection.id === '@pages' ? ctx.pageId : ctx.scope?.entry?.id
+  const query = resolveInstanceValue(node, ctx.mm.get(node.id), 'listQuery')
+  return applyListQuery(list.entries, query, { currentEntryId })
+}
+
+/** register one row's entry and hand back the index its marker carries */
+function dsEntryMark(ctx, collection, entry) {
+  return ctx.ds?.on ? dsEntry(ctx, collection, entry, []) : undefined
+}
+
+/**
+ * A list's row `<template>` plus its query descriptor.
+ *
+ * The template is the ORDINARY render of the first entry's row, inside an inert
+ * `<template>`: it therefore carries the same `data-ds`, `data-ds-act` and
+ * `data-fx` wiring every other row has, and the runtime's whole job when it
+ * builds a row is to re-point that wiring at another entry through the row's
+ * `data-ds-e` marker. Rendering a special "placeholder" row instead would mean
+ * a second emission path that could drift from the real one — which is the bug
+ * class this codebase keeps paying for with its three renderers.
+ *
+ * Returns '' when the route is stateless, so not one byte of it ships then.
+ */
+function dsListTemplate(ctx, node, list, listEntries, template) {
+  const ds = ctx.ds
+  if (!ds?.on || !list) return ''
+  // A collection with NO entries still gets a template, built from a synthetic
+  // blank entry: otherwise the one list a `create` is most likely to target —
+  // an empty one — would have no markup to render the new row from.
+  const first =
+    listEntries[0] ??
+    list.entries[0] ?? {
+      id: `${list.collection.id}:blank`,
+      name: '',
+      slug: '',
+      values: {},
+      createdAt: 0,
+    }
+  const synthetic = !listEntries.length && !list.entries.length
+  const inner = {
+    ...ctx,
+    scope: { collection: list.collection, entry: first, index: 0, count: listEntries.length },
+    dsSynthetic: synthetic || undefined,
+  }
+  if (!synthetic) dsEntryMark(ctx, list.collection, first)
+  const html = template.map((child) => renderNode(child, inner)).join('')
+  if (!html) return ''
+  const currentEntryId =
+    list.collection.id === '@pages' ? ctx.pageId : ctx.scope?.entry?.id
+  const descriptor = {
+    // the collection this list draws from; -1 for a source the store cannot
+    // re-query (the synthetic @pages list, or a gallery of media urls)
+    c: [...ds.cols.keys()].indexOf(list.collection.id),
+    // how many top-level elements one row is, so the runtime can tell where a
+    // row ends when a template has several children
+    k: template.length,
+    // the entries this list rendered, in order. The runtime stamps each row's
+    // first element with its entry from this, rather than the exporter writing
+    // the attribute per row: a row's top-level element is rendered BEFORE its
+    // own attributes are (the children are interpolated into the tag's
+    // template literal), so an attribute pushed from attrsFor landed on
+    // whichever descendant happened to be serialized first.
+    o: listEntries.map((entry) => ds.entries.get(entry.id)?.index ?? -1),
+  }
+  const query = resolveInstanceValue(node, ctx.mm.get(node.id), 'listQuery')
+  if (query) descriptor.q = query
+  // a multi-reference source is the scope entry's own list of ids, not the
+  // whole collection — the runtime re-reads it from the store so a `create`
+  // that appends to it shows up
+  const sourceField = ctx.scope?.collection?.fields?.find((f) => f.name === node.arg)
+  if (sourceField?.type === 'multi-reference') descriptor.rf = node.arg
+  if (currentEntryId) {
+    const cur = ds.entries.get(currentEntryId)
+    if (cur) descriptor.cur = cur.index
+  }
+  ds.lists.push(descriptor)
+  // set AFTER the template render, which calls attrsFor for every row element
+  // and would otherwise consume the mark meant for the list host
+  ctx.dsList = ds.lists.length - 1
+  return `<template ${STATE_ROW_ATTR}>${html}</template>`
+}
+
+/**
+ * The `ds` section of the fx manifest, assembled once the route has rendered.
+ * Absent entirely when the route uses no actions.
+ */
+function dsManifest(ctx, project) {
+  const ds = ctx.ds
+  if (!ds?.on) return null
+  const colIds = [...ds.cols.keys()]
+  const co = colIds.map((id) => {
+    const { collection, fields } = ds.cols.get(id)
+    const types = {}
+    for (const name of fields) {
+      const field = collection.fields?.find((f) => f.name === name)
+      if (!field) continue
+      // a reference carries WHICH collection it points at, because that is what
+      // lets a `create` fill the one reference back to the entry in scope
+      types[name] = field.refCollectionId
+        ? `${field.type}:${field.refCollectionId}`
+        : field.type
+    }
+    return { id, n: collection.name, f: types }
+  })
+  const entryIds = [...ds.entries.keys()].sort(
+    (a, b) => ds.entries.get(a).index - ds.entries.get(b).index,
+  )
+  const entryIndex = new Map(entryIds.map((id, i) => [id, i]))
+  const en = entryIds.map((id) => {
+    const { entry, collectionId } = ds.entries.get(id)
+    const { fields } = ds.cols.get(collectionId)
+    const values = {}
+    for (const name of fields) {
+      const field = ds.cols.get(collectionId).collection.fields?.find((f) => f.name === name)
+      if (!field) continue
+      // a `multi-` field keeps its ARRAY: that is the shape applyListQuery's
+      // `equalsCurrent` tests with `.includes`, and entryValue (which reads
+      // text) returns undefined for one
+      const value = field.type.startsWith('multi-')
+        ? entry.values?.[name]
+        : entryValue(entry, field, ctx.locale, ctx.defaultLocale)
+      if (value !== undefined && value !== null && value !== '') values[name] = value
+    }
+    const out = { id, c: colIds.indexOf(collectionId), v: values }
+    // `name` and `createdAt` are not field values, and applyListQuery sorts by
+    // either — so a route that re-runs a query has to carry them
+    if (ds.lists.length) {
+      out.n = entry.name ?? ''
+      out.ct = entry.createdAt ?? 0
+    }
+    return out
+  })
+  const out = {
+    co,
+    en,
+    rs: ds.shapeList,
+    b: ds.binds.map(([shapeIdx, ...ids]) => [shapeIdx, ...ids.map((id) => entryIndex.get(id) ?? -1)]),
+  }
+  if (ds.lists.length) out.l = ds.lists
+  if (ds.aggs.length) out.g = ds.aggs
+  if (ds.actions.length) {
+    out.a = ds.actions.map((list) =>
+      list.map((meta) => (meta.e ? { ...meta, e: entryIndex.get(meta.e) ?? -1 } : meta)),
+    )
+  }
+  const persist = project.settings?.state?.persist
+  if (persist === 'local' || persist === 'none') out.p = persist
+  return out
+}
+
+/**
+ * Whether a route uses client-side entry state at all — one cheap walk, before
+ * the render, because `data-ds` has to be emitted or omitted DURING it.
+ *
+ * A route qualifies when some node it renders carries an action binding, a
+ * draft scope, or a two-way control binding (a `data-field` on an input, which
+ * writes the store on change). Everything else ships exactly the bytes it
+ * always did: no attributes, no `ds` section, no fourth runtime. That is what
+ * makes this engine free for every site that does not ask for it.
+ *
+ * Component masters are walked too, since the trigger may well live inside a
+ * `<TaskCard>` the route only reaches through an instance.
+ */
+function routeUsesState(page, project) {
+  let used = false
+  const look = (n) => {
+    if (used) return
+    if (n.actions?.length || n.draft) used = true
+    else if (n.arg && isTwoWayControl(n.type)) used = true
+    // an aggregate on its own makes the route stateful: a count that never
+    // updates when a card moves is the bug this exists for
+    else if (n.arg && parseAggregate(n.arg)) used = true
+  }
+  for (const { tree } of routeTrees(page, project)) walkNodes(tree, look)
+  if (!used) {
+    for (const c of project.components ?? []) walkNodes([c.root], look)
+  }
+  return used
+}
+
+/** a control whose `data-field` binding reads AND writes the store */
+function isTwoWayControl(type) {
+  return type === 'input' || type === 'textarea' || type === 'select' || type === 'checkbox' || type === 'radio'
+}
+
+/**
  * The route's entry-scope index (shared/entryScope.js): the page's trees plus
  * every component master, since a master can hold a `:collection-list` of its
  * own and its nodes are keyed by the same ids.
@@ -476,6 +827,9 @@ function collectCandidates(project) {
       add(a.duration)
       add(a.easing)
       candidates.add('transition-all')
+      // the scrim is renderer-invented markup, so its classes reach the
+      // stylesheet only from here — without this the backdrop ships invisible
+      if (a.scrim) add(scrimCandidateClasses())
     }
   }
   for (const page of project.pages) walkNodes(page.elements, scanNode)
@@ -515,6 +869,13 @@ async function buildCss(candidates, settings, { forms = false } = {}) {
 function classFor(node, ctx) {
   const mapping = ctx.mm.get(node.id)
   const own = ownClasses(node, mapping).split(/\s+/).filter(Boolean)
+  // An instance wrapper that emits an element only because something is bound
+  // to it is layout-TRANSPARENT: the instance's own root still decides every
+  // box, exactly as it did when the wrapper emitted nothing. Without this a
+  // binding on a <Button> would wrap it in a real block and move the page —
+  // which is why the only way to bind one used to be an authored
+  // `<div class="contents">` per trigger.
+  if (/^[A-Z]/.test(node.type) && wrapperIsTransparent(node)) own.push('contents')
   const bindings = mapping
     ? scopedTargets(mapping.root, mapping.master.id)
     : (ctx.plainTargets.get(node.id) ?? [])
@@ -718,6 +1079,131 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
           custom,
         )
       : custom
+  // --- client state: which of this element's reads come from the store ---
+  //
+  // Registered HERE, beside the resolution it mirrors, so a bound attribute and
+  // the re-render that keeps it current can never read different fields. The
+  // whole block is inert on a route with no actions (`ctx.ds.on` false), which
+  // is what makes the engine cost nothing to a site that never asks for it.
+  //
+  // A read carries its OWN entry, not the element's: a `data-field="author.name"`
+  // hops one reference, so the value it renders belongs to the referenced entry
+  // and a write to the task in scope must not re-render it.
+  if (ctx.ds?.on) {
+    const reads = []
+    // An AGGREGATE has no entry of its own: it is a number over a list, so the
+    // runtime re-evaluates it from the store whenever ANY entry changes. It is
+    // registered as its own bind rather than a read of some entry, which is
+    // also why a moved card updates both the column and its header.
+    const aggHere = parseAggregate(node.arg)
+    if (aggHere && !LIST_TYPES.has(node.type) && !node.children.length) {
+      const list = resolveListScope(
+        ctx.project.collections,
+        ctx.scope?.collection ?? null,
+        ctx.scope?.entry ?? null,
+        aggHere.source,
+        ctx.project.pages,
+      )
+      if (list) {
+        const colIdx = dsCollection(ctx, list.collection, aggHere.field ? [aggHere.field] : [])
+        const query = resolveInstanceValue(node, ctx.mm.get(node.id), 'listQuery')
+        const cur = ctx.scope?.entry?.id ? ctx.ds.entries.get(ctx.scope.entry.id) : null
+        const index = ctx.ds.aggs.length
+        ctx.ds.aggs.push({
+          op: aggHere.op,
+          c: colIdx,
+          ...(aggHere.field ? { f: aggHere.field } : {}),
+          ...(query ? { q: query } : {}),
+          ...(cur ? { cur: cur.index } : {}),
+        })
+        attrs.push(`${STATE_AGG_ATTR}="${index}"`)
+        // every entry of the source collection has to be IN the store, or the
+        // count would only ever see the rows this route happened to render
+        for (const entry of list.entries) {
+          dsEntry(ctx, list.collection, entry, aggHere.field ? [aggHere.field] : [])
+        }
+      }
+    }
+    if (binding?.entry && !LIST_TYPES.has(node.type) && node.type !== 'custom-code') {
+      if (mediaTag) {
+        reads.push({ f: binding.field.name, k: BIND_ATTR, n: 'src', ...binding })
+      } else if (isTwoWayControl(node.type)) {
+        reads.push({ f: binding.field.name, k: BIND_VALUE, ...binding })
+      } else if (!node.children.length && !def?.void && !isRefType(binding.field.type)) {
+        // a reference bound as TEXT renders the referenced entry's NAME
+        // (refDisplay), and the store carries field values rather than the
+        // names of entries it never rendered — so there is nothing to
+        // re-render it from. `publish` warns when an action writes a field
+        // some element displays this way.
+        reads.push({ f: binding.field.name, k: BIND_TEXT, fmt: binding.format, ...binding })
+      }
+    }
+    if (boundAttrs && ctx.scope?.entry) {
+      for (const [rawName, fieldName] of Object.entries(boundAttrs)) {
+        const name = String(rawName).toLowerCase().trim()
+        const field = ctx.scope.collection?.fields?.find((f) => f.name === fieldName)
+        if (!field) continue
+        reads.push({
+          f: fieldName,
+          k: BIND_ATTR,
+          n: name,
+          entry: ctx.scope.entry,
+          collection: ctx.scope.collection,
+        })
+      }
+    }
+    const dsAttr = dsBind(ctx, reads)
+    if (dsAttr) attrs.push(dsAttr)
+    // the list host's own marker, set by dsListTemplate just before this runs
+    if (ctx.dsList !== undefined) {
+      attrs.push(`${STATE_LIST_ATTR}="${ctx.dsList}"`)
+      ctx.dsList = undefined
+    }
+    // A control bound to a field with NO entry in scope is a draft input: it
+    // collects a value for a `create` that names its scope, and writes nothing
+    // until one does. It carries the field name rather than a store index,
+    // because there is no entry for an index to point at — and the runtime
+    // finds which draft it belongs to with `closest()`, so an input that sits
+    // in no draft scope at all is simply ignored.
+    if (isTwoWayControl(node.type) && node.arg && !binding?.entry) {
+      attrs.push(`${STATE_DRAFT_FIELD_ATTR}="${escapeHtml(String(node.arg))}"`)
+    }
+    // a bound control's CURRENT value, so the first paint already shows the
+    // entry rather than an empty box the runtime fills a frame later.
+    //
+    // `input`/`checkbox`/`radio` only: a <textarea>'s value IS its text, which
+    // the leaf render already writes, and a <select>'s is a `selected` option —
+    // the runtime sets that one on load, since marking it here would mean
+    // resolving the option children against the entry from inside attrsFor.
+    const valueRead =
+      node.type === 'input' || node.type === 'checkbox' || node.type === 'radio'
+        ? reads.find((r) => r.k === BIND_VALUE)
+        : null
+    if (valueRead && !('value' in withBound) && !('checked' in withBound)) {
+      const text = entryValue(valueRead.entry, valueRead.field, ctx.locale, ctx.defaultLocale) ?? ''
+      if (node.type === 'checkbox' || node.type === 'radio') {
+        const on =
+          valueRead.field.type === 'boolean'
+            ? isTruthyValue(text)
+            : String(withBound.value ?? '') === String(text)
+        if (on) attrs.push('checked')
+      } else if (text !== '') {
+        attrs.push(`value="${escapeHtml(String(text))}"`)
+      }
+    }
+  }
+
+  // CSS custom properties bound to fields — the one way a NUMBER reaches a
+  // style. Merged into the style attribute at the end of this function, beside
+  // the background and the primed first frame, rather than emitted as an
+  // attribute of its own.
+  const boundVars =
+    boundAttrs && ctx.scope?.entry
+      ? cssVarsFromFields(boundAttrs, ctx.scope.collection, (field) =>
+          entryValue(ctx.scope.entry, field, ctx.locale, ctx.defaultLocale) ?? '',
+        )
+      : {}
+
   // images always carry alt: the bound field, else the author's attributes.alt,
   // else the library asset's default, else '' (decorative)
   if (def?.tag === 'img') {
@@ -835,11 +1321,44 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
   // component instance); now the element carries an index and the manifest
   // carries the payload once.
   const fxEntry = {}
-  const triggers = (mapping ? mapping.master.interactions : node.interactions) ?? []
+  // Inside an instance a node's bindings are the MASTER's — shared, so every
+  // instance fires them. An instance WRAPPER is the one place that is not the
+  // whole story: its own bindings belong to this placement alone ("open the
+  // modal from THIS Button"), and the master root's still fire everywhere. So
+  // the wrapper fires both.
+  const isWrapperNode = /^[A-Z]/.test(node.type)
+  const ownTriggers = isWrapperNode && mapping ? (node.interactions ?? []) : []
+  const triggers = [
+    ...((mapping ? mapping.master.interactions : node.interactions) ?? []).map((i) => ({
+      i,
+      own: false,
+    })),
+    // a wrapper's own binding is a PAGE binding: the wrapper is a page node,
+    // so it keys with no instance scope at all (see ownerFor below)
+    ...ownTriggers.map((i) => ({ i, own: true })),
+  ]
   if (triggers.length) {
-    const list = triggers.map((i) => {
-      const key = scopedKey(i.id, selfId, i.targetId ?? selfId)
-      const state = stateKeyFor(i, selfId)
+    const list = triggers.map(({ i, own }) => {
+      // A WRAPPER's own binding belongs to the page, not to the component it
+      // holds, so it must key exactly as a plain page element's does: owner =
+      // the wrapper node, and NO instance part in the scope.
+      //
+      // Keyed with the instance part (which is what every other binding inside
+      // an instance needs), the trigger wrote `X:sheet@<instanceId>` while the
+      // sheet — a page element with no mapping — listened on `X:sheet`. The
+      // keys never matched, the click did nothing, and `publish` reported
+      // success: the same failure the entry-scope part of this function was
+      // written to stop, one scope component over.
+      const ownerId = own ? node.id : selfId
+      const key = own
+        ? ctx.intern(FX_KIND.binding, i.id)
+        : scopedKey(i.id, selfId, i.targetId ?? selfId)
+      const state = own
+        ? ctx.intern(
+            FX_KIND.state,
+            interactionStateKey(i.interactionId, i.targetId ?? ownerId, undefined),
+          )
+        : stateKeyFor(i, selfId)
       ctx.fx[state] = ctx.anim.get(i.interactionId)?.toClasses ?? ''
       const meta = { t: i.trigger, k: key, s: state }
       if (i.action && i.action !== 'toggle') meta.a = i.action
@@ -859,6 +1378,55 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
     })
     fxEntry.c = list
   }
+  // --- client-state actions: the write side ---
+  //
+  // The target entry is resolved HERE, at export, from the scope this element
+  // is being rendered in — which is the same rule that decides an interaction's
+  // entry scope, and it is what makes a "Done" checkbox inside a row write THAT
+  // row's entry. Left to the browser, the runtime would have to rediscover the
+  // repeat it sits in from the DOM, and a row's checkbox would write whichever
+  // entry it found first.
+  //
+  // Read off the MASTER inside a component instance, like every other binding:
+  // the action belongs to the component, the entry belongs to the placement.
+  const actionBindings = (mapping ? mapping.master.actions : node.actions) ?? []
+  if (actionBindings.length && ctx.ds?.on) {
+    const scopeEntry = ctx.scope?.entry ?? null
+    const list = []
+    for (const a of actionBindings) {
+      const ops = (a.ops ?? []).filter((o) => o && typeof o.op === 'string')
+      if (!ops.length) continue
+      const meta = { t: a.trigger, o: ops }
+      if (scopeEntry) {
+        meta.e = scopeEntry.id
+        // the fields this action WRITES have to be in the store even when
+        // nothing on the route reads them, or the op has no value to change
+        // and no field type to coerce against
+        dsEntry(
+          ctx,
+          ctx.scope.collection,
+          scopeEntry,
+          ops.map((o) => o.field).filter(Boolean),
+        )
+      }
+      if (a.breakpoints?.length) {
+        meta.b = a.breakpoints.map((id) => ctx.intern(FX_KIND.breakpoint, id))
+      }
+      list.push(meta)
+    }
+    if (list.length) {
+      const index = ctx.ds.actions.length
+      ctx.ds.actions.push(list)
+      attrs.push(`${STATE_ACTION_ATTR}="${index}"`)
+    }
+  }
+  // a draft scope: the inputs under it collect values for a `create` that names
+  // it, and write nothing until one does
+  const draftName = (mapping ? mapping.master : node).draft
+  if (draftName && ctx.ds?.on) {
+    attrs.push(`${STATE_DRAFT_ATTR}="${escapeHtml(String(draftName))}"`)
+  }
+
   // --- channels: the listener side ---
   // The element DECLARES a channel and every binding in the project aimed at
   // that name lands on it — from another component, from another page's tree,
@@ -923,6 +1491,7 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
       // the modal flag belongs to the EFFECT, like closeOn and the group, so
       // it is recorded per state key whichever binding declares it
       if (ctx.anim.get(i.interactionId)?.modal) ctx.fxModal[key] = 1
+      if (ctx.anim.get(i.interactionId)?.scrim) ctx.fxScrim[key] = 1
     }
     fxEntry.t = targetKeys
   }
@@ -1047,7 +1616,10 @@ function attrsFor(node, ctx, bg, { wrapLink = true, extraClass = '' } = {}) {
 
   // one style attribute: the background's inline style plus the pre-play
   // first frame of every animation aimed at this node
-  const styleText = [bg?.style, cssDecls(firstFrame)].filter(Boolean).join(';')
+  const boundVarText = Object.entries(boundVars)
+    .map(([name, value]) => `${name}:${value}`)
+    .join(';')
+  const styleText = [bg?.style, cssDecls(firstFrame), boundVarText].filter(Boolean).join(';')
   if (styleText) attrs.push(`style="${escapeHtml(styleText)}"`)
 
   // custom attributes (allowlisted) — never override an attribute the
@@ -1145,20 +1717,46 @@ function renderNode(node, ctx) {
     // never repeated and renders only when there is nothing to repeat
     const template = node.children.filter((c) => c.type !== 'list-empty')
     const emptyState = node.children.filter((c) => c.type === 'list-empty')
-    const inner = !list
+    const rowsHtml = !list
       ? ''
-      : listEntries.length
-        ? listEntries
-            .map((entry, index) => {
-              const inner2 = {
-                ...ctx,
-                scope: { collection: list.collection, entry, index, count: listEntries.length },
-              }
-              return template.map((child) => renderNode(child, inner2)).join('')
-            })
-            .join('')
-        : emptyState.map((child) => renderNode(child, ctx)).join('')
-    return linkWrap(`<${tag}${attrsFor(node, ctx)}>${inner}</${tag}>`, node, ctx)
+      : listEntries
+          .map((entry, index) => {
+            const inner2 = {
+              ...ctx,
+              scope: { collection: list.collection, entry, index, count: listEntries.length },
+            }
+            dsEntryMark(ctx, list.collection, entry)
+            return template.map((child) => renderNode(child, inner2)).join('')
+          })
+          .join('')
+    const emptyHtml = emptyState.map((child) => renderNode(child, ctx)).join('')
+    // On a stateful route the empty block is ALWAYS emitted, inside its own
+    // marked wrapper, and merely hidden while there are rows.
+    //
+    // Both halves are load-bearing. A block that was never rendered cannot be
+    // shown when the runtime empties the list — and an UNWRAPPED one is worse
+    // than missing: the reconciler slices a list's children into rows, so an
+    // empty block sitting among them reads back as a row, and emptying that
+    // column removed its own empty state. It is hidden by the attribute rather
+    // than a class so an author's styling cannot override it, exactly as a
+    // form's state blocks are.
+    const stateful = !!ctx.ds?.on && !!list && !!emptyState.length
+    const dsEmpty = stateful
+      ? `<div ${STATE_EMPTY_ATTR}${listEntries.length ? ' hidden' : ''}>${emptyHtml}</div>`
+      : ''
+    const inner = !list ? '' : listEntries.length ? rowsHtml : stateful ? '' : emptyHtml
+    // The ROW TEMPLATE, for a row the runtime has to build that the export
+    // never rendered — a created subtask, or a task that moved into this
+    // column. It is the ordinary render of the first entry's row inside an
+    // inert <template>, so it carries the same `data-ds`/`data-fx` wiring and
+    // the runtime only has to re-point it at another entry. Emitted ONLY on a
+    // stateful route, and only for a list that something can actually change.
+    const rowTemplate = dsListTemplate(ctx, node, list, listEntries, template)
+    return linkWrap(
+      `<${tag}${attrsFor(node, ctx)}>${rowTemplate}${dsEmpty}${inner}</${tag}>`,
+      node,
+      ctx,
+    )
   }
 
   // carousel — the same DOM the editor renders (useRenderNode + the two Vue
@@ -1383,22 +1981,42 @@ function renderNode(node, ctx) {
       ? resolveBinding(ctx.project.collections, ctx.scope.collection, ctx.scope.entry, node.arg)
       : null
     let text
-    if (binding) {
+    const agg = parseAggregate(node.arg)
+    if (agg) {
+      // a number over a LIST, not a field of one entry
+      const entries = aggregateEntries(node, ctx, agg)
+      text = entries ? aggregateValue(entries, agg.op, agg.field) : ''
+    } else if (binding) {
       const { field, entry } = binding
       // bound fields with no entry/value render empty on the public site;
       // a directly-bound reference reads as the referenced entry name(s)
       if (field.type === 'reference' || field.type === 'multi-reference') {
         text = entry ? refDisplay(ctx.project.collections, field, entry) : ''
       } else {
-        text = entry ? (entryValue(entry, field, ctx.locale, ctx.defaultLocale) ?? '') : ''
+        // the `|format` suffix on the path: a date as words, a choice as its
+        // label. Applied HERE, where the field is resolved, so the exporter
+        // cannot format one field's value against another's options.
+        text = entry
+          ? formatFieldValue(
+              entryValue(entry, field, ctx.locale, ctx.defaultLocale) ?? '',
+              field,
+              binding.format,
+              ctx.locale,
+            )
+          : ''
       }
     } else {
+      // NO `def.defaultContent` fallback: it is an editor placeholder, not
+      // content. A fresh element needs something to see and click on the
+      // canvas; a published page needs the words someone actually wrote. An
+      // empty <span> used as a colour dot or a toggle knob used to ship
+      // "Dolor sit amet", once per dot, with the canvas giving no hint that it
+      // would. Mirrors useRenderNode, which returns '' when isPreview.
       text =
         nodeContent(node, ctx.locale, ctx.defaultLocale) ||
         (mapping ? [...mapping.mirrors, mapping.master] : [])
           .map((source) => nodeContent(source, ctx.locale, ctx.defaultLocale))
           .find(Boolean) ||
-        def?.defaultContent ||
         ''
     }
     // rich text emits its sanitized subset; anything else is fully escaped
@@ -1609,6 +2227,10 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
     // node id → its enclosing entry scope, which decides whether a binding's
     // state key carries the entry part (see attrsFor)
     scopeRoots: routeScopeRoots(page, project),
+    // the client-state accumulator. `on` is decided by ONE pre-walk, before the
+    // render, because `data-ds` has to be emitted or omitted as each element is
+    // written — a route with no actions ships not one byte of this.
+    ds: createDsCtx(routeUsesState(page, project)),
     // every key that reaches the artifact goes through here: a route-local
     // short id per uuid, so the trigger side and the listener side agree
     // without either carrying 36 characters of identity it does not need
@@ -1642,6 +2264,8 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
     // state keys whose effect is a MODAL: while one is on, the runtime locks
     // page scroll, traps focus in the target and sets aria-modal
     fxModal: {},
+    // state keys whose effect draws a dimming backdrop behind its target
+    fxScrim: {},
     // sliders rendered on this route — a Set so it survives the `{...ctx}`
     // spread every nested scope makes (same reason fx/animUsed are objects)
     sliderIds: new Set(),
@@ -1715,7 +2339,9 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
   // breakpoint-scoped bindings (either engine) need the width→breakpoint map,
   // and it has to carry EVERY breakpoint in order — the runtime picks the
   // current one by walking them, not by looking up a scoped id
-  const hasBpScope = Object.keys(ctx.fxbp).length > 0 || Object.keys(ctx.animBp).length > 0
+  const hasActionBpScope = ctx.ds.actions.some((list) => list.some((meta) => meta.b))
+  const hasBpScope =
+    Object.keys(ctx.fxbp).length > 0 || Object.keys(ctx.animBp).length > 0 || hasActionBpScope
 
   // ONE manifest, replacing seven islands. Top-level names are spelled out
   // because each appears once; see src/lib/shared/fxWire.js for the format.
@@ -1725,6 +2351,12 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
   if (Object.keys(ctx.fxrm).length) manifest.rm = ctx.fxrm
   if (Object.keys(ctx.fxbp).length) manifest.fxbp = ctx.fxbp
   if (Object.keys(ctx.fxModal).length) manifest.modal = Object.keys(ctx.fxModal)
+  if (Object.keys(ctx.fxScrim).length) {
+    manifest.scrim = Object.keys(ctx.fxScrim)
+    // the classes travel on the wire so the runtime does not repeat them, and
+    // one change to shared/interactionClasses.js reaches the published page
+    manifest.scrimc = { on: SCRIM_ON_CLASS, off: SCRIM_OFF_CLASS, base: SCRIM_CLASSES }
+  }
   if (hasAnimations) manifest.lib = ctx.animUsed
   if (Object.keys(ctx.animBp).length) manifest.animbp = ctx.animBp
   if (hasBpScope) {
@@ -1734,6 +2366,12 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
     }))
   }
   if (hasSiteFx) manifest.site = siteFx
+  // the client-state store rides the SAME sidecar as the effects, rather than a
+  // second file: a route that carries actions almost always carries the
+  // interactions they restyle, so one deferred request serves both and the
+  // content hash still dedupes two routes with identical state.
+  const ds = dsManifest(ctx, project)
+  if (ds) manifest.ds = ds
 
   // The manifest ships as a SIDECAR, not inline: `assets/fx-<hash>.js` loaded
   // with `defer` ahead of the runtimes. See src/lib/shared/fxWire.js for why a
@@ -1749,11 +2387,16 @@ function renderPage(route, project, media, channels, fxAssets = new Map()) {
   const motionTag = hasAnimations || hasSiteFx ? '<script src="/assets/motion.js" defer></script>' : ''
   // the slider runtime ships only on routes that actually carry one
   const sliderTag = ctx.sliderIds.size ? '<script src="/assets/slider.js" defer></script>' : ''
+  // the state runtime, on the same terms: only where an action can fire. It is
+  // emitted AFTER script.js because a re-rendered row has to be handed back to
+  // the interaction runtime, which must have built its own index first.
+  const stateTag = ds ? '<script src="/assets/state.js" defer></script>' : ''
   const tail =
     fxTag +
-    (needsRuntime ? '<script src="/assets/script.js" defer></script>' : '') +
+    (needsRuntime || ds ? '<script src="/assets/script.js" defer></script>' : '') +
     motionTag +
-    sliderTag
+    sliderTag +
+    stateTag
   // per-locale seo overrides (page + project) apply on non-default routes,
   // falling back field-by-field to the base values
   const localized = locale !== project.defaultLocale
@@ -2068,6 +2711,12 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
   } catch {
     // only fatal if a page actually carries a slider — checked below
   }
+  let stateRuntime = null
+  try {
+    stateRuntime = await readFile(STATE_RUNTIME)
+  } catch {
+    // only fatal if a page actually carries an action — checked below
+  }
 
   return await withStagingDir(outDir, async (tmp) => {
     const tmpAbs = resolve(tmp)
@@ -2100,6 +2749,7 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
     // whether the tween runtime ships at all
     let usesMotion = false
     let usesSlider = false
+    let usesState = false
     const rendered = []
     const manifest = {}
     for (const route of routes) {
@@ -2108,6 +2758,7 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
       const { html, forms, route: routePath } = renderPage(route, project, media, channels, fxAssets)
       if (!usesMotion && html.includes('/assets/motion.js')) usesMotion = true
       if (!usesSlider && html.includes('/assets/slider.js')) usesSlider = true
+      if (!usesState && html.includes('/assets/state.js')) usesState = true
       collectManifest(manifest, forms, routePath, route)
       rendered.push([route.outPath, html])
     }
@@ -2126,6 +2777,14 @@ export async function exportSite(rawProject, outDir, { integrations } = {}) {
         )
       }
       await write('assets/slider.js', sliderRuntime)
+    }
+    if (usesState) {
+      if (!stateRuntime) {
+        throw new Error(
+          'state runtime missing — run `npm run build:state` to rebuild server/state-runtime.js',
+        )
+      }
+      await write('assets/state.js', stateRuntime)
     }
     for (const [name, body] of fxAssets) await write(name, body)
     for (const [outPath, html] of rendered) await write(outPath, html)

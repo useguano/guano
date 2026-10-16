@@ -66,12 +66,41 @@
     modalKeys[k] = 1
   })
 
-  // every element the manifest has anything to say about, resolved once
-  var entries = []
-  document.querySelectorAll('[data-fx]').forEach(function (el) {
-    var entry = els[+el.getAttribute('data-fx')]
-    if (entry) entries.push({ el: el, fx: entry })
+  // state keys whose effect draws a dimming BACKDROP behind its target. An
+  // overlay built from classes has no backdrop of its own, and the only way to
+  // add one was a second element, a second interaction and a second binding
+  // aimed at the same state — three things to keep in step for a rectangle.
+  // The classes come down the wire (man.scrimc) so this file does not repeat
+  // them and shared/interactionClasses.js stays the one definition.
+  var scrimKeys = {}
+  ;(man.scrim || []).forEach(function (k) {
+    scrimKeys[k] = 1
   })
+  var scrimc = man.scrimc || {}
+
+  // Every element the manifest has anything to say about.
+  //
+  // Collected INCREMENTALLY rather than once, because a row the state runtime
+  // re-creates from a <template> is a new DOM node carrying an old `data-fx`:
+  // built once at load, its trigger would never be wired and its class list
+  // would never be recomputed, so a created subtask row came back inert while
+  // every other row on the page worked. `seen` is what keeps a rescan from
+  // wiring an element twice.
+  var seen = new WeakSet()
+  var collect = function (root) {
+    var found = []
+    var scope = root && root.querySelectorAll ? root : document
+    var nodes = scope.querySelectorAll('[data-fx]')
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i]
+      if (seen.has(el)) continue
+      var entry = els[+el.getAttribute('data-fx')]
+      if (!entry) continue
+      seen.add(el)
+      found.push({ el: el, fx: entry })
+    }
+    return found
+  }
 
   // current breakpoint id for the viewport (mirrors breakpointIdForWidth in
   // src/lib/responsive.ts): tightest bp still covering this width, else widest
@@ -98,14 +127,22 @@
     return el.getAttribute('class') || ''
   }
   var targets = []
-  entries.forEach(function (e) {
-    if (!e.fx.t) return
-    targets.push({
-      el: e.el,
-      base: classOf(e.el).split(/\s+/).filter(Boolean),
-      keys: e.fx.t,
+  var collectTargets = function (list) {
+    list.forEach(function (e) {
+      if (!e.fx.t) return
+      var t = {
+        el: e.el,
+        base: classOf(e.el).split(/\s+/).filter(Boolean),
+        keys: e.fx.t,
+      }
+      targets.push(t)
+      // every target element counts as "inside" its own state keys, so clicking
+      // within an open menu doesn't dismiss it
+      t.keys.forEach(function (k) {
+        addInside(k, t.el)
+      })
     })
-  })
+  }
 
   var apply = function () {
     curBp = computeBp()
@@ -352,6 +389,53 @@
     if (opener && document.contains(opener) && typeof opener.focus === 'function') opener.focus()
   }
 
+  // ---------- the scrim ----------
+  //
+  // ONE element for every scrim'd effect, created on first use and reused: two
+  // overlays open at once share a backdrop, which is what a visitor expects and
+  // also what keeps the z-order sane.
+  var scrimEl = null
+  var scrimOpen = []
+  var scrimFor = function () {
+    if (scrimEl) return scrimEl
+    scrimEl = document.createElement('div')
+    scrimEl.setAttribute('data-guano-scrim', '')
+    scrimEl.setAttribute('class', (scrimc.base || '') + ' ' + (scrimc.off || ''))
+    // a click on the backdrop closes whatever it is behind — the behaviour
+    // every visitor already expects of a dimmed page
+    scrimEl.addEventListener('click', function () {
+      var doomed = scrimOpen.slice()
+      for (var i = doomed.length - 1; i >= 0; i--) closeKey(doomed[i])
+    })
+    document.body.appendChild(scrimEl)
+    return scrimEl
+  }
+  var syncScrim = function () {
+    if (!scrimOpen.length) {
+      if (scrimEl) scrimEl.setAttribute('class', (scrimc.base || '') + ' ' + (scrimc.off || ''))
+      return
+    }
+    var el = scrimFor()
+    // the target sits ABOVE the backdrop: move the scrim to just before the
+    // topmost open target, so an author needs no z-index of their own
+    var top = modalTargets(scrimOpen[scrimOpen.length - 1])[0]
+    if (top && top.parentNode && top.previousElementSibling !== el) {
+      top.parentNode.insertBefore(el, top)
+    }
+    // the off class is on for one frame so the opacity transition has
+    // something to move from — set directly, it would simply appear
+    requestAnimationFrame(function () {
+      el.setAttribute('class', (scrimc.base || '') + ' ' + (scrimc.on || ''))
+    })
+  }
+  var setScrim = function (key, on) {
+    var at = scrimOpen.indexOf(key)
+    if (on && at === -1) scrimOpen.push(key)
+    else if (!on && at !== -1) scrimOpen.splice(at, 1)
+    else return
+    syncScrim()
+  }
+
   var set = function (key, on) {
     // bookkeeping runs even when the state is unchanged (a second trigger
     // pointing at an already-open effect still has to register its dismissal
@@ -369,6 +453,7 @@
           fired.delete(open)
           delete dismissable[open]
           if (modalKeys[open]) closeModal(open)
+          if (scrimKeys[open]) setScrim(open, false)
         }
         openGroups[group] = key
       } else if (openGroups[group] === key) {
@@ -394,6 +479,7 @@
       if (on) openModal(key)
       else closeModal(key)
     }
+    if (scrimKeys[key]) setScrim(key, on)
   }
 
   // --- outside-click / Escape dismissal: one pair of capture-phase listeners,
@@ -409,6 +495,7 @@
     // a dismissal is a close: Escape and an outside click have to give the
     // scroll lock, the aria attributes and the focus back too
     if (modalKeys[key]) closeModal(key)
+    if (scrimKeys[key]) setScrim(key, false)
   }
   var installDismiss = function () {
     if (dismissInstalled) return
@@ -439,13 +526,6 @@
     )
   }
 
-  // every target element counts as "inside" its own state keys, so clicking
-  // within an open menu doesn't dismiss it
-  targets.forEach(function (t) {
-    t.keys.forEach(function (k) {
-      addInside(k, t.el)
-    })
-  })
 
   // ---------- triggers ----------
 
@@ -473,22 +553,36 @@
   // Options have to be known for ALL bindings before any of them fires, or a
   // `closeOn`/`group`/`once` declared on one trigger would be invisible to the
   // effect when a different trigger opens it.
-  entries.forEach(function (e) {
-    ;(e.fx.c || []).forEach(function (i) {
-      addInside(i.s, e.el)
-      collectOptions(i)
-      triggers.push({ el: e.el, i: i })
+  var collectTriggers = function (list) {
+    var found = []
+    list.forEach(function (e) {
+      ;(e.fx.c || []).forEach(function (i) {
+        addInside(i.s, e.el)
+        collectOptions(i)
+        var t = { el: e.el, i: i }
+        triggers.push(t)
+        found.push(t)
+      })
     })
-  })
+    return found
+  }
 
   // PASS 2 — restore remembered states, then wire the listeners. Restoring first
   // means a dismissed popup never flashes open.
-  Object.keys(onceFor).forEach(function (key) {
-    var was = recall(onceFor[key], key)
-    if (was !== null) set(key, was)
-  })
+  var restoreRemembered = function () {
+    Object.keys(onceFor).forEach(function (key) {
+      var was = recall(onceFor[key], key)
+      if (was !== null) set(key, was)
+    })
+  }
 
-  triggers.forEach(function (entry) {
+  // `instant` wires an APPEAR trigger as already-fired instead of observing it.
+  // That is what a re-created row needs: the entrance already played for this
+  // list, and replaying it per re-render would flash every card on every write.
+  // A row whose effect was already fired gets its classes back from apply()
+  // for free, since the state key survives the DOM node.
+  var wire = function (list, instant) {
+    list.forEach(function (entry) {
     var el = entry.el
     var i = entry.i
     if (i.t === 'hover') {
@@ -505,9 +599,13 @@
         set(i.s, i.a === 'on' ? true : i.a === 'off' ? false : !fired.has(i.s))
       })
     } else if (i.t === 'appear') {
-      appearMetas.push({ i: i, el: el })
-      if (hasIO) appear.observe(el)
-      else set(i.s, true)
+      if (instant) {
+        set(i.s, true)
+      } else {
+        appearMetas.push({ i: i, el: el })
+        if (hasIO) appear.observe(el)
+        else set(i.s, true)
+      }
     } else if (i.t === 'load') {
       // on as soon as the page renders, and never off — appear without the
       // wait, for a state the page simply starts in
@@ -515,14 +613,29 @@
     } else if (i.t === 'scrolled') {
       scrolledMetas.push(i)
     } else if (i.t === 'change') {
+      var stateOf = function (t) {
+        return t.type === 'checkbox' || t.type === 'radio' ? t.checked : !!t.value
+      }
       var onChange = function (e) {
-        var t = e.target
-        set(i.s, t.type === 'checkbox' || t.type === 'radio' ? t.checked : !!t.value)
+        set(i.s, stateOf(e.target))
       }
       el.addEventListener('change', onChange)
       el.addEventListener('input', onChange)
+      // A change binding reflects its control's STATE, so read it once NOW and
+      // not only when something moves: a radio that ships `checked` fired
+      // nothing until you clicked elsewhere, so radio-driven tabs opened with
+      // every panel closed. Only when it is already on — turning one OFF here
+      // would undo a remembered `once` state restored moments ago.
+      if (stateOf(el)) set(i.s, true)
     }
-  })
+    })
+  }
+
+  var initial = collect(document)
+  collectTargets(initial)
+  var initialTriggers = collectTriggers(initial)
+  restoreRemembered()
+  wire(initialTriggers, false)
 
   // 'scrolled': on while the page is scrolled past the threshold — header
   // shrink, back-to-top reveal, sticky-bar states
@@ -583,6 +696,25 @@
   }
 
   apply()
+
+  // The hook the state runtime calls after it has moved, created or removed a
+  // list row. Nothing else in the published site needs it, and it is set even
+  // when no state runtime ships — one assignment is cheaper than the gate.
+  //
+  // A row is a NEW DOM node wearing an old `data-fx`, so without this its
+  // trigger is unwired and its class list is never recomputed: the reason this
+  // file's index became incremental at all. `collect` skips what it has already
+  // seen, so a rescan over an unchanged page does nothing.
+  window.__guanoFxRescan = function () {
+    var fresh = collect(document)
+    if (fresh.length) {
+      collectTargets(fresh)
+      wire(collectTriggers(fresh), true)
+    }
+    // unconditionally: a row that MOVED is an element we have seen, and its
+    // class list still has to be recomputed against the states now fired
+    apply()
+  }
 })()
 
 // ---------- forms ----------

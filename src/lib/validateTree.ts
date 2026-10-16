@@ -1,7 +1,14 @@
 import type { ElementNode, Page, Project } from '@/types/editor'
 import { isComponentType } from './components'
 import { BUILTIN_LIST_SOURCES } from './nodeState'
-import { pagesListScope, resolveBinding, resolveListScope } from './shared/fields.js'
+import {
+  pagesListScope,
+  resolveBinding,
+  resolveListScope,
+  fieldFormatError,
+  parseAggregate,
+  aggregateError,
+} from './shared/fields.js'
 import { CHANNEL_NAME_RE, isChannelName } from './shared/interactionKeys.js'
 import { COLOR_MODE_ACTIONS, isThemeLink, themeLinkAction } from './shared/colorMode.js'
 
@@ -224,11 +231,27 @@ export function validateTree(root: ElementNode, ctx: ValidateContext): TreeDiagn
         !!resolveBinding(collections, scopeCollection, null, name)
       const names = (scopeCollection.fields ?? []).map((f) => f.name)
       const hint = names.length ? ` (fields here: ${names.join(', ')})` : ''
-      if (node.arg && !SCOPE_TYPES.has(node.type) && !known(node.arg)) {
+      const agg = node.arg ? parseAggregate(node.arg) : null
+      if (agg) {
+        // an aggregate is a number over a LIST, so it is checked against the
+        // source and its field rather than against the entry in scope
+        const why = aggregateError(agg, {
+          collections,
+          scopeCollection,
+        })
+        if (why) diags.push({ nodeId: node.id, message: why })
+      } else if (node.arg && !SCOPE_TYPES.has(node.type) && !known(node.arg)) {
         diags.push({
           nodeId: node.id,
           message: `'${node.arg}' is not a field of ${where}, so this element renders empty${hint}`,
         })
+      } else if (node.arg && !SCOPE_TYPES.has(node.type)) {
+        // a `|format` that does not suit the field renders the RAW value with
+        // nothing to say why — the reason a prototype grew a `due-label` text
+        // field beside a date it already had
+        const bound = resolveBinding(collections, scopeCollection, null, node.arg)
+        const why = bound ? fieldFormatError(bound.format ?? null, bound.field) : null
+        if (why) diags.push({ nodeId: node.id, message: why })
       }
       for (const [attr, field] of Object.entries(node.fieldAttrs ?? {})) {
         if (field && !known(field)) {

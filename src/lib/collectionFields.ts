@@ -12,7 +12,11 @@ export const FIELD_TYPES: { label: string; value: CollectionField['type'] }[] = 
   { label: 'Gallery', value: 'multi-image' },
 ]
 
-export const isRefType = (t: string) => t === 'reference' || t === 'multi-reference'
+// one definition, in shared/, so the exporter and the MCP validators read the
+// same rule the panel does. Imported as well as re-exported: a bare re-export
+// does not bring the name into this module's own scope.
+import { isRefType } from './shared/fields.js'
+export { isRefType }
 
 export const isTranslatableType = (t: string) => t === 'text'
 

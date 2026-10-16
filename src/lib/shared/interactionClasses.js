@@ -1,3 +1,30 @@
+/**
+ * The backdrop a `scrim` interaction draws behind its target.
+ *
+ * Renderer-INVENTED classes, like a slider's chrome: nothing authors them, so
+ * `collectCandidates` has to register them or they never reach the compiled
+ * stylesheet and the scrim ships invisible.
+ *
+ * It exists because an overlay built from classes has no backdrop of its own. A
+ * channel-driven mobile sidebar opened with nothing dimming the page behind it,
+ * and the only way to add one was a second element, a second interaction and a
+ * second binding aimed at the same state — three things to keep in step for a
+ * rectangle. `modal: true` already adds the behaviours an overlay cannot
+ * express in classes (scroll lock, focus trap, aria); this adds the one pixel
+ * it cannot either.
+ */
+export const SCRIM_CLASSES =
+  'fixed inset-0 bg-black/50 transition-opacity duration-200 motion-reduce:transition-none'
+
+/** on-state, applied the frame after the element is inserted so it fades in */
+export const SCRIM_ON_CLASS = 'opacity-100'
+export const SCRIM_OFF_CLASS = 'opacity-0'
+
+/** every class the scrim can wear, for the candidate scan */
+export function scrimCandidateClasses() {
+  return `${SCRIM_CLASSES} ${SCRIM_ON_CLASS} ${SCRIM_OFF_CLASS}`
+}
+
 const KEYWORD_PROPERTY = new Map(
   Object.entries({
     display:

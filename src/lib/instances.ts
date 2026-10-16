@@ -5,6 +5,7 @@ import {
   dependencyOrder as order,
   isInstanceWrapper as wrapper,
   isBareWrapper as bareWrapper,
+  wrapperIsTransparent as transparent,
   nestedComponentNames as nested,
   buildInstanceMap as build,
   inheritedInstanceValue as inherited,
@@ -58,6 +59,10 @@ export const isBareWrapper = bareWrapper as (
   master: ElementNode | null | undefined,
   state?: { classes?: string; targeted?: boolean },
 ) => boolean
+
+/** a component wrapper with no classes of its own is layout-transparent: it
+ *  gets `display: contents` so the instance's own root decides every box */
+export const wrapperIsTransparent = transparent as (node: ElementNode) => boolean
 
 export const nestedComponentNames = nested as (def: ComponentDef) => string[]
 

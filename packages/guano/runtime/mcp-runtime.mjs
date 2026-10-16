@@ -4911,86 +4911,149 @@ function decodeEntities(text) {
 	return text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10))).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 }
 //#endregion
-//#region src/lib/shared/interactionKeys.js
-/**
-* The key interaction STATE is held under: one boolean per (interaction, target)
-* within a scope, so any number of triggers drive the same effect.
-* @param {string} interactionId
-* @param {string} targetId the node the classes land on (never null — callers
-*   resolve `binding.targetId ?? ownerId` first)
-* @param {string} [scope] component instance + collection-list repeat isolation
-* @returns {string}
-*/
-function interactionStateKey(interactionId, targetId, scope) {
-	const base = `${interactionId}:${targetId}`;
-	return scope ? `${base}@${scope}` : base;
-}
-/**
-* The key an exclusive GROUP is tracked under. Deliberately scoped to the
-* component INSTANCE only and never to the collection-list repeat: "one
-* accordion open at a time" has to hold ACROSS the repeats of one list (that is
-* the whole point), while two instances of the same component stay independent.
-* @param {string} group author-chosen group name
-* @param {string} [instanceScope] the component instance part of the scope only
-* @returns {string}
-*/
-function interactionGroupKey(group, instanceScope) {
-	return instanceScope ? `${group}@${instanceScope}` : group;
-}
-var CHANNEL_NAME_RE = /^[a-z][a-z0-9-]{0,39}$/;
-var RESERVED_CHANNEL_NAMES = /* @__PURE__ */ new Set(["item", "locale"]);
-/**
-* Is this `targetId` a channel rather than a node id?
-* @param {string|null|undefined} targetId
-* @returns {boolean}
-*/
-function isChannelTarget(targetId) {
-	if (typeof targetId !== "string" || targetId[0] !== "@") return false;
-	const name = targetId.slice(1);
-	return CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
-}
-function channelName(targetId) {
-	return isChannelTarget(targetId) ? targetId.slice(1) : null;
-}
-function channelTargetId(name) {
-	return `@${name}`;
-}
-function isChannelName(name) {
-	return typeof name === "string" && CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
-}
-var INTERACTION_ACTIONS = [
-	"toggle",
-	"on",
-	"off"
-];
-var INTERACTION_TRIGGERS = [
-	"hover",
-	"click",
-	"appear",
-	"scrolled",
-	"change",
-	"load"
-];
-var INTERACTION_CLOSE_ON = ["outside", "escape"];
-var INTERACTION_ONCE = ["session", "local"];
-var DEFAULT_SCROLL_AT = 50;
-var SYMMETRIC_TRIGGERS = /* @__PURE__ */ new Set([
-	"hover",
-	"scrolled",
-	"change",
-	"load"
-]);
-function isSymmetricTrigger(trigger) {
-	return SYMMETRIC_TRIGGERS.has(trigger);
-}
-//#endregion
 //#region src/lib/shared/fields.js
 function refIds(entry, fieldName) {
 	const v = entry?.values?.[fieldName];
 	if (Array.isArray(v)) return v;
 	return typeof v === "string" && v ? [v] : [];
 }
-function resolveBinding(collections, collection, entry, path) {
+/**
+* A binding path split from its display FORMAT: `due|date:long` → `due` + `date:long`.
+*
+* The format travels on the `arg` rather than in a separate field because it is
+* part of the address — "this field, rendered this way" — and every reader of
+* `arg` already exists in three renderers. A second node key would have to be
+* carried by `cloneSubtree`, baked by `detach` and resolved along the instance
+* chain, for a string that never means anything without the path beside it.
+*
+* @param {string|undefined} path
+* @returns {{path: string, format: string|null}}
+*/
+function splitFieldFormat(path) {
+	const raw = typeof path === "string" ? path : "";
+	const bar = raw.indexOf("|");
+	if (bar === -1) return {
+		path: raw,
+		format: null
+	};
+	return {
+		path: raw.slice(0, bar).trim(),
+		format: raw.slice(bar + 1).trim() || null
+	};
+}
+/** `Intl.DateTimeFormat` options per named date preset */
+var DATE_PRESETS = {
+	numeric: {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit"
+	},
+	short: {
+		year: "numeric",
+		month: "short",
+		day: "numeric"
+	},
+	medium: {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		weekday: "short"
+	},
+	long: {
+		year: "numeric",
+		month: "long",
+		day: "numeric"
+	},
+	"month-day": {
+		month: "short",
+		day: "numeric"
+	},
+	"month-year": {
+		month: "long",
+		year: "numeric"
+	},
+	time: {
+		hour: "2-digit",
+		minute: "2-digit"
+	},
+	datetime: {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit"
+	}
+};
+/** the date presets an author may name, for a refusal that lists them */
+var DATE_FORMATS = Object.keys(DATE_PRESETS);
+/**
+* Whether a `|format` suffix is one this renderer understands, given the field.
+*
+* Validated at WRITE time so an unknown format is a refusal rather than a page
+* that renders a raw ISO string, which is what "no value formatting of any
+* kind" cost: a prototype grew a `due-label` text field on two collections
+* purely to hold the words a date already contains.
+*/
+function fieldFormatError(format, field) {
+	if (!format) return null;
+	const type = field?.type ?? "text";
+	if (format === "label") {
+		if (type !== "select") return `'|label' reads a choice's label, so it only works on a select field — '${field?.name}' is a ${type}`;
+		return null;
+	}
+	if (format.startsWith("date:")) {
+		const preset = format.slice(5);
+		if (type !== "date") return `'|date:' formats a date field — '${field?.name}' is a ${type}`;
+		if (!DATE_PRESETS[preset]) return `'${preset}' is not a date format — one of ${DATE_FORMATS.join(", ")}`;
+		return null;
+	}
+	return `'|${format}' is not a format — use '|label' on a select, or '|date:<${DATE_FORMATS[0]}…>' on a date`;
+}
+/**
+* One field value rendered for a reader: a date as words, a choice as its
+* label. Shared by both Vue renderers, the exporter and the state runtime, so
+* the canvas, Play and the published page cannot disagree about a date.
+*
+* Falls back to the raw stored value whenever the format cannot be applied —
+* an unparseable date, a choice with no label — because a visible wrong date is
+* better than a blank space, and the refusal that would have prevented it
+* already happened at write time.
+*
+* @param {string} value the stored value (always a string)
+* @param {{type?: string, options?: string[], optionLabels?: Record<string,string>}|null} field
+* @param {string|null} format
+* @param {string} [locale]
+*/
+function formatFieldValue(value, field, format, locale) {
+	const raw = value == null ? "" : String(value);
+	if (!format || !raw) return raw;
+	if (format === "label") return field?.optionLabels?.[raw] ?? raw;
+	if (format.startsWith("date:")) {
+		const opts = DATE_PRESETS[format.slice(5)];
+		if (!opts) return raw;
+		const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00Z` : raw);
+		if (Number.isNaN(date.getTime())) return raw;
+		try {
+			return new Intl.DateTimeFormat(locale || "en", {
+				timeZone: "UTC",
+				...opts
+			}).format(date);
+		} catch (e) {
+			return raw;
+		}
+	}
+	return raw;
+}
+/**
+* Resolve a binding path to its field and the entry that holds it.
+*
+* The path may carry a display FORMAT (`due|date:long`), which is stripped here
+* and handed back on the result — so every one of the three renderers resolves
+* the format in the same place it resolves the field, and none of them can
+* render a formatted value against the wrong one.
+*/
+function resolveBinding(collections, collection, entry, rawPath) {
+	const { path, format } = splitFieldFormat(rawPath);
 	if (!collection || !path) return null;
 	const dot = path.indexOf(".");
 	const head = dot === -1 ? path : path.slice(0, dot);
@@ -5000,7 +5063,8 @@ function resolveBinding(collections, collection, entry, path) {
 	if (tail === null) return {
 		collection,
 		field,
-		entry: entry ?? null
+		entry: entry ?? null,
+		format
 	};
 	if (field.type !== "reference" || tail.includes(".")) return null;
 	const refCollection = collections.find((c) => c.id === field.refCollectionId) ?? null;
@@ -5010,7 +5074,8 @@ function resolveBinding(collections, collection, entry, path) {
 	return {
 		collection: refCollection,
 		field: refField,
-		entry: typeof id === "string" && refCollection.entries.find((e) => e.id === id) || null
+		entry: typeof id === "string" && refCollection.entries.find((e) => e.id === id) || null,
+		format
 	};
 }
 function mediaUrls(entry, fieldName) {
@@ -5114,6 +5179,180 @@ function resolveListScope(collections, scopeCollection, scopeEntry, arg, pages) 
 		collection: target,
 		entries: refIds(scopeEntry, arg).map((id) => target.entries.find((e) => e.id === id)).filter(Boolean)
 	};
+}
+/** a custom-property name a field may be bound to: `--` then lowercase ident */
+var CSS_VAR_RE = /^--[a-z][a-z0-9-]*$/;
+/** whether a `fieldAttrs` key is a well-formed CSS-variable binding */
+function isCssVarBinding(name) {
+	const n = String(name).toLowerCase().trim();
+	return n.startsWith("style:") && CSS_VAR_RE.test(n.slice(6));
+}
+/**
+* An AGGREGATE binding: a leaf that renders a number computed over a list
+* rather than a field of one entry.
+*
+* Spelled on the `arg`, as `@count:task` / `@sum:task.points`, because it is an
+* address like any other binding and because it then inherits `listQuery`
+* wholesale — the same `filters`, `pick`, `excludeCurrent` and `limit` a
+* `collection-list` uses. A column header that says "3" is therefore the same
+* query as the column it labels, and the actions engine re-runs both.
+*
+* The `@` prefix is already reserved by the lexer (`@pages`, `@item`), so this
+* can never collide with a field someone actually named "count".
+*
+* @param {string|undefined} arg
+* @returns {{op: string, source: string, field: string|null}|null}
+*/
+function parseAggregate(arg) {
+	const raw = typeof arg === "string" ? arg : "";
+	const m = /^@(count|sum|avg|min|max):(.+)$/.exec(raw);
+	if (!m) return null;
+	const op = m[1];
+	const rest = m[2];
+	if (op === "count") return {
+		op,
+		source: rest,
+		field: null
+	};
+	const dot = rest.lastIndexOf(".");
+	if (dot <= 0 || dot === rest.length - 1) return null;
+	return {
+		op,
+		source: rest.slice(0, dot),
+		field: rest.slice(dot + 1)
+	};
+}
+/** the aggregate ops an author may name, for a refusal that lists them */
+var AGGREGATE_OPS = [
+	"count",
+	"sum",
+	"avg",
+	"min",
+	"max"
+];
+/**
+* Compute one aggregate over already-filtered entries.
+*
+* Every value is a string, so a numeric op parses as it goes and ignores what
+* cannot be a number — a half-filled `points` field makes a sum of the rest
+* rather than NaN, which is the only answer that renders.
+*
+* @param {{values?: Record<string, unknown>}[]} entries
+* @param {string} op
+* @param {string|null} field
+* @returns {string}
+*/
+function aggregateValue(entries, op, field) {
+	const list = entries ?? [];
+	if (op === "count") return String(list.length);
+	if (!field) return "";
+	const numbers = [];
+	for (const entry of list) {
+		const raw = entry?.values?.[field];
+		const n = Number(Array.isArray(raw) ? NaN : raw);
+		if (Number.isFinite(n)) numbers.push(n);
+	}
+	if (!numbers.length) return op === "sum" ? "0" : "";
+	if (op === "sum") return String(numbers.reduce((a, b) => a + b, 0));
+	if (op === "avg") {
+		const mean = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+		return String(Math.round(mean * 100) / 100);
+	}
+	if (op === "min") return String(Math.min(...numbers));
+	if (op === "max") return String(Math.max(...numbers));
+	return "";
+}
+/**
+* Why an aggregate binding cannot resolve, named at write time.
+* @param {{op: string, source: string, field: string|null}} agg
+* @param {{collections?: any[], scopeCollection?: any}} at
+*/
+function aggregateError(agg, at) {
+	const collections = at.collections ?? [];
+	const named = collections.find((c) => c.name === agg.source);
+	const scopeField = at.scopeCollection?.fields?.find((f) => f.name === agg.source);
+	const viaRef = scopeField?.type === "multi-reference" ? collections.find((c) => c.id === scopeField.refCollectionId) : null;
+	const target = agg.source === "@pages" ? null : named ?? viaRef;
+	if (agg.source !== "@pages" && !target) return `'@${agg.op}:${agg.source}' names no collection "${agg.source}" and no multi-reference field of the entry in scope (collections: ${collections.map((c) => c.name).join(", ")})`;
+	if (agg.field) {
+		const field = (target?.fields ?? []).find((f) => f.name === agg.field);
+		if (!field) return `'@${agg.op}' has no field "${agg.field}" on "${target?.name ?? agg.source}"`;
+		if (field.type !== "number") return `'@${agg.op}' adds up numbers — "${agg.field}" is a ${field.type} field`;
+	}
+	return null;
+}
+//#endregion
+//#region src/lib/shared/interactionKeys.js
+/**
+* The key interaction STATE is held under: one boolean per (interaction, target)
+* within a scope, so any number of triggers drive the same effect.
+* @param {string} interactionId
+* @param {string} targetId the node the classes land on (never null — callers
+*   resolve `binding.targetId ?? ownerId` first)
+* @param {string} [scope] component instance + collection-list repeat isolation
+* @returns {string}
+*/
+function interactionStateKey(interactionId, targetId, scope) {
+	const base = `${interactionId}:${targetId}`;
+	return scope ? `${base}@${scope}` : base;
+}
+/**
+* The key an exclusive GROUP is tracked under. Deliberately scoped to the
+* component INSTANCE only and never to the collection-list repeat: "one
+* accordion open at a time" has to hold ACROSS the repeats of one list (that is
+* the whole point), while two instances of the same component stay independent.
+* @param {string} group author-chosen group name
+* @param {string} [instanceScope] the component instance part of the scope only
+* @returns {string}
+*/
+function interactionGroupKey(group, instanceScope) {
+	return instanceScope ? `${group}@${instanceScope}` : group;
+}
+var CHANNEL_NAME_RE = /^[a-z][a-z0-9-]{0,39}$/;
+var RESERVED_CHANNEL_NAMES = /* @__PURE__ */ new Set(["item", "locale"]);
+/**
+* Is this `targetId` a channel rather than a node id?
+* @param {string|null|undefined} targetId
+* @returns {boolean}
+*/
+function isChannelTarget(targetId) {
+	if (typeof targetId !== "string" || targetId[0] !== "@") return false;
+	const name = targetId.slice(1);
+	return CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
+}
+function channelName(targetId) {
+	return isChannelTarget(targetId) ? targetId.slice(1) : null;
+}
+function channelTargetId(name) {
+	return `@${name}`;
+}
+function isChannelName(name) {
+	return typeof name === "string" && CHANNEL_NAME_RE.test(name) && !RESERVED_CHANNEL_NAMES.has(name);
+}
+var INTERACTION_ACTIONS = [
+	"toggle",
+	"on",
+	"off"
+];
+var INTERACTION_TRIGGERS = [
+	"hover",
+	"click",
+	"appear",
+	"scrolled",
+	"change",
+	"load"
+];
+var INTERACTION_CLOSE_ON = ["outside", "escape"];
+var INTERACTION_ONCE = ["session", "local"];
+var DEFAULT_SCROLL_AT = 50;
+var SYMMETRIC_TRIGGERS = /* @__PURE__ */ new Set([
+	"hover",
+	"scrolled",
+	"change",
+	"load"
+]);
+function isSymmetricTrigger(trigger) {
+	return SYMMETRIC_TRIGGERS.has(trigger);
 }
 //#endregion
 //#region src/lib/shared/colorMode.js
@@ -5257,10 +5496,28 @@ function validateTree(root, ctx) {
 			const known = (name) => !!resolveBinding(collections, scopeCollection, null, name);
 			const names = (scopeCollection.fields ?? []).map((f) => f.name);
 			const hint = names.length ? ` (fields here: ${names.join(", ")})` : "";
-			if (node.arg && !SCOPE_TYPES.has(node.type) && !known(node.arg)) diags.push({
+			const agg = node.arg ? parseAggregate(node.arg) : null;
+			if (agg) {
+				const why = aggregateError(agg, {
+					collections,
+					scopeCollection
+				});
+				if (why) diags.push({
+					nodeId: node.id,
+					message: why
+				});
+			} else if (node.arg && !SCOPE_TYPES.has(node.type) && !known(node.arg)) diags.push({
 				nodeId: node.id,
 				message: `'${node.arg}' is not a field of ${where}, so this element renders empty${hint}`
 			});
+			else if (node.arg && !SCOPE_TYPES.has(node.type)) {
+				const bound = resolveBinding(collections, scopeCollection, null, node.arg);
+				const why = bound ? fieldFormatError(bound.format ?? null, bound.field) : null;
+				if (why) diags.push({
+					nodeId: node.id,
+					message: why
+				});
+			}
 			for (const [attr, field] of Object.entries(node.fieldAttrs ?? {})) if (field && !known(field)) diags.push({
 				nodeId: node.id,
 				message: `the '${attr}' attribute is bound to '${field}', which is not a field of ${where} — it renders as the static value, or empty${hint}`
@@ -5349,6 +5606,18 @@ function clearBindingsToIds(host, gone) {
 }
 //#endregion
 //#region src/lib/html/apply.ts
+/**
+* Attributes that mean "this was meant to be an ELEMENT", not words.
+*
+* A leaf's interior is never tokenized, so markup written inside one is
+* captured as text and run through `sanitizeRich` — which keeps no attribute
+* but `href` and drops any tag outside its subset, `<span>` included. A
+* `<p>` holding three `<span data-field>` therefore came back as one rich
+* string with every binding gone: the write reported success, the read-back
+* looked plausible, and three fields rendered nothing. Named here so it is a
+* refusal instead.
+*/
+var STRUCTURAL_IN_TEXT = /\s(data-field|data-ref|data-id|data-type|data-bind-[a-z-]+)\s*=/i;
 var NEAR_MISS_BINDINGS = /* @__PURE__ */ new Set([
 	"data-source",
 	"data-collection",
@@ -5409,6 +5678,9 @@ function applyHtml(root, parsed, opts) {
 		message
 	});
 	const reportedClasses = /* @__PURE__ */ new Set();
+	/** distinct classes the Style panel models no control for, with where each
+	*  was first seen — summarized into ONE warning at the end of the write */
+	const unmodelledSeen = [];
 	const name = (node) => node.ref ? `${node.type}#${node.ref}` : node.type;
 	const under = (parent, node) => `${parent} > ${name(node)}`;
 	const addressable = [root];
@@ -5462,6 +5734,12 @@ function applyHtml(root, parsed, opts) {
 	for (const id of before) if (!after.has(id)) gone.add(id);
 	result.removed = gone.size;
 	clearBindingsToIds(host, gone);
+	if (unmodelledSeen.length) {
+		const shown = unmodelledSeen.slice(0, 12);
+		const list = shown.map(({ token }) => `'${token}'`).join(", ");
+		const more = unmodelledSeen.length - shown.length;
+		warn(unmodelledSeen[0].path, `${unmodelledSeen.length} class${unmodelledSeen.length === 1 ? "" : "es"} ${unmodelledSeen.length === 1 ? "is" : "are"} kept and will render, but the Style panel has no control for ${unmodelledSeen.length === 1 ? "it" : "them"}: ${list}` + (more > 0 ? ` (+${more} more)` : "") + ". A human cannot adjust these from the panel — only by rewriting the markup.");
+	}
 	result.diagnostics = validateTree(root, opts.validate ?? contextFromProject(project));
 	return result;
 	function bare(type) {
@@ -5571,7 +5849,9 @@ function applyHtml(root, parsed, opts) {
 		}
 		const fill = (instance, master, written, at, owner) => {
 			if (written.length !== master.length) {
-				refuse(at, `<${owner}> has ${master.length} part${master.length === 1 ? "" : "s"} here and ${written.length} ${written.length === 1 ? "was" : "were"} written. Write <${owner} /> to leave its parts alone, or change the component itself with update_component.`);
+				const shape = master.map((m) => `<${m.type === "icon" ? "svg" : m.type}>`).join(" ");
+				const wrote = written.map((w) => `<${w.tag}>`).join(" ") || "nothing";
+				refuse(at, `<${owner}> has ${master.length} part${master.length === 1 ? "" : "s"} at this level — ${shape} — and ${written.length} ${written.length === 1 ? "was" : "were"} written (${wrote}). Markup must MIRROR the component's structure, level by level, which is not the flat list \`get_page\` returns as \`parts\` (that list is for edit_elements {ref, part}). Read the page back to copy the shape, write <${owner} /> to leave its parts alone, edit the parts one at a time with edit_elements {ref: "…", part: "…"}, or change the component itself with update_component.`);
 				return;
 			}
 			written.forEach((child, i) => {
@@ -5584,7 +5864,7 @@ function applyHtml(root, parsed, opts) {
 					return;
 				}
 				if (!sameType(target.type, child.type)) {
-					refuse(childPath, `part ${i + 1} of <${owner}> is a <${target.type}>, not a <${child.tag}>`);
+					refuse(childPath, `part ${i + 1} of <${owner}> is a <${target.type === "icon" ? "svg" : target.type}>, not a <${child.tag}> — parts are matched by POSITION, so they cannot be reordered or skipped. Read the page back for the exact shape, or address this one on its own with edit_elements {ref: "…", part: "…"}.`);
 					return;
 				}
 				fillPart(target, child, owner, childPath);
@@ -5802,10 +6082,13 @@ function applyHtml(root, parsed, opts) {
 	}
 	function setClasses(node, value, path) {
 		const tokens = value.split(/\s+/).filter(Boolean);
-		const unmodelled = tokens.filter((t) => !isValidClass(t) && !reportedClasses.has(t));
-		if (unmodelled.length) {
-			for (const t of unmodelled) reportedClasses.add(t);
-			warn(path, `${unmodelled.map((t) => `'${t}'`).join(", ")} ${unmodelled.length === 1 ? "is" : "are"} kept, but the Style panel has no control for ${unmodelled.length === 1 ? "it" : "them"}`);
+		for (const t of tokens) {
+			if (isValidClass(t) || reportedClasses.has(t)) continue;
+			reportedClasses.add(t);
+			unmodelledSeen.push({
+				token: t,
+				path
+			});
 		}
 		assign(node, "classes", tokens.join(" "));
 	}
@@ -5828,8 +6111,8 @@ function applyHtml(root, parsed, opts) {
 			refuse(path, "an instance wrapper emits no element, so an attribute has nowhere to land");
 			return;
 		}
-		if (!isAllowedAttribute(attr)) {
-			refuse(path, `'${attr}' is not an allowed attribute, so it can't be bound to a field`);
+		if (!isCssVarBinding(attr) && !isAllowedAttribute(attr)) {
+			refuse(path, `'${attr}' is not an allowed attribute, so it can't be bound to a field` + (attr.startsWith("style") ? ". For a measurement, bind a CSS variable: data-bind-style:--p=\"progress\", then size the element with a class like w-[calc(var(--p)*1%)]." : ""));
 			return;
 		}
 		const next = { ...node.fieldAttrs ?? {} };
@@ -5845,6 +6128,11 @@ function applyHtml(root, parsed, opts) {
 	}
 	function setContent(node, parsed, path) {
 		const raw = parsed.text ?? "";
+		const structural = STRUCTURAL_IN_TEXT.exec(raw);
+		if (structural) {
+			refuse(path, `<${parsed.tag}> carries text, so the markup inside it is read as WORDS — the '${structural[1]}' on an element in there would be dropped along with its tag (rich text keeps no attribute but 'href'). Put those elements in a container instead: make this a <div> and give it one child per value, or bind <${parsed.tag} data-field="…"> itself if it is the whole of the text.`);
+			return;
+		}
 		const text = node.type === "custom-code" ? raw.includes("<") ? raw : decodeEntities(raw) : isRich(raw) ? sanitizeRich(raw) : decodeEntities(raw);
 		if (!isLeafElement(node.type) && text.trim()) {
 			refuse(path, `<${parsed.tag}> is a container — its words go in a child element`);
@@ -6402,6 +6690,119 @@ function buildScopeRoots(trees) {
 }
 function isEntryScopeRoot(node) {
 	return node.type === "collection-list" || node.type === "slider" && !!node.arg;
+}
+//#endregion
+//#region src/lib/shared/state.js
+/** every op an action can run. `create`/`delete` take no field. */
+var STATE_OPS = [
+	"set",
+	"toggle",
+	"increment",
+	"create",
+	"delete"
+];
+/** the sentinel meaning "the entry in scope where the binding sits" */
+var CURRENT_ENTRY = "@current";
+/**
+* The collection whose entry is in scope at a node — what `"@current"` means
+* there, and the collection an action's `field` has to belong to.
+*
+* Resolved by walking DOWN from the page body and remembering the nearest
+* entry-scope root above the node (`shared/entryScope.js` decides what counts
+* as one), falling back to the template page's own collection. That is the same
+* walk a renderer makes, which is the point: a refusal computed any other way
+* would refuse writes that render perfectly well, and accept ones that do not.
+*
+* @param {{collections?: any[], pages?: any[]}} project
+* @param {{elements?: any[], collectionId?: string}} page
+* @param {string} nodeId
+* @returns {{collection: any, root: any}|null}
+*/
+function scopeCollectionFor(project, page, nodeId) {
+	const collections = project?.collections ?? [];
+	let found = null;
+	const walk = (nodes, scope) => {
+		for (const node of nodes ?? []) {
+			if (found) return;
+			if (node.id === nodeId) {
+				found = scope;
+				return;
+			}
+			let next = scope;
+			if (node.type === "collection-list" || node.type === "slider" && node.arg) {
+				const named = collections.find((c) => c.name === node.arg);
+				if (named) next = {
+					collection: named,
+					root: node
+				};
+				else if (scope?.collection) {
+					const field = scope.collection.fields?.find((f) => f.name === node.arg);
+					const target = field?.type === "multi-reference" ? collections.find((c) => c.id === field.refCollectionId) : null;
+					next = target ? {
+						collection: target,
+						root: node
+					} : next;
+				}
+			} else if (node.type === "collection-item" && node.arg) {
+				const named = collections.find((c) => c.name === node.arg);
+				if (named) next = {
+					collection: named,
+					root: node
+				};
+			}
+			walk(node.children, next);
+		}
+	};
+	const own = page?.collectionId ? collections.find((c) => c.id === page.collectionId) : null;
+	walk(page?.elements ?? [], own ? {
+		collection: own,
+		root: null
+	} : null);
+	return found;
+}
+/**
+* Why an action binding cannot land, named so the message carries its own fix.
+*
+* Every refusal this engine has is raised HERE, at bind time, rather than in
+* the browser: a published page whose button silently does nothing is the one
+* outcome the interaction engine already learned to refuse, and it cost two
+* releases to find each time. The runtime's own ops are deliberately
+* forgiving for the same reason — by the time they run, this has passed.
+*
+* @param {{trigger?: string, ops?: any[]}} bind
+* @param {{collection?: any, collections?: any[], triggers: string[]}} at
+* @returns {string|null}
+*/
+function actionBindingError(bind, at) {
+	if (!at.triggers.includes(bind?.trigger)) return `trigger must be one of ${at.triggers.join(", ")}`;
+	const ops = bind?.ops;
+	if (!Array.isArray(ops) || !ops.length) return "an action needs at least one op — see get_guide {section: \"state\"}";
+	for (const op of ops) {
+		const kind = op?.op;
+		if (!STATE_OPS.includes(kind)) return `unknown op "${kind}" — one of ${STATE_OPS.join(", ")}`;
+		if (kind === "create") {
+			const target = (at.collections ?? []).find((c) => c.name === op.collection);
+			if (!target) return `create refused: no collection named "${op.collection}" (use list_collections)`;
+			if (!op.from && !op.values) return `create refused: it would make an empty "${op.collection}" entry. Give it \`values\`, or \`from: "<draft name>"\` naming a container you set \`draft\` on, whose inputs supply them.`;
+			const unknown = Object.keys(op.values ?? {}).find((name) => !target.fields?.some((f) => f.name === name));
+			if (unknown) return `create refused: "${op.collection}" has no field "${unknown}"`;
+			continue;
+		}
+		if (kind === "delete") continue;
+		if (!op.field) return `${kind} refused: it needs a \`field\``;
+		if (kind === "set" && typeof op.value !== "string") return "set refused: `value` must be a string — every entry value is one (\"12\", \"true\")";
+		if (!op.entry && !at.collection) return `${kind} refused: there is no entry in scope here, so "@current" resolves to nothing. Bind this inside a collection-list row or on a collection template page, or name an entry with \`entry: "<id>"\`.`;
+		const collection = op.entry ? null : at.collection;
+		if (collection && !collection.fields?.some((f) => f.name === op.field)) return `${kind} refused: "${collection.name}" has no field "${op.field}" (get_collection {collectionId: "${collection.id}"} lists them)`;
+		const field = collection?.fields?.find((f) => f.name === op.field);
+		if (field && kind === "toggle" && field.type !== "boolean") return `toggle refused: "${op.field}" is a ${field.type} field — toggle flips a boolean`;
+		if (field && kind === "increment" && field.type !== "number") return `increment refused: "${op.field}" is a ${field.type} field — increment adds to a number`;
+		if (field && kind === "set" && field.type === "select") {
+			const options = field.options ?? [];
+			if (options.length && !options.includes(op.value)) return `set refused: "${op.value}" is not an option of "${op.field}" (${options.join(", ")}). A page matches on the VALUE, so an unknown one styles as nothing.`;
+		}
+	}
+	return null;
 }
 //#endregion
 //#region src/lib/shared/locales.js
@@ -7493,4 +7894,4 @@ function routeChannelCounts(trees, instanceMap) {
 	return counts;
 }
 //#endregion
-export { APPEAR_MODES, BUILTIN_LIST_SOURCES, CHANNEL_NAME_RE, COLOR_MODE_ACTIONS, COLOR_MODE_DEFAULTS, DEFAULT_SCROLL_AT, EASINGS, EASING_KEYS, ELEMENTS, ELIDED_DATA_URL, FONT_FORMATS, HEX_RE, INTERACTION_ACTIONS, INTERACTION_CLOSE_ON, INTERACTION_ONCE, INTERACTION_TRIGGERS, MAX_DEPTH, MAX_INPUT, MAX_SVG_BYTES, MOTION_PROPS, RESERVED_FIELD_NAMES, RESERVED_TOKEN_NAMES, SAFE_HREF, SAFE_SRC, SCHEMA_VERSION, SCROLL_LERP_MAX, SCROLL_LERP_MIN, SLIDER_DEFAULTS, STYLE_SECTIONS, TOKEN_NAME_RE, TRANSITION_DEFAULTS, TRANSITION_PRESET_IDS, VARIANT_NAME_RE, addVariantAxis, addVariantOption, adoptStructure, alignMirrors, alignStructure, applyClass, applyHtml, buildChannelIndex, buildInstanceMap, buildScopeRoots, canNest, channelListeners, channelName, channelTargetId, cloneForMaster, collectFormFields, collectionRouteBase, compileAnimation, componentReaches, componentUsage, contextFromProject, countLocaleSeo, countTargetError, createBody, createNode, createPage, createProject, customSchemaError, deepClone, defaultBreakpoints, defaultColorMode, defaultSettings, deleteComponent, dependencyOrder, describeMigration, detachInstance, duplicateComponent, effectiveClasses, entryRoutePath, fieldNameError, fieldValueError, findNode, findParent, fontError, fontFormatForUrl, formConfigError, formEnabled, formName, hasAncestorOfType, hasDetailRoutes, inheritedInstanceValue, interactionGroupKey, interactionStateKey, isAbsoluteTarget, isAllowedAttribute, isChannelName, isChannelTarget, isComponentType, isEmittableToken, isEntryScopeRoot, isInstancePart, isInstanceWrapper, isKnownElement, isLeafElement, isLocalizableAttribute, isNodeHidden, isReservedToken, isRich, isStateClass, isSymmetricTrigger, isThemeLink, isThemeValue, isTranslatableType, isValidClass, isValidToken, lucideNameOf, lucideSvg, masterToHtml, matchClass, mergeAttributeLayers, mergeClassLayers, migrateProject, nestedComponentNames, nodesByShortId, normalizeComponentName, normalizeRedirectPath, normalizeRedirectTarget, pageToHtml, parseHtml, pickedKeys, purgeLocaleSeo, pushMasterStructure, redirectError, removeVariantAxis, removeVariantOption, renameComponent, renameVariantAxis, renameVariantOption, resolveInstanceValue, resolveNodeAttributes, resolvePicks, resolveRedirects, resolveSliderConfig, routeChannelCounts, sameLayerProperty, sameProperty, sameType, sanitizeAttributes, sanitizeInlineSvg, sanitizeRich, setComponentCategory, setComponentMeta, setInstancePick, setNodeHidden, setStyleTokens, setVariantAxes, setVariantClasses, setVariantDefault, shortIds, sliderLabelAttributes, slugify, stripExtractedInstanceState, tagForType, themeLinkAction, tokenError, typeForTag, typeOptionsFor, validateAnimation, validateBinding, validateMotionSettings, validateSliderConfig, validateTree, variantKey, walkNodes };
+export { AGGREGATE_OPS, APPEAR_MODES, BUILTIN_LIST_SOURCES, CHANNEL_NAME_RE, COLOR_MODE_ACTIONS, COLOR_MODE_DEFAULTS, CURRENT_ENTRY, DATE_FORMATS, DEFAULT_SCROLL_AT, EASINGS, EASING_KEYS, ELEMENTS, ELIDED_DATA_URL, FONT_FORMATS, HEX_RE, INTERACTION_ACTIONS, INTERACTION_CLOSE_ON, INTERACTION_ONCE, INTERACTION_TRIGGERS, MAX_DEPTH, MAX_INPUT, MAX_SVG_BYTES, MOTION_PROPS, RESERVED_FIELD_NAMES, RESERVED_TOKEN_NAMES, SAFE_HREF, SAFE_SRC, SCHEMA_VERSION, SCROLL_LERP_MAX, SCROLL_LERP_MIN, SLIDER_DEFAULTS, STATE_OPS, STYLE_SECTIONS, TOKEN_NAME_RE, TRANSITION_DEFAULTS, TRANSITION_PRESET_IDS, VARIANT_NAME_RE, actionBindingError, addVariantAxis, addVariantOption, adoptStructure, aggregateError, aggregateValue, alignMirrors, alignStructure, applyClass, applyHtml, buildChannelIndex, buildInstanceMap, buildScopeRoots, canNest, channelListeners, channelName, channelTargetId, cloneForMaster, collectFormFields, collectionRouteBase, compileAnimation, componentReaches, componentUsage, contextFromProject, countLocaleSeo, countTargetError, createBody, createNode, createPage, createProject, customSchemaError, deepClone, defaultBreakpoints, defaultColorMode, defaultSettings, deleteComponent, dependencyOrder, describeMigration, detachInstance, duplicateComponent, effectiveClasses, entryRoutePath, fieldFormatError, fieldNameError, fieldValueError, findNode, findParent, fontError, fontFormatForUrl, formConfigError, formEnabled, formName, formatFieldValue, hasAncestorOfType, hasDetailRoutes, inheritedInstanceValue, interactionGroupKey, interactionStateKey, isAbsoluteTarget, isAllowedAttribute, isChannelName, isChannelTarget, isComponentType, isCssVarBinding, isEmittableToken, isEntryScopeRoot, isInstancePart, isInstanceWrapper, isKnownElement, isLeafElement, isLocalizableAttribute, isNodeHidden, isReservedToken, isRich, isStateClass, isSymmetricTrigger, isThemeLink, isThemeValue, isTranslatableType, isValidClass, isValidToken, lucideNameOf, lucideSvg, masterToHtml, matchClass, mergeAttributeLayers, mergeClassLayers, migrateProject, nestedComponentNames, nodesByShortId, normalizeComponentName, normalizeRedirectPath, normalizeRedirectTarget, pageToHtml, parseAggregate, parseHtml, pickedKeys, purgeLocaleSeo, pushMasterStructure, redirectError, removeVariantAxis, removeVariantOption, renameComponent, renameVariantAxis, renameVariantOption, resolveInstanceValue, resolveNodeAttributes, resolvePicks, resolveRedirects, resolveSliderConfig, routeChannelCounts, sameLayerProperty, sameProperty, sameType, sanitizeAttributes, sanitizeInlineSvg, sanitizeRich, scopeCollectionFor, setComponentCategory, setComponentMeta, setInstancePick, setNodeHidden, setStyleTokens, setVariantAxes, setVariantClasses, setVariantDefault, shortIds, sliderLabelAttributes, slugify, splitFieldFormat, stripExtractedInstanceState, tagForType, themeLinkAction, tokenError, typeForTag, typeOptionsFor, validateAnimation, validateBinding, validateMotionSettings, validateSliderConfig, validateTree, variantKey, walkNodes };

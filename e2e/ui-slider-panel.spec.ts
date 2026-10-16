@@ -98,12 +98,35 @@ async function writeSlider(page: Page) {
   for (let i = 0; i < 3; i++) {
     await sliderRow.click()
     await insertFromDock(page, 'div')
-    // the new div is the selection, so this lands inside it — and gives the
-    // slide some height, without which the track measures zero
+    // the new div is the selection, so this lands inside it
     await insertFromDock(page, 'h2')
   }
   // the canvas renders from the parsed tree, so this proves the structure took
   await expect(page.locator('[data-sl-track]').first()).toBeVisible({ timeout: 15_000 })
+
+  // Give each slide real WORDS, which is what gives it height.
+  //
+  // An element's `defaultContent` ("Lorem ipsum") is a Build-canvas
+  // placeholder and publishes nothing, so a heading nobody typed into exports
+  // as `<h2></h2>` — three zero-height slides, a track that measures zero and
+  // an arrow no click can reach. This used to pass on the placeholder alone,
+  // which is exactly the bug: the published page said "Lorem ipsum" three
+  // times and nothing in the editor suggested it would.
+  // scoped to ONE frame: the canvas renders the page once per breakpoint, so
+  // an unscoped selector matches three slides per frame
+  const headings = page
+    .locator('[data-node-id]:has(> [data-sl-track])')
+    .first()
+    .locator('h2')
+  await expect(headings).toHaveCount(3)
+  for (let i = 0; i < 3; i++) {
+    await headings.nth(i).dispatchEvent('dblclick')
+    const editing = page.locator('span[contenteditable]')
+    await expect(editing).toBeFocused()
+    await page.keyboard.press('ControlOrMeta+A')
+    await page.keyboard.type(`Slide ${i + 1}`)
+    await page.keyboard.press('Enter')
+  }
 }
 
 test('author a slider, configure it in the Data panel, and publish it', async ({ page }) => {

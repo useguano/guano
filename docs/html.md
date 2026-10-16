@@ -68,3 +68,15 @@ Over the tree, reporting `{nodeId, message}`: a duplicate ref, a ref inside an i
 The grammar half of the old `validateDocument` — indentation, unclosed blocks, leaf-vs-container form, invalid tokens — cannot happen in a tree and is gone.
 
 `LayersPane`'s issues footer is where a human sees these and selects the offending node.
+
+## Structural markup inside a LEAF is refused, not absorbed
+
+`STRUCTURAL_IN_TEXT` in `apply.ts`.
+
+A leaf's interior is never tokenized, so markup written inside one is captured as text and run through `sanitizeRich` — which keeps no attribute but `href` and drops any tag outside its subset, `<span>` included. A `<p>` holding three `<span data-field>` therefore came back as ONE rich string with every binding gone: the write reported success, the read-back looked plausible, and three fields rendered nothing.
+
+The write is now refused by name when the interior carries `data-field`, `data-ref`, `data-id`, `data-type` or a `data-bind-*` — the attributes that mean "this was meant to be an element" — and the message names both ways out: put them in a container, or bind the leaf itself. Ordinary rich text (`<strong>`, `<a>`, `<em>`) is unaffected.
+
+## Unmodelled classes are ONE warning per write
+
+`unmodelledSeen` in `apply.ts`. A class the Style panel models no control for is kept and renders, and that is worth saying once — but one warning per distinct class meant a page using twenty stacked variants answered every write with twenty lines of vocabulary note, which buried the warning that mattered. The summary lists up to twelve tokens with the first path each was seen at. Coverage: `e2e/render-placeholders.spec.ts`.

@@ -5,6 +5,7 @@ import { findNode, walkNodes } from '../tree'
 import { buildInstanceMap, canNest, isInstanceWrapper, type InstanceMapping } from '../instances'
 import { isValidClass } from '../styles'
 import { isAllowedAttribute, sanitizeAttributes } from '../shared/attributes.js'
+import { isCssVarBinding } from '../shared/fields.js'
 import { isRich, sanitizeRich } from '../shared/richtext.js'
 import { SAFE_SRC } from '../shared/urls.js'
 import { isChannelName } from '../shared/interactionKeys.js'
@@ -19,6 +20,19 @@ import { decodeEntities, type ParsedNode } from './parse'
 import { nodesByShortId } from './ids'
 import { ELIDED_DATA_URL } from './serialize'
 import { impliedAttrs, isLeafType, sameType, SLOT_FILL_TYPE, SOURCE_TYPES } from './tags'
+
+/**
+ * Attributes that mean "this was meant to be an ELEMENT", not words.
+ *
+ * A leaf's interior is never tokenized, so markup written inside one is
+ * captured as text and run through `sanitizeRich` — which keeps no attribute
+ * but `href` and drops any tag outside its subset, `<span>` included. A
+ * `<p>` holding three `<span data-field>` therefore came back as one rich
+ * string with every binding gone: the write reported success, the read-back
+ * looked plausible, and three fields rendered nothing. Named here so it is a
+ * refusal instead.
+ */
+const STRUCTURAL_IN_TEXT = /\s(data-field|data-ref|data-id|data-type|data-bind-[a-z-]+)\s*=/i
 
 export interface Refusal {
   path: string
@@ -133,6 +147,9 @@ export function applyHtml(
   const warn = (path: string, message: string) => result.warnings.push({ path, message })
 
   const reportedClasses = new Set<string>()
+  /** distinct classes the Style panel models no control for, with where each
+   *  was first seen — summarized into ONE warning at the end of the write */
+  const unmodelledSeen: { token: string; path: string }[] = []
 
   const name = (node: ElementNode) => (node.ref ? `${node.type}#${node.ref}` : node.type)
   const under = (parent: string, node: ElementNode) => `${parent} > ${name(node)}`
@@ -208,6 +225,20 @@ export function applyHtml(
   for (const id of before) if (!after.has(id)) gone.add(id)
   result.removed = gone.size
   clearBindingsToIds(host, gone)
+
+  if (unmodelledSeen.length) {
+    const shown = unmodelledSeen.slice(0, 12)
+    const list = shown.map(({ token }) => `'${token}'`).join(', ')
+    const more = unmodelledSeen.length - shown.length
+    warn(
+      unmodelledSeen[0]!.path,
+      `${unmodelledSeen.length} class${unmodelledSeen.length === 1 ? '' : 'es'} ` +
+        `${unmodelledSeen.length === 1 ? 'is' : 'are'} kept and will render, but the Style ` +
+        `panel has no control for ${unmodelledSeen.length === 1 ? 'it' : 'them'}: ${list}` +
+        (more > 0 ? ` (+${more} more)` : '') +
+        '. A human cannot adjust these from the panel — only by rewriting the markup.',
+    )
+  }
 
   result.diagnostics = validateTree(root, opts.validate ?? contextFromProject(project))
   return result
@@ -347,11 +378,25 @@ export function applyHtml(
       owner: string,
     ) => {
       if (written.length !== master.length) {
+        // NAME the shape. "has 1 part here and 2 were written" is true and
+        // undiscoverable: the one part is usually a wrapping <div>, and
+        // `get_page`'s `parts` list is deliberately FLAT (it exists to be
+        // addressed by {ref, part}), so an agent reading `parts: [icon, span]`
+        // writes those two side by side and takes a count complaint about a
+        // level it was never told existed.
+        const shape = master
+          .map((m) => `<${m.type === 'icon' ? 'svg' : m.type}>`)
+          .join(' ')
+        const wrote = written.map((w) => `<${w.tag}>`).join(' ') || 'nothing'
         refuse(
           at,
-          `<${owner}> has ${master.length} part${master.length === 1 ? '' : 's'} here and ` +
-            `${written.length} ${written.length === 1 ? 'was' : 'were'} written. Write ` +
-            `<${owner} /> to leave its parts alone, or change the component itself with ` +
+          `<${owner}> has ${master.length} part${master.length === 1 ? '' : 's'} at this level — ` +
+            `${shape} — and ${written.length} ${written.length === 1 ? 'was' : 'were'} written ` +
+            `(${wrote}). Markup must MIRROR the component's structure, level by level, which is ` +
+            `not the flat list \`get_page\` returns as \`parts\` (that list is for ` +
+            `edit_elements {ref, part}). Read the page back to copy the shape, write ` +
+            `<${owner} /> to leave its parts alone, edit the parts one at a time with ` +
+            `edit_elements {ref: "…", part: "…"}, or change the component itself with ` +
             'update_component.',
         )
         return
@@ -372,7 +417,10 @@ export function applyHtml(
         if (!sameType(target.type, child.type)) {
           refuse(
             childPath,
-            `part ${i + 1} of <${owner}> is a <${target.type}>, not a <${child.tag}>`,
+            `part ${i + 1} of <${owner}> is a <${target.type === 'icon' ? 'svg' : target.type}>, ` +
+              `not a <${child.tag}> — parts are matched by POSITION, so they cannot be ` +
+              `reordered or skipped. Read the page back for the exact shape, or address this ` +
+              `one on its own with edit_elements {ref: "…", part: "…"}.`,
           )
           return
         }
@@ -749,15 +797,18 @@ export function applyHtml(
 
   function setClasses(node: ElementNode, value: string, path: string) {
     const tokens = value.split(/\s+/).filter(Boolean)
-    const unmodelled = tokens.filter((t) => !isValidClass(t) && !reportedClasses.has(t))
-    if (unmodelled.length) {
-      for (const t of unmodelled) reportedClasses.add(t)
-      warn(
-        path,
-        `${unmodelled.map((t) => `'${t}'`).join(', ')} ` +
-          `${unmodelled.length === 1 ? 'is' : 'are'} kept, but the Style panel has no control ` +
-          `for ${unmodelled.length === 1 ? 'it' : 'them'}`,
-      )
+    // Collected, not warned per element.
+    //
+    // One warning per distinct class meant a page using twenty stacked
+    // variants (`dark:…-950` and friends) answered every write with twenty
+    // lines of vocabulary note — which buried the one warning that mattered.
+    // This is a complaint about the Style panel's coverage, not about a
+    // position in the tree, so it is reported ONCE with the first place each
+    // token was seen.
+    for (const t of tokens) {
+      if (isValidClass(t) || reportedClasses.has(t)) continue
+      reportedClasses.add(t)
+      unmodelledSeen.push({ token: t, path })
     }
     assign(node, 'classes', tokens.join(' '))
   }
@@ -784,8 +835,18 @@ export function applyHtml(
       refuse(path, 'an instance wrapper emits no element, so an attribute has nowhere to land')
       return
     }
-    if (!isAllowedAttribute(attr)) {
-      refuse(path, `'${attr}' is not an allowed attribute, so it can't be bound to a field`)
+    // `style:--x` is a CSS custom property, not an attribute: it merges into
+    // the style the renderer owns, which is the one way a NUMBER can reach a
+    // style at all (a `data-[…]:` variant has to know its value in advance).
+    if (!isCssVarBinding(attr) && !isAllowedAttribute(attr)) {
+      refuse(
+        path,
+        `'${attr}' is not an allowed attribute, so it can't be bound to a field` +
+          (attr.startsWith('style')
+            ? ". For a measurement, bind a CSS variable: data-bind-style:--p=\"progress\", then " +
+              'size the element with a class like w-[calc(var(--p)*1%)].'
+            : ''),
+      )
       return
     }
     const next = { ...(node.fieldAttrs ?? {}) }
@@ -803,6 +864,18 @@ export function applyHtml(
 
   function setContent(node: ElementNode, parsed: ParsedNode, path: string) {
     const raw = parsed.text ?? ''
+    const structural = STRUCTURAL_IN_TEXT.exec(raw)
+    if (structural) {
+      refuse(
+        path,
+        `<${parsed.tag}> carries text, so the markup inside it is read as WORDS — the ` +
+          `'${structural[1]}' on an element in there would be dropped along with its tag ` +
+          `(rich text keeps no attribute but 'href'). Put those elements in a container ` +
+          `instead: make this a <div> and give it one child per value, or bind <${parsed.tag} ` +
+          `data-field="…"> itself if it is the whole of the text.`,
+      )
+      return
+    }
     const text =
       node.type === 'custom-code'
         ? raw.includes('<')

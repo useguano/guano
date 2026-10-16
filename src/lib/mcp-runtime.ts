@@ -128,6 +128,23 @@ export {
 } from './shared/attributes.js'
 
 export { buildScopeRoots, isEntryScopeRoot } from './shared/entryScope.js'
+export {
+  actionBindingError,
+  scopeCollectionFor,
+  STATE_OPS,
+  CURRENT_ENTRY,
+} from './shared/state.js'
+export {
+  isCssVarBinding,
+  splitFieldFormat,
+  fieldFormatError,
+  formatFieldValue,
+  DATE_FORMATS,
+  parseAggregate,
+  aggregateError,
+  aggregateValue,
+  AGGREGATE_OPS,
+} from './shared/fields.js'
 
 export { purgeLocaleSeo, countLocaleSeo } from './shared/locales.js'
 
