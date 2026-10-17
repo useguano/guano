@@ -286,12 +286,20 @@ Each site needs its **own port**, or whichever one starts first answers for
 both — and the other's token is then refused with a 401 that looks exactly
 like a revoked token. `npm create @useguano` picks a free port per project and
 writes it to `.env`; a server with no `PORT` set otherwise reclaims whatever
-port it used last. `guano connect` writes **one `mcpServers` entry per
-project** (`guano-<slug>`), so connecting a second site never disconnects the
-first, and it records which project the entry belongs to — if another instance
-is holding the port, `guano mcp` says which project answered instead of
-failing silently. Run `npm run connect` again in a project whose port has
-changed.
+port it used last. `guano connect` writes **one `mcpServers` entry for all of
+them**, carrying a map of projects — so connecting a second site never
+disconnects the first, and Claude does not start a process (and an alert) per
+project you are not running. Each project in the map records its own instance
+id, so if another instance is holding the port, `guano mcp` says which project
+answered instead of failing silently. Run `npm run connect` again in a project
+whose port has changed.
+
+A project that is deleted, rebuilt or renamed leaves its entry behind, and
+enough stale entries make every tool call fail with *no configured project is
+running*. `guano disconnect --list` shows every entry with a live verdict,
+`guano disconnect` removes the one for the folder you are in, and
+`guano disconnect --stale` removes the ones whose address answers but is
+provably not them. Quit Claude Desktop first — it rewrites its config on quit.
 
 ## Backup
 

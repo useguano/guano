@@ -49,6 +49,16 @@ Usage:
                          --url https://host --token guano_… connects a REMOTE
                          instance (a VPS): make the token in its editor under
                          My account → API tokens
+  guano disconnect       remove a project from Claude's MCP config — this
+                         folder's by default, or \`guano disconnect <slug>\`.
+                         --list shows every configured project with a live
+                         verdict (live / stale / down); --stale removes the
+                         ones whose address answers but is provably not them
+                         (a rebuilt or renamed project leaves an entry behind,
+                         and enough of those make every tool call fail with
+                         "no configured project is running"). Quit Claude
+                         Desktop first, same as connect. The project itself is
+                         untouched — \`guano connect\` puts it back
   guano mcp              run the MCP server (stdio) for AI agents
   guano --version
 
@@ -131,6 +141,16 @@ switch (cmd) {
   }
   case 'connect': {
     const { main } = await import(pathToFileURL(join(ROOT, 'mcp', 'connect.mjs')).href)
+    try {
+      await main(rest)
+    } catch (e) {
+      console.error(`✗ ${e.message}`)
+      process.exit(1)
+    }
+    break
+  }
+  case 'disconnect': {
+    const { main } = await import(pathToFileURL(join(ROOT, 'mcp', 'disconnect.mjs')).href)
     try {
       await main(rest)
     } catch (e) {

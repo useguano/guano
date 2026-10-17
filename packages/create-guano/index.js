@@ -243,6 +243,13 @@ if (connect) {
       const dataDir = join(target, 'data')
       await mkdir(dataDir, { recursive: true, mode: 0o700 })
       process.env.GUANO_DATA_DIR = dataDir
+      // The port we just picked and wrote into .env. `bin/guano.js` loads that
+      // file for a CLI `guano connect`, but this call imports connect directly
+      // — so without this it saw no PORT, fell back to the 4174 default and
+      // baked `http://localhost:4174` into the entry of a project whose .env
+      // says 4180. Every scaffolded project claimed one address, and whichever
+      // one held it answered for all of them.
+      process.env.PORT = String(port)
       const { main } = await import(pathToFileURL(join(pkgDir, 'mcp', 'connect.mjs')).href)
       const connectArgs = [...policyFlags, '--offline', '--yes']
       if (opt('--config')) connectArgs.push('--config', resolve(opt('--config')))
@@ -267,5 +274,5 @@ rl?.close()
 console.log(`
 Next:
   cd ${dir}${installed || !install ? '' : '\n  npm install'}
-  npm run dev   → http://localhost:4174/admin  (create your admin account)
+  npm run dev   → http://localhost:${port}/admin  (create your admin account)
 ${connected ? '\nThen open Claude — guano is connected; the agent token is bound to the admin you create.\n' : ''}`)

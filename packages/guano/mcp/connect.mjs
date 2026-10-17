@@ -65,7 +65,7 @@ function claudeConfigPath() {
  * means Claude Code has never run here and there is nothing to connect:
  * writing a stub would be inventing another tool's private state.
  */
-function clientTargets(explicit) {
+export function clientTargets(explicit) {
   if (explicit)
     return [{ label: explicit, path: resolve(explicit), needsQuit: false, stdio: false, always: true }]
   return [
@@ -74,7 +74,7 @@ function clientTargets(explicit) {
   ]
 }
 
-function claudeDesktopRunning() {
+export function claudeDesktopRunning() {
   try {
     if (process.platform === 'darwin') {
       execFileSync('pgrep', ['-x', 'Claude'], { stdio: 'ignore' })
@@ -193,7 +193,7 @@ const onOff = (v) => (v ? 'on' : 'off')
  * So: an explicit GUANO_DATA_DIR wins, then whichever candidate actually
  * exists, and only then the packaged default.
  */
-async function resolveDataDir() {
+export async function resolveDataDir() {
   if (process.env.GUANO_DATA_DIR) return resolve(process.env.GUANO_DATA_DIR)
   const candidates = [join(process.cwd(), 'data'), join(process.cwd(), 'server', 'data')]
   for (const dir of candidates) {
@@ -223,7 +223,7 @@ async function resolveDataDir() {
  * address for a dir that has no record yet — a `--offline` connect before the
  * server has ever started.
  */
-async function readIdentity(candidate, dataDir) {
+export async function readIdentity(candidate, dataDir) {
   let file = null
   try {
     const parsed = JSON.parse(await readFile(join(dataDir, 'instance.json'), 'utf8'))
@@ -247,6 +247,47 @@ async function readIdentity(candidate, dataDir) {
   }
   // no record at all: nothing to compare, so claim nothing about identity
   return { id: '', port: null, base: candidate, strayPort: false }
+}
+
+/**
+ * Mint this data dir's instance.json if it has none yet, so `readIdentity`
+ * above has something to read.
+ *
+ * It is `boot()`'s own `ensureInstance`, and it is idempotent, so the server
+ * adopts whatever is already on disk at its first start — the id is the same
+ * either way, it just exists EARLIER.
+ *
+ * Without this, a data dir that has never booted had no id, `readIdentity`
+ * reached its "claim nothing about identity" branch and the client entry was
+ * written with NO instance id. That is every project `npm create @useguano`
+ * connects, because it connects before the server has ever run: the router
+ * then falls back to the token test against whatever holds the port, and the
+ * day the entry's token goes stale the answer is a plain 401, reported as
+ * "no configured project is running" while /api/health answers 200 ok.
+ *
+ * `port` goes in for the same reason — it is this project's address, known
+ * here from PORT (the scaffolder's .env) and otherwise not knowable until the
+ * server listens. Never overwritten: the live server records the port it
+ * actually got, and that one is the truth.
+ */
+async function ensureLocalIdentity(dataDir) {
+  try {
+    await mkdir(dataDir, { recursive: true, mode: 0o700 })
+    // these read DATA_DIR from util.mjs, which main() has pinned to this dir
+    const { ensureInstance, updateInstance } = await import(
+      pathToFileURL(join(ROOT, 'server', 'instance.mjs')).href
+    )
+    const record = await ensureInstance()
+    const port = Number(process.env.PORT)
+    if (!record.port && Number.isInteger(port) && port > 0 && port < 65536) {
+      return await updateInstance({ port })
+    }
+    return record
+  } catch {
+    // Identity is a nicety here, not the job: a read-only or unusual data dir
+    // must still get a token and an entry, exactly as it did before.
+    return null
+  }
 }
 
 /** /api/health, or null when nothing answers (or it predates instance ids) */
@@ -293,7 +334,7 @@ function projectFolder(dataDir) {
  * process, one toolset, one tool list, and nothing to fail for a project that
  * is simply not up.
  */
-const ENTRY_KEY = 'guano'
+export const ENTRY_KEY = 'guano'
 
 function projectSlug(projectName, dataDir) {
   const raw = projectName?.trim() || projectFolder(dataDir)
@@ -563,6 +604,9 @@ export async function main(args = [], opts = {}) {
   const pinned = remote
     ? remoteUrl
     : process.env.GUANO_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : '')
+  // Give this data dir an id BEFORE reading its identity, or a project that
+  // has never booted gets an entry with none — see ensureLocalIdentity.
+  if (dataDir) await ensureLocalIdentity(dataDir)
   const identity = remote
     ? await remoteIdentity(remoteUrl.replace(/\/+$/, ''))
     : await readIdentity((pinned || 'http://localhost:4174').replace(/\/+$/, ''), dataDir)

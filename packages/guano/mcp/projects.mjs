@@ -78,6 +78,79 @@ export function parseProjects(raw) {
   return { projects, ...(dropped.length ? { dropped } : {}) }
 }
 
+const short = (id) => (id.length > 8 ? `${id.slice(0, 8)}…` : id)
+
+/**
+ * Does the instance on this address accept this project's token?
+ *
+ * The identity test when either side carries no instance id. "A missing id is
+ * never a mismatch" is right for an old SERVER and wrong for an old ENTRY:
+ * every entry written before ids existed says :4174, because that was the
+ * only default there was, so each one matched whatever project held that port
+ * and five dead projects all read as running at one address — the ambiguity
+ * the map exists to end, manufactured by the fold.
+ *
+ * A token is minted into ONE data dir, so an instance that ACCEPTS it is that
+ * project, as surely as the id says so. Only a plain 401 is a no. A PENDING
+ * token is this instance's token already (the scaffolder mints one before the
+ * admin exists, and the first admin binds it), and anything else — 403, a 404
+ * from an older build, a 5xx — is not an answer about identity and must not
+ * exclude a project that is plainly up.
+ */
+async function tokenAccepted(api) {
+  if (!api.token) return false
+  try {
+    await api.whoami()
+    return true
+  } catch (e) {
+    return !(e?.status === 401 && !e?.needsSetup)
+  }
+}
+
+/**
+ * Is the instance at this entry's address the project the entry names?
+ *
+ * Returns `{ok, answered, why, instance}`, not a bare boolean, because the two
+ * ways of failing need different advice and the refusal used to give one. A
+ * project that is simply not up is fixed by `guano dev`. A project whose
+ * ADDRESS answers but whose identity does not check out is a STALE ENTRY, and
+ * telling its owner to start a server they are already running is how an
+ * afternoon goes: /api/health answers 200 ok, every tool call answers "no
+ * configured project is running", and nothing reconciles the two.
+ *
+ * Shared, because `guano disconnect --stale` decides what to delete on exactly
+ * this question and two implementations of it would eventually disagree about
+ * which entries are dead.
+ */
+export async function identifyEntry(p, api = createApi({ base: p.url, token: p.token, instance: p.instance })) {
+  const h = await api.health()
+  const got = h && typeof h.instance === 'string' ? h.instance : ''
+  const answered = !!h
+  if (!answered) return { ok: false, answered: false, why: 'nothing is listening there', instance: '' }
+  const want = p.instance
+  // Both sides know an id: compare them, which costs no extra request.
+  // Either side does not: ask the token instead of waving it through.
+  if (want && got) {
+    return got === want
+      ? { ok: true, answered: true, why: '', instance: got }
+      : {
+          ok: false,
+          answered: true,
+          why: `a different project holds ${p.url} (instance ${short(got)}, expected ${short(want)})`,
+          instance: got,
+        }
+  }
+  if (await tokenAccepted(api)) return { ok: true, answered: true, why: '', instance: got }
+  return {
+    ok: false,
+    answered: true,
+    why:
+      `${p.url} answered${got ? ` as instance ${short(got)}` : ''} but refused this entry's token, ` +
+      'and the entry carries no instance id to check against — it is stale',
+    instance: got,
+  }
+}
+
 /**
  * The router. Holds one `createApi` client per mapped project and resolves
  * which is live; `current()` is what the toolset's api wrapper dispatches to.
@@ -102,46 +175,15 @@ export function createProjectRouter({
   }
 
   /**
-   * Does the instance on this address accept this project's token?
-   *
-   * The identity test when either side carries no instance id. "A missing id
-   * is never a mismatch" is right for an old SERVER and wrong for an old
-   * ENTRY: every entry written before ids existed says :4174, because that was
-   * the only default there was, so each one matched whatever project held that
-   * port and five dead projects all read as running at one address — the
-   * ambiguity the map exists to end, manufactured by the fold.
-   *
-   * A token is minted into ONE data dir, so an instance that ACCEPTS it is
-   * that project, as surely as the id says so. Only a plain 401 is a no. A
-   * PENDING token is this instance's token already (the scaffolder mints one
-   * before the admin exists, and the first admin binds it), and anything else
-   * — 403, a 404 from an older build, a 5xx — is not an answer about identity
-   * and must not exclude a project that is plainly up.
+   * Does this project answer, and is it the project we were connected to?
+   * `identifyEntry` is the shared implementation — see its comment.
    */
-  async function tokenAccepted(api) {
-    if (!api.token) return false
-    try {
-      await api.whoami()
-      return true
-    } catch (e) {
-      return !(e?.status === 401 && !e?.needsSetup)
-    }
-  }
-
-  /** does this project answer, and is it the project we were connected to? */
-  async function reachable(slug) {
+  async function probeProject(slug) {
     const cached = probes.get(slug)
-    if (cached && now() - cached.at < PROBE_TTL_MS) return cached.ok
-    const api = clientFor(slug)
-    const h = await api.health()
-    const want = projects[slug].instance
-    const got = h && typeof h.instance === 'string' ? h.instance : ''
-    let ok = !!h
-    // Both sides know an id: compare them, which costs no extra request.
-    // Either side does not: ask the token instead of waving it through.
-    if (ok) ok = want && got ? got === want : await tokenAccepted(api)
-    probes.set(slug, { at: now(), ok })
-    return ok
+    if (cached && now() - cached.at < PROBE_TTL_MS) return cached
+    const probe = { at: now(), ...(await identifyEntry(projects[slug], clientFor(slug))) }
+    probes.set(slug, probe)
+    return probe
   }
 
   /**
@@ -168,13 +210,31 @@ export function createProjectRouter({
       return { slug: slugs[0], sole: true }
     }
     const up = []
-    for (const slug of slugs) if (await reachable(slug)) up.push(slug)
+    // the ones whose ADDRESS answered but whose identity did not check out —
+    // a server IS running, so "start one" is the wrong thing to be told
+    const stale = []
+    for (const slug of slugs) {
+      const probe = await probeProject(slug)
+      if (probe.ok) up.push(slug)
+      else if (probe.answered) stale.push(`${slug} — ${probe.why}`)
+    }
     if (up.length === 1) {
       active = up[0]
       return { slug: up[0], sole: true }
     }
     active = null
     if (!up.length) {
+      if (stale.length) {
+        return {
+          error:
+            'a Guano server is running, but it is not any of the configured projects:\n  ' +
+            stale.join('\n  ') +
+            '\nReconnect the project you are working on: quit Claude (it rewrites its config on ' +
+            'quit), run `guano connect` in that project\'s folder, then reopen Claude. ' +
+            '`guano disconnect --stale` clears entries that can no longer work.',
+          candidates: slugs,
+        }
+      }
       return {
         error:
           `none of the configured projects is running (${slugs.join(', ')}). Start one with ` +

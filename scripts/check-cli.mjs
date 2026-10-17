@@ -68,7 +68,17 @@ try {
   fail(`guano --help failed:\n${String(e.stderr || e.message).trim()}`)
 }
 if (help) {
-  for (const needle of ['Usage:', 'guano dev', 'guano mcp', 'guano connect', '`npm create @useguano`', '`guano connect`']) {
+  for (const needle of [
+    'Usage:',
+    'guano dev',
+    'guano mcp',
+    'guano connect',
+    // the way out of a config full of dead projects — undiscoverable if it
+    // stops being listed, and a hand-edit is what it exists to replace
+    'guano disconnect',
+    '`npm create @useguano`',
+    '`guano connect`',
+  ]) {
     if (!help.includes(needle)) fail(`guano --help no longer mentions ${needle}`)
   }
   if (help.includes('\\`')) fail('guano --help prints literal \\` — a backtick escape leaked into the output')
