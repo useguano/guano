@@ -39,6 +39,12 @@ execSync('npm run build:motion', { cwd: REPO, stdio: 'inherit' })
 console.log('prepack: building the slider runtime…')
 execSync('npm run build:slider', { cwd: REPO, stdio: 'inherit' })
 
+// the published site's client-state runtime — same deal again. Every committed
+// runtime is rebuilt HERE rather than trusted from the working tree, so a
+// tarball can never carry an artifact older than the source it was built from.
+console.log('prepack: building the state runtime…')
+execSync('npm run build:state', { cwd: REPO, stdio: 'inherit' })
+
 for (const dir of ['dist', 'server', 'src']) {
   await rm(join(PKG, dir), { recursive: true, force: true })
 }
