@@ -120,14 +120,55 @@ if (Object.keys(lib).length || siteFx) {
   }
 
   const targets = new Map<string, HTMLElement[]>()
-  const wired = Array.from(document.querySelectorAll<HTMLElement>(`[${FX_ATTR}]`))
-  wired.forEach((el) => {
-    for (const key of els[+(el.getAttribute(FX_ATTR) || -1)]?.a ?? []) {
-      const list = targets.get(key) || []
-      list.push(el)
-      targets.set(key, list)
+  /** every element indexed so far, so a re-run of the priming pass covers a
+   *  row that became the target of a binding wired long before it existed */
+  const indexed: HTMLElement[] = []
+  /** stagger children that have been handed a frame — the test for a row the
+   *  reconciler has just built */
+  const staggerWritten = new WeakSet<HTMLElement>()
+  /**
+   * Every element the manifest has something to say about, collected
+   * INCREMENTALLY: a row the state runtime builds from a `<template>` is a new
+   * DOM node wearing an old `data-fx`, so indexed once at boot its trigger is
+   * never wired and the first frame baked into the template is never cleared —
+   * a created card arrived invisible and stayed that way. `seen` is what keeps
+   * a rescan from wiring an element twice. The class-toggle runtime
+   * (`server/site-runtime.js`) learned this first; this is the same index on
+   * the timeline side.
+   */
+  const seen = new WeakSet<HTMLElement>()
+  const collect = (root: ParentNode): HTMLElement[] => {
+    const found: HTMLElement[] = []
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>(`[${FX_ATTR}]`))) {
+      if (seen.has(el) || !els[+(el.getAttribute(FX_ATTR) || -1)]) continue
+      seen.add(el)
+      found.push(el)
     }
-  })
+    return found
+  }
+  /** a row that was removed must not keep driving a play, and must not hold a
+   *  slot in the target list a later row's play key is an index into */
+  const prune = () => {
+    targets.forEach((list, key) => {
+      const live = list.filter((el) => el.isConnected)
+      if (live.length !== list.length) targets.set(key, live)
+    })
+    plays.forEach((play, key) => {
+      if (!play.el.isConnected) plays.delete(key)
+    })
+  }
+  const index = (fresh: HTMLElement[]) => {
+    fresh.forEach((el) => {
+      indexed.push(el)
+      for (const key of els[+(el.getAttribute(FX_ATTR) || -1)]?.a ?? []) {
+        const list = targets.get(key) || []
+        list.push(el)
+        targets.set(key, list)
+      }
+    })
+  }
+  const wired = collect(document)
+  index(wired)
 
   const authored = new WeakMap<HTMLElement, string>()
   const countTo = (el: HTMLElement, c: Compiled): SampleOptions['to'] => {
@@ -135,10 +176,79 @@ if (Object.keys(lib).length || siteFx) {
     return countToFor(c, authored.get(el)!)
   }
 
-  const staggerTargets = (el: HTMLElement, selector: string): HTMLElement[] =>
-    selector
-      ? (Array.from(el.querySelectorAll(selector)) as HTMLElement[])
-      : (Array.from(el.children) as HTMLElement[])
+  /**
+   * The elements a staggered step cascades over, which have to be the SAME
+   * elements the exporter baked the first frame onto (it bakes per NODE, from
+   * the tree) or a child is left wearing a frame nothing ever plays — the
+   * failure is a card permanently invisible, not merely a flash.
+   *
+   * The tree's children and the DOM's are not the same list, so three shapes
+   * are resolved here:
+   *
+   * - A **layout-transparent wrapper** is stepped through. A row with a link
+   *   is emitted inside `<a class="contents">` and a bare component root wears
+   *   `contents` too, so the DOM child is a wrapper whose `opacity` and
+   *   `transform` do NOTHING (`display: contents` generates no box) while the
+   *   exporter's baked `opacity: 0` sat on the element inside it. A grid of
+   *   linked cards with a staggered entrance never appeared at all.
+   * - A **slider**'s children are its track and its chrome; the cascade is
+   *   over the SLIDES, whose contents are what the exporter baked.
+   * - A stateful list's **chrome** — the row `<template>` and the wrapped
+   *   empty state — is not a row. Counted in, the first two slots of every
+   *   cascade went to elements nobody can see, so a four-card column started
+   *   160ms late and the baked frames and the runtime's indices disagreed.
+   *
+   * A `staggerSelector` is the author's own answer and is used verbatim.
+   */
+  const transparent = (el: HTMLElement): boolean => {
+    if (el.classList.contains('contents')) return true
+    try {
+      return getComputedStyle(el).display === 'contents'
+    } catch {
+      return false
+    }
+  }
+
+  const flatten = (els: HTMLElement[]): HTMLElement[] => {
+    const out: HTMLElement[] = []
+    for (const el of els) {
+      if (transparent(el)) out.push(...flatten(Array.from(el.children) as HTMLElement[]))
+      else out.push(el)
+    }
+    return out
+  }
+
+  /** resolved per parent and reused, because `write` asks once a FRAME and
+   *  stepping through a wrapper costs a style resolution per child. Dropped
+   *  wholesale when the DOM changes under the reconciler (see the rescan). */
+  let staggerCache = new WeakMap<HTMLElement, { selector: string; list: HTMLElement[] }>()
+
+  const staggerTargets = (el: HTMLElement, selector: string): HTMLElement[] => {
+    const hit = staggerCache.get(el)
+    if (hit && hit.selector === selector) return hit.list
+    const list = resolveStaggerTargets(el, selector)
+    staggerCache.set(el, { selector, list })
+    return list
+  }
+
+  const resolveStaggerTargets = (el: HTMLElement, selector: string): HTMLElement[] => {
+    if (selector) return Array.from(el.querySelectorAll(selector)) as HTMLElement[]
+    const kids = Array.from(el.children) as HTMLElement[]
+    const track = kids.find((kid) => kid.hasAttribute('data-sl-track'))
+    if (track) {
+      const slides = (Array.from(track.children) as HTMLElement[]).filter((s) =>
+        s.hasAttribute('data-sl-slide'),
+      )
+      return flatten(slides.flatMap((s) => Array.from(s.children) as HTMLElement[]))
+    }
+    const own = kids.filter(
+      (kid) =>
+        kid.tagName !== 'TEMPLATE' &&
+        !kid.hasAttribute('data-ds-empty') &&
+        !kid.hasAttribute('data-ds-row'),
+    )
+    return flatten(own)
+  }
 
   const playTotal = (el: HTMLElement, c: Compiled, split: Split): number => {
     if (!split.hasStagger) return c.duration
@@ -432,53 +542,68 @@ if (Object.keys(lib).length || siteFx) {
 
   const scrolled: BindingMeta[] = []
 
-  wired.forEach((el) => {
-    for (const meta of metasOf(el)) {
-      if (meta.t === 'load') {
-        start(meta, false, hiddenAtBoot)
-      } else if (meta.t === 'appear') {
-        appearing.push({ meta, el })
-        // no IntersectionObserver (and `new IntersectionObserver` would throw):
-        // the trigger cannot exist, so it degrades to `load` rather than
-        // leaving the element on a primed first frame forever
-        if (hasIO) observerFor(appearAt(meta)).observe(el)
-        else if (!still) {
-          appearOnce.add(meta.k)
+  function wire(fresh: HTMLElement[]) {
+    fresh.forEach((el) => {
+      for (const meta of metasOf(el)) {
+        if (meta.t === 'load') {
           start(meta, false, hiddenAtBoot)
+        } else if (meta.t === 'appear') {
+          appearing.push({ meta, el })
+          // no IntersectionObserver (and `new IntersectionObserver` would throw):
+          // the trigger cannot exist, so it degrades to `load` rather than
+          // leaving the element on a primed first frame forever — under reduced
+          // motion and `?noanim` too, where `start` SETTLES rather than plays.
+          // The baked first frame is in the markup whatever the visitor prefers,
+          // so standing down there left the entrance's `from` — usually
+          // `opacity: 0` — as the final state.
+          if (hasIO) observerFor(appearAt(meta)).observe(el)
+          else {
+            appearOnce.add(meta.k)
+            start(meta, false, hiddenAtBoot)
+          }
+        } else if (meta.t === 'scrub') {
+          scrubs.push({ meta, el })
+        } else if (meta.t === 'mouse') {
+          mice.push({ meta, el })
+        } else if (meta.t === 'scrolled') {
+          scrolled.push(meta)
+        } else if (meta.t === 'change') {
+          const onChange = (event: Event) => {
+            const input = event.target as HTMLInputElement | null
+            if (!input) return
+            const on =
+              input.type === 'checkbox' || input.type === 'radio' ? input.checked : !!input.value
+            if (on) start(meta)
+            else reverseBinding(meta)
+          }
+          el.addEventListener('change', onChange)
+          el.addEventListener('input', onChange)
+        } else if (meta.t === 'hover') {
+          el.addEventListener('mouseenter', () => start(meta))
+          el.addEventListener('mouseleave', () => reverseBinding(meta))
+        } else if (meta.t === 'click') {
+          el.addEventListener('click', () => {
+            if (meta.ac === 'on') return start(meta)
+            if (meta.ac === 'off') return reverseBinding(meta)
+            const play = plays.get(playKey(stateOf(meta), 0))
+            if (play && play.direction === 1) reverseBinding(meta)
+            else start(meta)
+          })
         }
-      } else if (meta.t === 'scrub') {
-        scrubs.push({ meta, el })
-      } else if (meta.t === 'mouse') {
-        mice.push({ meta, el })
-      } else if (meta.t === 'scrolled') {
-        scrolled.push(meta)
-      } else if (meta.t === 'change') {
-        const onChange = (event: Event) => {
-          const input = event.target as HTMLInputElement | null
-          if (!input) return
-          const on =
-            input.type === 'checkbox' || input.type === 'radio' ? input.checked : !!input.value
-          if (on) start(meta)
-          else reverseBinding(meta)
-        }
-        el.addEventListener('change', onChange)
-        el.addEventListener('input', onChange)
-      } else if (meta.t === 'hover') {
-        el.addEventListener('mouseenter', () => start(meta))
-        el.addEventListener('mouseleave', () => reverseBinding(meta))
-      } else if (meta.t === 'click') {
-        el.addEventListener('click', () => {
-          if (meta.ac === 'on') return start(meta)
-          if (meta.ac === 'off') return reverseBinding(meta)
-          const play = plays.get(playKey(stateOf(meta), 0))
-          if (play && play.direction === 1) reverseBinding(meta)
-          else start(meta)
-        })
       }
-    }
-  })
+    })
+  }
+  wire(wired)
 
-  if (scrolled.length) {
+  // The three continuous/scroll drivers are started on DEMAND rather than at
+  // boot, because `wire` runs again for a row the state runtime builds: a list
+  // that exported EMPTY has none of these bindings at boot and every one of
+  // them in its row template, so a gate read once would leave a created card's
+  // scrub or follow dead.
+  let scrolledStarted = false
+  function ensureScrolled() {
+    if (scrolledStarted || !scrolled.length) return
+    scrolledStarted = true
     const past = new Map<BindingMeta, boolean>()
     const onScroll = () => {
       const y = window.pageYOffset || document.documentElement.scrollTop || 0
@@ -493,13 +618,26 @@ if (Object.keys(lib).length || siteFx) {
     window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
   }
+  ensureScrolled()
 
-  if (!still) {
+  /**
+   * The pre-play frame of every element the manifest knows about, and of every
+   * child a staggered step cascades over.
+   *
+   * Re-runnable, and run again whenever a row is built: it is idempotent for
+   * an element that already wears its frame, and a parent whose timeline has
+   * STARTED is skipped entirely (its `plays` entry owns the frame), which is
+   * what keeps a finished cascade from being primed back to its first frame.
+   * A row that arrives after the cascade is over is handed its END frame by
+   * `adoptStagger` instead.
+   */
+  function primePass() {
+    if (still) return
     // every trigger is primed, not just the entrances: a track's `from` is the
     // value the element holds until that timeline runs, so a hover tweening
     // opacity 0 → 1 sits at 0 until the pointer arrives. Anything that already
     // started during setup is skipped below rather than filtered here.
-    const toPrime = wired.flatMap((el) => metasOf(el).map((meta) => ({ meta, el })))
+    const toPrime = indexed.flatMap((el) => metasOf(el).map((meta) => ({ meta, el })))
     const perElement = new Map<
       HTMLElement,
       {
@@ -538,9 +676,43 @@ if (Object.keys(lib).length || siteFx) {
           staggerTargets(el, split.selector).forEach((kid) => {
             applyStyle(kid, firstChild)
             primedFrames.set(kid, firstChild)
+            staggerWritten.add(kid)
           })
         }
       }
+    })
+  }
+  primePass()
+
+  /**
+   * A row the state runtime built after a cascade has already played. Its
+   * markup is a clone of the row `<template>`, which carries the first frame
+   * the exporter baked — so without this it arrived wearing `opacity: 0` with
+   * nothing left to play it, and a task that changed column vanished.
+   *
+   * One `write` per play hands every child the frame for the play's CURRENT
+   * time, which is the end state for a finished cascade and the right
+   * mid-flight value for one still running — no second code path, and no
+   * cascade restarted under the visitor.
+   */
+  function adoptStagger() {
+    plays.forEach((play) => {
+      if (!play.split.hasStagger) return
+      const kids = staggerTargets(play.el, play.split.selector)
+      let fresh = false
+      for (const kid of kids) {
+        if (staggerWritten.has(kid)) continue
+        staggerWritten.add(kid)
+        fresh = true
+      }
+      if (!fresh) return
+      // the clock is per element (the compiler cannot know the child count),
+      // so one more child makes the cascade longer — and a cascade that has
+      // ALREADY finished has to settle at the new end rather than freeze at
+      // what used to be it, which is now mid-flight
+      play.total = playTotal(play.el, play.compiled, play.split)
+      if (!play.running && play.direction === 1) play.time = play.total
+      write(play)
     })
   }
 
@@ -572,7 +744,10 @@ if (Object.keys(lib).length || siteFx) {
 
   let driveScrub: ((now?: number) => void) | null = null
 
-  if (scrubs.length && !still) {
+  let scrubsStarted = false
+  function ensureScrubs() {
+    if (scrubsStarted || !scrubs.length || still) return
+    scrubsStarted = true
     let pending = false
     let lastT = 0
     const smoothState = new Map<BindingMeta, number>()
@@ -620,6 +795,7 @@ if (Object.keys(lib).length || siteFx) {
     updateScrub()
     driveScrub = updateScrub
   }
+  ensureScrubs()
 
 
   // --- mouse follow: continuous progress like scrub, driven by the pointer ---
@@ -627,7 +803,10 @@ if (Object.keys(lib).length || siteFx) {
   // -n → n, so the middle is where the element sits before the pointer has
   // moved. Priming (above) left it at `from`, i.e. shifted hard to one side,
   // so each binding is held at the centre here and eases away from there.
-  if (mice.length && !still && !coarsePointer) {
+  let miceStarted = false
+  function ensureMice() {
+    if (miceStarted || !mice.length || still || coarsePointer) return
+    miceStarted = true
     const CENTRE = MOUSE_REST
     let pending = false
     let lastT = 0
@@ -694,6 +873,7 @@ if (Object.keys(lib).length || siteFx) {
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
   }
+  ensureMice()
 
   const scrollFx = siteFx && siteFx.s
   if (scrollFx && !still && !coarsePointer) {
@@ -790,6 +970,39 @@ if (Object.keys(lib).length || siteFx) {
       due.push(meta)
     }
     for (const meta of due) start(meta, false, settled)
+  }
+
+  /**
+   * The hook the state runtime calls after it has built, moved or removed a
+   * list row — the same one `server/site-runtime.js` answers for the class
+   * engine, CHAINED rather than assigned so whichever of the two runtimes
+   * loads second does not silently replace the other.
+   *
+   * A built row is a new DOM node wearing an old `data-fx` and the first frame
+   * baked into the row `<template>`: unwired and unprimed, its entrance never
+   * ran and the frame never cleared, so a created card — or one that changed
+   * column — arrived invisible and stayed that way. It runs inside the click
+   * that changed the store, before the frame is painted, which is what keeps
+   * the row from flashing its final state on the way in.
+   */
+  const previousRescan = (window as unknown as Record<string, unknown>).__guanoFxRescan
+  ;(window as unknown as Record<string, unknown>).__guanoFxRescan = function () {
+    if (typeof previousRescan === 'function') (previousRescan as () => void)()
+    staggerCache = new WeakMap()
+    prune()
+    const fresh = collect(document)
+    if (fresh.length) {
+      index(fresh)
+      wire(fresh)
+      ensureScrolled()
+      ensureScrubs()
+      ensureMice()
+    }
+    // unconditionally: a row can be built under a stagger parent that carries
+    // no binding of its own, so there is nothing fresh to collect and its
+    // children are still waiting for a frame
+    primePass()
+    adoptStagger()
   }
 
   if (appearing.length && !still && hasIO) {

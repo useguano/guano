@@ -757,6 +757,7 @@ test.describe('several entrances on one element, and a delayed binding', () => {
 // the animation starts.
 const STAGGER = 'a-stag'
 const STAGGER_SEL = 'a-stag-sel'
+const STAGGER_LATE = 'a-stag-late'
 
 function staggerFixture() {
   const step = (extra: Record<string, unknown> = {}) => ({
@@ -813,6 +814,48 @@ function staggerFixture() {
                 children: kids('sel'),
                 animations: [{ id: 'b-sel', animationId: STAGGER_SEL, trigger: 'load' }],
               }),
+              // the cascade is NOT the first step: the children still have to
+              // hold their frame from the first paint, not from the moment
+              // that step's turn comes up
+              node('late', 'div', {
+                htmlId: 'late',
+                children: kids('late'),
+                animations: [{ id: 'b-late', animationId: STAGGER_LATE, trigger: 'load' }],
+              }),
+              // a LINKED row is emitted inside `<a class="contents">`, which
+              // generates no box: the runtime stepped the cascade over the
+              // anchors, where opacity and transform do nothing, while the
+              // baked frame sat on the element inside — a grid of linked cards
+              // never appeared at all
+              node('lnk', 'div', {
+                htmlId: 'lnk',
+                children: kids('lnk').map((kid) => ({ ...kid, link: '/' })),
+                animations: [{ id: 'b-lnk', animationId: STAGGER, trigger: 'load' }],
+              }),
+              // a slider's own children are its track and its chrome; the
+              // cascade is over the SLIDES, whose contents are what is baked
+              node('sld', 'slider', {
+                htmlId: 'sld',
+                children: kids('sld'),
+                animations: [{ id: 'b-sld', animationId: STAGGER, trigger: 'load' }],
+              }),
+              // an appear cascade that reverses: leaving the viewport has to
+              // put EVERY child back on its first frame, not only the ones
+              // whose delay had already elapsed
+              node('gap', 'div', { htmlId: 'gap', classes: 'h-[300vh]' }),
+              node('rev', 'div', {
+                htmlId: 'rev',
+                children: kids('rev'),
+                animations: [
+                  {
+                    id: 'b-rev',
+                    animationId: STAGGER,
+                    trigger: 'appear',
+                    appearMode: 'reverse',
+                  },
+                ],
+              }),
+              node('gap2', 'div', { htmlId: 'gap2', classes: 'h-[300vh]' }),
             ],
           }),
         ],
@@ -824,6 +867,19 @@ function staggerFixture() {
     animations: [
       { id: STAGGER, name: 'Stagger up', steps: [step()] },
       { id: STAGGER_SEL, name: 'Stagger imgs', steps: [step({ staggerSelector: 'span' })] },
+      {
+        id: STAGGER_LATE,
+        name: 'Container then cascade',
+        steps: [
+          {
+            id: 's0',
+            tracks: [{ prop: 'opacity', from: 0, to: 1 }],
+            duration: 200,
+            easing: 'linear',
+          },
+          step({ id: 's1', offset: -50 }),
+        ],
+      },
     ],
     breakpoints: [{ id: 'md', name: 'Tablet', width: 768 }],
     comments: [],
@@ -875,6 +931,126 @@ test.describe("a staggered step's children", () => {
     }
   })
 
+  test('a cascade that is not the first step is baked all the same', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    const tag = (id: string) => new RegExp(`<div[^>]*id="${id}"[^>]*>`).exec(html)![0]
+    for (const id of ['late-a', 'late-b', 'late-c']) {
+      expect(tag(id)).toMatch(/style="[^"]*opacity:\s*0[;"]/)
+      expect(tag(id)).toMatch(/translateY\(28px\)/)
+    }
+  })
+
+  test('a linked row is baked on the element, and the anchor is stepped through', async ({
+    page,
+  }) => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    // the frame is on the element, never on the `display: contents` anchor
+    expect(/<a[^>]*class="contents"[^>]*style="/.exec(html)).toBeNull()
+    expect(new RegExp(`<div[^>]*id="lnk-a"[^>]*>`).exec(html)![0]).toMatch(/opacity:\s*0[;"]/)
+    // and the runtime finds it through the wrapper, so it lands at 1
+    await page.goto('/')
+    for (const id of ['lnk-a', 'lnk-b', 'lnk-c']) {
+      await expect
+        .poll(() => page.locator(`#${id}`).evaluate((el) => (el as HTMLElement).style.opacity), {
+          timeout: 3000,
+        })
+        .toBe('1')
+    }
+  })
+
+  test("a slider's cascade is over its slides, not its track", async ({ page }) => {
+    await page.goto('/')
+    for (const id of ['sld-a', 'sld-b', 'sld-c']) {
+      await expect
+        .poll(() => page.locator(`#${id}`).evaluate((el) => (el as HTMLElement).style.opacity), {
+          timeout: 3000,
+        })
+        .toBe('1')
+    }
+    // the track is chrome: it is never the thing that fades
+    expect(
+      await page.locator('#sld [data-sl-track]').evaluate((el) => (el as HTMLElement).style.opacity),
+    ).toBe('')
+  })
+
+  test('no child ever paints its final value before its own tween', async ({ page }) => {
+    await page.goto('/')
+    // every frame for a second, over the whole cascade: the later a child sits
+    // in it, the longer the flash used to be — child 1 animated while 2 and 3
+    // still showed their natural (final) state
+    const frames = (await page.evaluate(`new Promise((done) => {
+      const ids = ['hero-a', 'hero-b', 'hero-c', 'lnk-a', 'lnk-b', 'lnk-c']
+      const out = []
+      const t0 = performance.now()
+      const tick = () => {
+        const row = {}
+        for (const id of ids) {
+          const el = document.getElementById(id)
+          row[id] = el ? Number(getComputedStyle(el).opacity) : 1
+        }
+        out.push(row)
+        if (performance.now() - t0 < 1000) requestAnimationFrame(tick)
+        else done(out)
+      }
+      requestAnimationFrame(tick)
+    })`)) as Record<string, number>[]
+    // the cascade is 80ms a child over a 300ms tween, so the first sampled
+    // frame of a later child is its `from` and never its destination
+    for (const id of ['hero-b', 'hero-c', 'lnk-b', 'lnk-c']) {
+      expect(frames[0]![id], `${id} on the first frame`).toBeLessThan(0.1)
+    }
+    // and all of them finish
+    for (const id of Object.keys(frames[0]!)) {
+      expect(frames[frames.length - 1]![id], `${id} at the end`).toBe(1)
+    }
+  })
+
+  test('reduced motion and ?noanim land every child on the END state', async ({ browser }) => {
+    // the baked first frame is in the markup whatever the visitor prefers, so
+    // "nothing is primed" is not enough — it has to be written over
+    const reduced = await browser.newContext({ reducedMotion: 'reduce' })
+    const page = await reduced.newPage()
+    await page.goto('/')
+    await page.waitForTimeout(300)
+    for (const id of ['hero-a', 'hero-c', 'lnk-a', 'lnk-c', 'sld-a', 'sld-c']) {
+      expect(
+        await page.locator(`#${id}`).evaluate((el) => getComputedStyle(el).opacity),
+        `${id} under reduced motion`,
+      ).toBe('1')
+    }
+    await reduced.close()
+    const plain = await browser.newPage()
+    await plain.goto('/?noanim')
+    await plain.waitForTimeout(300)
+    for (const id of ['hero-a', 'hero-c', 'lnk-c']) {
+      expect(
+        await plain.locator(`#${id}`).evaluate((el) => getComputedStyle(el).opacity),
+        `${id} under ?noanim`,
+      ).toBe('1')
+    }
+    await plain.close()
+  })
+
+  test('an appear cascade that reverses puts every child back, not just the early ones', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const opacity = (id: string) =>
+      page.locator(`#${id}`).evaluate((el) => getComputedStyle(el).opacity)
+    await page.locator('#rev').scrollIntoViewIfNeeded()
+    for (const id of ['rev-a', 'rev-b', 'rev-c']) {
+      await expect.poll(() => opacity(id), { timeout: 3000 }).toBe('1')
+    }
+    await page.evaluate('window.scrollTo(0, 0)')
+    for (const id of ['rev-a', 'rev-b', 'rev-c']) {
+      await expect.poll(() => opacity(id), { timeout: 3000 }).toBe('0')
+    }
+    await page.locator('#rev').scrollIntoViewIfNeeded()
+    for (const id of ['rev-a', 'rev-b', 'rev-c']) {
+      await expect.poll(() => opacity(id), { timeout: 3000 }).toBe('1')
+    }
+  })
+
   test('the children come up from the baked frame, never down from the end state', async ({
     page,
   }) => {
@@ -897,5 +1073,184 @@ test.describe("a staggered step's children", () => {
         timeout: 3000,
       })
       .toBe('1')
+  })
+})
+
+// A row the state runtime builds is a CLONE of the row `<template>`, so it
+// arrives wearing the first frame the exporter baked — with the cascade long
+// finished and nothing left to play it. A task that changed column vanished,
+// which is the one failure worse than the flash the baking was for.
+const LIST_STAGGER = 'a-list-stag'
+
+function listFixture() {
+  const column = (status: string, next: string) => ({
+    ...node(`col-${status}`, 'collection-list', {
+      htmlId: `col-${status}`,
+      arg: 'task',
+      listQuery: { filter: { field: 'status', equals: status }, sortField: 'createdAt' },
+      animations: [{ id: `b-${status}`, animationId: LIST_STAGGER, trigger: 'load' }],
+    }),
+    children: [
+      {
+        ...node(`card-${status}`, 'div'),
+        children: [
+          node(`cardt-${status}`, 'span', { arg: 'title' }),
+          {
+            ...node(`adv-${status}`, 'button'),
+            actions: [
+              {
+                id: `a-${status}`,
+                trigger: 'click',
+                ops: [{ op: 'set', field: 'status', value: next }],
+              },
+            ],
+            children: [node(`advt-${status}`, 'span', { content: 'move' })],
+          },
+        ],
+      },
+      {
+        ...node(`empty-${status}`, 'list-empty', { htmlId: `empty-${status}` }),
+        children: [node(`et-${status}`, 'span', { content: 'Nothing' })],
+      },
+    ],
+  })
+  return {
+    schemaVersion: 2,
+    pages: [
+      {
+        id: 'p1',
+        name: 'Board',
+        path: '/',
+        status: 'published',
+        elements: [
+          { ...node('p1-body', 'body'), children: [column('todo', 'doing'), column('doing', 'todo')] },
+        ],
+      },
+      {
+        id: 'p-task',
+        name: 'Task',
+        path: '/task',
+        status: 'published',
+        collectionId: 'c-task',
+        elements: [{ ...node('b-task', 'body'), children: [node('t1', 'span', { arg: 'title' })] }],
+      },
+    ],
+    components: [],
+    collections: [
+      {
+        id: 'c-task',
+        name: 'task',
+        templatePageId: 'p-task',
+        detailRoutes: true,
+        fields: [
+          { id: 'f-title', name: 'title', type: 'text' },
+          { id: 'f-status', name: 'status', type: 'select', options: ['todo', 'doing'] },
+        ],
+        entries: [
+          {
+            id: 'e1',
+            name: 'A',
+            slug: 'a',
+            values: { title: 'Card A', status: 'todo' },
+            status: 'published',
+            createdAt: 1,
+          },
+          {
+            id: 'e2',
+            name: 'B',
+            slug: 'b',
+            values: { title: 'Card B', status: 'todo' },
+            status: 'published',
+            createdAt: 2,
+          },
+        ],
+      },
+    ],
+    interactions: [],
+    animations: [
+      {
+        id: LIST_STAGGER,
+        name: 'Cards in',
+        steps: [
+          {
+            id: 's',
+            tracks: [{ prop: 'opacity', from: 0, to: 1 }],
+            duration: 200,
+            easing: 'linear',
+            stagger: 60,
+          },
+        ],
+      },
+    ],
+    breakpoints: [],
+    comments: [],
+    locales: ['en'],
+    defaultLocale: 'en',
+    settings: {
+      publishing: { method: 'server', github: { repo: '', branch: '' } },
+      seo: { siteName: 'Board', titleTemplate: '%s', description: '' },
+      domain: '',
+      smtp: {},
+      integrations: { stripe: {}, mailing: {} },
+      tokens: [],
+      customCode: { head: '' },
+      fonts: { family: 'sans' },
+    },
+  }
+}
+
+test.describe('a staggered list the state runtime reconciles', () => {
+  test.beforeAll(async () => {
+    await exportSite(listFixture(), SITE)
+  })
+
+  test('the list chrome is not a row, and carries no frame to clear', async () => {
+    const html = await readFile(join(SITE, 'index.html'), 'utf8')
+    // the wrapped empty state is what sits among the rows, so the block inside
+    // it must not be baked: the cascade steps over the wrapper, and that frame
+    // would be the one nothing ever clears
+    expect(/<div[^>]*id="empty-todo"[^>]*style="/.exec(html)).toBeNull()
+    // the row template IS baked — it is where a built row gets its first frame
+    const tpl = /<template data-ds-row>([\s\S]*?)<\/template>/.exec(html)![1]!
+    expect(tpl).toMatch(/opacity:\s*0[;"]/)
+  })
+
+  test('a row the reconciler builds lands visible, not on the baked frame', async ({ page }) => {
+    await page.goto('/?resetstate')
+    const cards = (col: string) =>
+      page.locator(`#${col} > div:not([data-ds-empty])`)
+    await expect
+      .poll(() => cards('col-todo').first().evaluate((el) => getComputedStyle(el).opacity), {
+        timeout: 3000,
+      })
+      .toBe('1')
+    // move Card A into the other column, where it has to be BUILT from the
+    // template: before the runtime adopted it, it arrived at opacity 0 and
+    // stayed there for good
+    await cards('col-todo').first().locator('button').click()
+    const moved = cards('col-doing').first()
+    await expect(moved).toHaveText(/Card A/)
+    expect(await moved.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
+    // and the column it left still shows its other card
+    expect(
+      await cards('col-todo').first().evaluate((el) => getComputedStyle(el).opacity),
+    ).toBe('1')
+  })
+
+  test('the empty state is shown, not left invisible, when the last row leaves', async ({
+    page,
+  }) => {
+    await page.goto('/?resetstate')
+    const todo = page.locator('#col-todo > div:not([data-ds-empty])')
+    await expect
+      .poll(() => todo.count(), { timeout: 3000 })
+      .toBe(2)
+    await todo.first().locator('button').click()
+    await todo.first().locator('button').click()
+    const empty = page.locator('#empty-todo')
+    await expect(empty).toBeVisible()
+    // the block the cascade steps OVER: it was baked at opacity 0 with
+    // nothing to play it, so emptying a column showed an invisible message
+    expect(await empty.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
   })
 })

@@ -772,6 +772,7 @@ function splitFor(animation, ctx) {
  * primed by the runtime.
  */
 function staggerPrimeEntries(node, ctx) {
+  if (ctx.chrome) return []
   const parent = ctx.parents.get(node.id)
   if (!parent) return []
   const entries = []
@@ -1729,7 +1730,15 @@ function renderNode(node, ctx) {
             return template.map((child) => renderNode(child, inner2)).join('')
           })
           .join('')
-    const emptyHtml = emptyState.map((child) => renderNode(child, ctx)).join('')
+    // On a stateful route the block is wrapped and the wrapper is what sits
+    // among the rows, so it is the wrapper the cascade would step over —
+    // `chrome` holds the first frame back from the block inside it, which
+    // nothing would ever clear. On a stateless route the block IS the list's
+    // only child and keeps its frame.
+    const emptyChrome = !!ctx.ds?.on && !!list && !!emptyState.length
+    const emptyHtml = emptyState
+      .map((child) => renderNode(child, emptyChrome ? { ...ctx, chrome: true } : ctx))
+      .join('')
     // On a stateful route the empty block is ALWAYS emitted, inside its own
     // marked wrapper, and merely hidden while there are rows.
     //
@@ -1740,7 +1749,7 @@ function renderNode(node, ctx) {
     // column removed its own empty state. It is hidden by the attribute rather
     // than a class so an author's styling cannot override it, exactly as a
     // form's state blocks are.
-    const stateful = !!ctx.ds?.on && !!list && !!emptyState.length
+    const stateful = emptyChrome
     const dsEmpty = stateful
       ? `<div ${STATE_EMPTY_ATTR}${listEntries.length ? ' hidden' : ''}>${emptyHtml}</div>`
       : ''

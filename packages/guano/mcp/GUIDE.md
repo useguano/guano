@@ -2455,6 +2455,13 @@ step's tracks move the children; tracks in other steps still move the element it
 narrows the cascade to matching descendants (`{stagger: 250, staggerSelector: "img"}`)
 when the things to cascade are nested inside the direct children.
 
+The cascade follows the container's **rows**, not whatever the DOM happens to put there:
+a row with a link, a component instance, a slider's slides and a collection-list's
+repeats all cascade as one item each, and a list's empty-state block is not an item. So
+bind the stagger to the list and leave the rows alone — **per-element bindings with
+hand-written delays are no longer a workaround for anything**, and cost you one binding
+per card to maintain.
+
 Because a staggered step leaves the container itself untouched, a staggered entrance on a
 big grid is fine with `trigger: "load"` and is NOT what `load-animation-moves-layout`
 flags. That warning is about an unstaggered move or scale on a large container, which
@@ -2582,11 +2589,17 @@ Notes that matter:
   appeared" state, so an `appear` animation fires per card as it scrolls in.
 - An entrance with an explicit `from` is baked into the exported HTML as an inline
   first-frame style, so the element never paints its final state before the runtime
-  boots. Staggered CHILDREN are primed by the script instead, so give a cascade a
-  moment before screenshotting on a cold load. **Breakpoint-scoped entrances are
-  never baked** (an inline style has no breakpoint gate — it used to hide the
-  element permanently at every other width); they are script-primed like staggered
-  children, so expect a brief natural-state paint inside their scope.
+  boots — and **a staggered cascade's children are baked too**, each holding its first
+  frame from the first paint until its own turn comes up, so a cold-load screenshot is
+  deterministic for a cascade as well. Two kinds are the exception and are primed by
+  the script instead, which means a brief natural-state paint: a step with a
+  `staggerSelector` (a selector can only be matched in a DOM) and a
+  **breakpoint-scoped** binding (an inline style has no breakpoint gate — it used to
+  hide the element permanently at every other width).
+- A row the page BUILDS from client state — a created entry, or one whose field change
+  moved it into another list — is adopted into the animation that was already playing
+  there: it arrives at the cascade's current state rather than replaying it, and never
+  flashes.
 - A staggered cascade runs past the step's `duration` by `stagger × (children − 1)` —
   the runtime extends the clock per element (the compiler can't know the child
   count), so the last card completes. `list_animations`' `durationMs` reports the

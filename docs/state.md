@@ -69,6 +69,8 @@ Four things it took a bug each to get right:
 
 A built row is a new DOM node wearing an old `data-fx`, so `site-runtime.js` grew a `window.__guanoFxRescan` hook and its element index became INCREMENTAL. Built once at load, a created row's trigger was never wired and its class list never recomputed: the row came back inert while every other row on the page worked. `apply()` runs on every rescan regardless, because a row that MOVED is an element the runtime has already seen and its class list still has to be recomputed against the states now fired. An appear trigger on a BUILT row is wired as already-fired (`wire(list, true)`) — the entrance already played for this list, and replaying it per re-render would flash every card on every write.
 
+**Both motion runtimes answer that hook now.** `src/motion/runtime.ts` chains onto it rather than assigning, so whichever bundle loads second does not replace the other, and a built row gets its timelines re-indexed and its stagger frame adopted — without it, a row cloned from a `<template>` that carries a baked entrance frame arrived at `opacity: 0` with the cascade long finished and nothing left to play it, so a card that changed column vanished. → `docs/motion.md`
+
 ## Persistence
 
 `settings.state.persist`: `session` (the default), `none`, `local`. One key for the whole site (`guano-ds:v1`), cleared by `?resetstate` along with every remembered `once` state.
