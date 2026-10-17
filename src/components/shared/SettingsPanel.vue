@@ -124,7 +124,7 @@ const NAV = computed(() => {
       label: 'Admin',
       items: [
         { id: 'users', label: 'Users', icon: Users },
-        { id: 'backup', label: 'Backup', icon: Archive },
+        { id: 'snapshots', label: 'Snapshots', icon: Archive },
       ],
     })
   return groups
@@ -2194,7 +2194,7 @@ async function onImportFile(e: Event) {
             <UsersSettings />
           </TabPanelUI>
 
-          <TabPanelUI v-if="isAdmin" class="gap-9" id="backup">
+          <TabPanelUI v-if="isAdmin" class="gap-9" id="snapshots">
             <SettingsGroup
               title="Snapshots"
               description="Restore points of every page, draft, setting and media file."

@@ -65,7 +65,7 @@ package name. To cross a minor (0.1.x → 0.2.0), widen the range yourself with
 Your site is **not** in the package: it lives in `$GUANO_DATA_DIR` (`./data`),
 which npm never touches. Two things to do around an update:
 
-- **Back up `data/` first**, or take a snapshot in Settings → Backup. The
+- **Back up `data/` first**, or take a snapshot in Settings → Snapshots. The
   server brings every project blob up to the current schema at boot, and a
   schema change is one-way.
 - **Publish once afterwards.** What visitors get is the HTML already on disk in

@@ -130,7 +130,7 @@ Three paths are deliberately NOT rewritten, because they are the instance's and 
 
 ## Project package export/import
 
-`GET /api/project-export` / `POST /api/project-import`, **admin-only**. `/api/snapshots` keeps the same package ON the server under `data/backups/<id>.zip` — take, list, download, restore, delete — through the shared `buildPackage` / `applyPackage`, surfaced as Settings → Backup → Snapshots.
+`GET /api/project-export` / `POST /api/project-import`, **admin-only**. `/api/snapshots` keeps the same package ON the server under `data/backups/<id>.zip` — take, list, download, restore, delete — through the shared `buildPackage` / `applyPackage`, surfaced as Settings → Snapshots.
 
 The package is a `.zip` of `store/` + `media/`, never users, sessions, invites, `publish.json` or `site`. Import strict-allowlists every entry, requires a valid `manifest.json` and at least one project blob with pages, then atomically swaps the live `store`/`media` dirs and calls `resetMediaIndexCache()` so imported media is visible without a restart.
 

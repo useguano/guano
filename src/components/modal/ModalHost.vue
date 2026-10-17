@@ -22,7 +22,7 @@ const sizes: Record<Size, string> = {
   sm: 'w-80',
   default: 'w-[28rem]',
   lg: 'w-[40rem]',
-  xl: 'w-[840px] h-[660px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]',
+  xl: 'w-[840px] h-[760px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]',
   full: 'w-[min(92vw,1200px)] h-[88vh]',
 }
 
