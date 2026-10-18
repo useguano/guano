@@ -58,6 +58,10 @@ The files on disk cost an agent nothing, but the tool list is injected into the 
 
 **It measures TWO profiles against that one number**: the external client's list and the editor AI panel's (`docs/mcp.md`, Embedded mode). The panel's is smaller by construction, so measuring only it would let the external one grow unwatched; either going over fails the gate, and the budget is not raised for either.
 
+**The `instructions` size is PRINTED and not budgeted, and the panel's is a chosen number.** An external client injects the instructions on every turn, so its ~18 KB is a per-turn cost and stays small. The panel's is paid once per session — measured, not assumed: the `result` line's `cache_read_input_tokens` came back at 258k and 363k on two consecutive turns (`docs/agent-panel.md`, Startup cost). So the panel's instructions are deliberately larger and may grow again; that is a decision, not drift, and trimming them back to match the external profile would be undoing it.
+
+The `for` parameter on `get_guide` is the worked example of the trim rule: its enum cost ~155 B of schema, and the `get_guide` description was cut to pay for it rather than the budget being moved. Descriptions came out smaller than before the change.
+
 ## `check:cli` — the shipped CLI, the way a user meets it
 
 `scripts/check-cli.mjs`: every module under `packages/`, `server/` and `scripts/` parses, each package's `bin` entry exists and carries a shebang, and `packages/guano/bin/guano.js` is actually INVOKED for `--version` (compared against `package.json`), `--help` (which must still name every subcommand, and must not leak a backtick) and an unknown command (exit 1). `prepack` runs it before any build work, so a tarball whose entry point cannot run is never built.
