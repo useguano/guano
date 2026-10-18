@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml } from './fixtures/mcpSession'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 // E12: `missingTranslatable` counted the `shadowedByAll` masters the guide
 // tells you to SKIP, so the counter could never reach 0 for anyone following
@@ -114,6 +114,9 @@ test.describe('SEO in the worklist', () => {
 })
 
 test.describe('the worklist can go to disk', () => {
+  // The caller names the FILE, never the directory: an outputPath was a
+  // write-anything primitive, and `<project>/data/store/guano-project__main.json`
+  // put a worklist over the live project (→ docs/mcp.md).
   test('outputPath writes the items, and set_translations reads them back', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'guano-wl-'))
     try {
@@ -126,13 +129,16 @@ test.describe('the worklist can go to disk', () => {
         version: home.version,
       })
 
-      const out = join(dir, 'fr.json')
-      const r = await s.call('get_translation_worklist', { locale: 'fr', outputPath: out })
+      // a path the tool must NOT honour as a directory, pointed at the store
+      const aimed = join(dir, 'data', 'store', 'fr.json')
+      const r = await s.call('get_translation_worklist', { locale: 'fr', outputPath: aimed })
       // the response carries the counters and the path, not the items
       expect(r.items).toBeUndefined()
-      expect(r.outputPath).toBe(out)
+      expect(r.outputPath).not.toBe(aimed)
+      expect(basename(r.outputPath)).toBe('fr.json')
       expect(r.next).toContain('itemsPath')
 
+      const out = r.outputPath as string
       const file = JSON.parse(readFileSync(out, 'utf8'))
       expect(file.locale).toBe('fr')
       expect(file.items.length).toBe(2)
@@ -149,6 +155,7 @@ test.describe('the worklist can go to disk', () => {
       expect(after.missingTranslatable).toBe(0)
     } finally {
       rmSync(dir, { recursive: true, force: true })
+      rmSync(join(tmpdir(), '.guano-mcp', 'fr.json'), { force: true })
     }
   })
 })

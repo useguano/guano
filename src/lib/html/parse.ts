@@ -205,7 +205,8 @@ export function parseHtml(input: string, components: string[] = []): ParseResult
   function reportStrayText(text: string, offset: number) {
     if (!text.trim()) return
     const parent = stack[stack.length - 1]
-    const quoted = text.trim().slice(0, 40)
+    const stray = text.trim()
+    const quoted = stray.length > 12 ? `${stray.slice(0, 12)}…` : stray
     fail(
       offset + (text.length - text.trimStart().length),
       parent

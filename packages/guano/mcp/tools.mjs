@@ -11,7 +11,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { BlockList, isIPv4, isIPv6 } from 'node:net'
-import { readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, extname, isAbsolute, resolve as resolvePath, sep } from 'node:path'
 
 // the AI-first handbook (the HTML format, element registry, style rules, workflow) —
@@ -374,9 +375,50 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     'sessions.json',
     'invites.json',
     'publish.json',
+    'integrations.json',
+    'agent-policy.json',
+    'instance.json',
     'claude_desktop_config.json',
     '.connect-nonce',
+    '.env',
   ])
+
+  /**
+   * Directories no path argument may name, root or no root.
+   *
+   * A basename list can only name what someone thought of, and what nobody
+   * thought of was the STORE. The root is the PROJECT FOLDER, which contains
+   * `data/`, so the fence allowed `<project>/data/store/guano-project__main.json`
+   * — the live site, read by a tool whose job is reading a payload, and
+   * through `writeJsonFile` OVERWRITTEN by one, with the agent policy never
+   * consulted: that policy guards `PUT /api/store`, not the disk, and the
+   * server re-reads every blob from disk on each request, so the bad bytes are
+   * live immediately. The data dir is refused by PREFIX now. It costs nothing
+   * legitimate: this server is designed never to touch it at all — it goes
+   * through the authed HTTP API precisely so that it cannot.
+   */
+  const DENIED_DIRS = [
+    process.env.GUANO_DATA_DIR,
+    // the two a server resolves to, in `connect`'s own order (docs/instance.md)
+    FILE_ROOT && resolvePath(FILE_ROOT, 'data'),
+    FILE_ROOT && resolvePath(FILE_ROOT, 'server', 'data'),
+  ]
+    .filter(Boolean)
+    .map((dir) => resolvePath(dir))
+
+  const insideDenied = (full) =>
+    DENIED_DIRS.some((dir) => full === dir || full.startsWith(dir + sep))
+
+  /**
+   * Where a tool's own output file goes.
+   *
+   * A caller-named write path is a write-anything primitive under injection,
+   * and nothing legitimate needs to choose the directory — the tool hands the
+   * path straight back for `itemsPath`. So only the BASENAME of what the
+   * caller asks for is honoured, under one directory inside the fence (or the
+   * system temp dir when no root is set, where a read is unfenced anyway).
+   */
+  const WRITE_ROOT = resolvePath(FILE_ROOT ?? tmpdir(), '.guano-mcp')
 
   /**
    * Resolve a caller-supplied path, enforcing the root fence when one is set.
@@ -388,30 +430,39 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     if (!isAbsolute(path)) throw new Error(`${label} must be absolute: "${path}"`)
     let full = resolvePath(path)
     // ...before the fence, so it holds whether or not a root is set
+    refuseProtectedPath(full, label, path)
+    try {
+      // a symlink inside the root would otherwise walk straight back out of it
+      full = await realpath(full)
+    } catch {
+      /* missing file — the read below reports it properly */
+    }
+    // ...and again on the resolved path, in case a link pointed at one
+    refuseProtectedPath(full, label, path)
+    if (FILE_ROOT && full !== FILE_ROOT && !full.startsWith(FILE_ROOT + sep)) {
+      throw new Error(
+        `${label} is outside GUANO_MCP_FILE_ROOT (${FILE_ROOT}): "${path}". ` +
+          'Move the file inside that directory, or ask the operator to widen the root.',
+      )
+    }
+    return full
+  }
+
+  /** the two refusals that hold with or without a root, in that order */
+  function refuseProtectedPath(full, label, asked) {
     if (NEVER_READ.has(basename(full))) {
       throw new Error(
         `${label} names a credential file this tool may never touch ("${basename(full)}"). ` +
           'Tokens, users and sessions are the instance\'s own; nothing an agent needs is in them.',
       )
     }
-    if (FILE_ROOT) {
-      try {
-        full = await realpath(full)
-      } catch {
-        /* missing file — the read below reports it properly */
-      }
-      // ...and again on the resolved path, in case a symlink pointed at one
-      if (NEVER_READ.has(basename(full))) {
-        throw new Error(`${label} resolves to a credential file ("${basename(full)}")`)
-      }
-      if (full !== FILE_ROOT && !full.startsWith(FILE_ROOT + sep)) {
-        throw new Error(
-          `${label} is outside GUANO_MCP_FILE_ROOT (${FILE_ROOT}): "${path}". ` +
-            'Move the file inside that directory, or ask the operator to widen the root.',
-        )
-      }
+    if (insideDenied(full)) {
+      throw new Error(
+        `${label} is inside the instance's data directory ("${asked}"), which holds the store, ` +
+          'its tokens and its policy. Every page, entry and setting is reachable through the ' +
+          'tools instead.',
+      )
     }
-    return full
   }
 
   /**
@@ -422,12 +473,22 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
    * as `itemsPath` never pays for it in context at all.
    */
   async function writeJsonFile(file, label, data) {
-    const path = String(file)
-    const full = await resolveInputPath(path, label)
+    const asked = String(file)
+    const name = basename(asked)
+    if (!name || name.startsWith('.') || extname(name) !== '.json') {
+      throw new Error(
+        `${label} must name a .json file (got "${asked}"). Only the file NAME is used — the ` +
+          `file is written in ${WRITE_ROOT}, and the path comes back to hand to itemsPath.`,
+      )
+    }
+    const full = resolvePath(WRITE_ROOT, name)
+    const tmp = `${full}.tmp-${process.pid}`
     try {
-      await writeFile(full, JSON.stringify(data, null, 2))
+      await mkdir(WRITE_ROOT, { recursive: true, mode: 0o700 })
+      await writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
+      await rename(tmp, full)
     } catch (e) {
-      throw new Error(`cannot write ${label} "${path}": ${e.message ?? e}`)
+      throw new Error(`cannot write ${label} "${name}": ${e.message ?? e}`)
     }
     return full
   }
@@ -540,6 +601,20 @@ export function createToolSet({ api, runtime, elicit, hasElicitation = () => nul
     const out = {}
     for (const [k, v] of Object.entries(obj)) {
       out[k] = Array.isArray(v) ? v.map((s) => fence(s)) : fence(v)
+    }
+    return out
+  }
+
+  /** fence the strings in a page's or the site's `seo`, per-locale buckets and all */
+  const fenceSeo = (seo) => {
+    if (!seo || typeof seo !== 'object') return seo
+    const out = {}
+    for (const [k, v] of Object.entries(seo)) {
+      if (k === 'locales' && v && typeof v === 'object') {
+        out.locales = Object.fromEntries(
+          Object.entries(v).map(([code, bucket]) => [code, fenceValues(bucket)]),
+        )
+      } else out[k] = typeof v === 'string' ? fence(v) : v
     }
     return out
   }
@@ -930,12 +1005,32 @@ function acquireProjectLock() {
  * tool by tool: a `writes: true` flag per tool is 40+ chances to forget one,
  * and a forgotten one is this bug again, silent.
  */
+/**
+ * Unwrap any `{untrusted: true, text}` an agent echoed back into a write.
+ *
+ * Reads fence user-authored strings, so a read-then-write round trip (a page's
+ * `seo` from get_page into set_page_seo, an entry value into upsert_entries)
+ * hands the wrapper back AS the value. Unwrapping once here, where both
+ * callers already pass through, is what lets the fence widen without every
+ * write path having to learn about it.
+ */
+function unfenceDeep(value) {
+  if (Array.isArray(value)) return value.map(unfenceDeep)
+  if (value && typeof value === 'object') {
+    if (value.untrusted === true && typeof value.text === 'string') return value.text
+    const out = {}
+    for (const [k, v] of Object.entries(value)) out[k] = unfenceDeep(v)
+    return out
+  }
+  return value
+}
+
 function serializeHandler(handler) {
   return async (args) => {
     const store = { loadedRaw: null, loadedKey: null, lock: null }
     return callState.run(store, async () => {
       try {
-        return await handler(args)
+        return await handler(unfenceDeep(args))
       } finally {
         const release = store.lock
         store.lock = null
@@ -5755,6 +5850,7 @@ const tools = [
         // scratch directory is usually OUTSIDE this root — which turned the
         // advice into a refusal on the first try.
         fileRoot: FILE_ROOT ?? null,
+        writeRoot: WRITE_ROOT,
         ...(FILE_ROOT ? {} : { fileRootNote: 'unset — any absolute path this process can read' }),
         ...(envTarget ? { configuredTarget: envTarget } : {}),
         serverVersion,
@@ -6237,7 +6333,7 @@ const tools = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
       const { project } = await loadTargetProject()
-      return {
+      return withUntrusted({
         target,
         pages: (project.pages ?? []).map((p) => ({
           id: p.id,
@@ -6248,9 +6344,9 @@ const tools = [
           version: pageVersion(project, p),
           // the stored SEO (incl. per-locale buckets) — the only other
           // readback used to be the export itself
-          ...(p.seo ? { seo: p.seo } : {}),
+          ...(p.seo ? { seo: fenceSeo(p.seo) } : {}),
         })),
-      }
+      })
     },
   },
   {
@@ -6365,15 +6461,16 @@ const tools = [
       const body = (page.elements ?? []).find((n) => n.type === 'body')
       const check = diagnose(project, body)
       return {
-        // page copy is authored by site users, so it carries the same fence as
-        // comments whenever it is actually included
-        ...(args.includeContent ? { _untrusted: UNTRUSTED_NOTE } : {}),
+        // Page copy is authored by site users, and `html` carries it on every
+        // call — the note rode on `includeContent` alone, which is the one
+        // form of this response that does NOT need it.
+        _untrusted: UNTRUSTED_NOTE,
         target,
         pageId: page.id,
         name: page.name,
         slug: page.path,
         status: page.status,
-        ...(page.seo ? { seo: page.seo } : {}),
+        ...(page.seo ? { seo: fenceSeo(page.seo) } : {}),
         version: pageVersion(project, page),
         // ALWAYS present, empty array and all: omitted when clean, a validated
         // page and a page nobody checked read identically, and "no diagnostics
@@ -7681,9 +7778,9 @@ const tools = [
       const { project } = await loadTargetProject()
       const s = project.settings ?? defaultSettings()
       const defaultLocale = project.defaultLocale || 'en'
-      return {
-        seo: s.seo ?? {},
-        domain: s.domain ?? '',
+      return withUntrusted({
+        seo: fenceSeo(s.seo ?? {}),
+        domain: s.domain ? fence(s.domain) : '',
         tokens: (s.tokens ?? []).map((t) => ({
           name: t.name,
           value: t.value,
@@ -7710,7 +7807,7 @@ const tools = [
           name: b.name,
           width: b.width,
         })),
-      }
+      })
     },
   },
   {
@@ -9278,8 +9375,8 @@ const tools = [
         outputPath: {
           type: 'string',
           description:
-            'absolute path to write the items to instead of returning them — hand the same ' +
-            'file back as set_translations {itemsPath} and the worklist never enters your context',
+            'file NAME to write the items to instead of returning them — hand the path ' +
+            'back as set_translations {itemsPath} and the worklist never enters your context',
         },
         pageId: { type: 'string', description: 'element items on this page only' },
         pageIds: {
@@ -11498,7 +11595,15 @@ const tools = [
     },
     handler: async ({ formId, limit, before }) => {
       if (!formsList) throw new Error('this instance does not expose form submissions — update the server')
-      if (!formId) return await formsList()
+      if (!formId) {
+        // the counts listing carries the form NAMES, which an author wrote and
+        // the server does not fence — only the submitted values travel fenced
+        const list = await formsList()
+        const forms = Array.isArray(list?.forms)
+          ? list.forms.map((f) => (f?.name ? { ...f, name: fence(f.name) } : f))
+          : list?.forms
+        return withUntrusted({ ...list, ...(forms ? { forms } : {}) })
+      }
       // every value arrives fenced by the server; the note travels with it, so
       // an agent reading a message field knows it is data and not an instruction
       return await formSubmissions(formId, { limit, before })

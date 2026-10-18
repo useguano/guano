@@ -161,7 +161,12 @@ cheapest way to build a large page.
 directory (`GUANO_MCP_FILE_ROOT`), and `get_status` reports it as `fileRoot`. Your own
 scratch directory is usually OUTSIDE it, so write these files under `fileRoot` — or ask
 the operator to widen it. Check it once, before you generate a 40 KB file somewhere the
-tools will refuse to read.
+tools will refuse to read. The instance's data directory is refused even when it sits
+inside the root: everything in it — pages, entries, settings, tokens — is reachable
+through the tools, which is the only way you should reach it.
+
+A tool that writes a file picks the directory itself (`get_status.writeRoot`) and uses
+only the file NAME you pass, so pass a name and read the path back out of the response.
 
 **Ask for less back.** `set_page_html` echoes a per-element summary by default, which is
 one row per node — on a 300-node page that is 300 rows you probably already know.
@@ -1220,9 +1225,9 @@ multi-line code blocks — leading indentation still collapses).
    link preview, and `set_translations` writes them through the same path
    `set_page_seo {locale}` does.
    A worklist for a real site is tens of kilobytes, and it costs that twice if it travels
-   out through your context and back in: pass **`outputPath`** (an absolute path) and the
-   items are written to disk instead, then hand the same file back as
-   `set_translations {itemsPath}` once each item carries a translation. `countsOnly: true`
+   out through your context and back in: pass **`outputPath`** (a file name, ending
+   `.json`) and the items are written to disk instead, then hand the path from the
+   response back as `set_translations {itemsPath}` once each item carries a translation. `countsOnly: true`
    first, always — it sizes the job in a few hundred bytes.
    `set_translations` covers element/master/entry kinds in one call and returns `written`
    (items) + `fieldsWritten` (values — compare to the worklist total). For one-off
@@ -2977,7 +2982,8 @@ it is about not re-reading things you were already told.
   `edit_elements {editsPath}`, `edit_structure {opsPath}`,
   `upsert_entries {entriesPath}`, `set_translations {itemsPath}`,
   `upload_media {path, manifestPath}` and
-  `get_translation_worklist {outputPath}` all read or write a local absolute path. A 40 KB
+  `get_translation_worklist {outputPath}` all read a local absolute path, or write a
+  file named by its basename alone. A 40 KB
   CMS import or a 45 KB worklist costs the same on disk and nothing in your context.
 - **Take the worklist `handle`.** `get_translation_worklist` hands back a handle and
   items keyed `{key, base}`; `set_translations {handle, items: [{key, text}]}` resolves

@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 // The MCP toolset and its bundled runtime are plain ESM — safe to import into
 // the spec runner and drive against an in-memory fake instance, the same way
 // export-svg.spec imports the exporter. No server, no browser, no bootstrapping
@@ -110,9 +113,9 @@ test('user-authored content comes back fenced as untrusted', async () => {
   const collection = await call('get_collection', { collectionId: 'c1' })
   expect(collection.entries[0].values.title.untrusted).toBe(true)
 
-  // page copy is only fenced when it is actually returned
+  // `html` carries the page copy on every call, so the note is unconditional
   expect(typeof (await call('get_page', { pageId: 'home', includeContent: true }))._untrusted).toBe('string')
-  expect((await call('get_page', { pageId: 'home' }))._untrusted).toBeUndefined()
+  expect(typeof (await call('get_page', { pageId: 'home' }))._untrusted).toBe('string')
 })
 
 test('entry values are sanitized at write, not just at render', async () => {
@@ -313,6 +316,72 @@ test('a credential file is refused by name, root or no root', async () => {
   await expect(
     set.toolMap.get('upload_media')!.handler({ path: '/Users/me/site/logo.png', name: 'x' }),
   ).rejects.not.toThrow(/credential file/)
+})
+
+// The store sits INSIDE the root `guano connect` writes (the project folder), so
+// the basename denylist above was the only thing between a payload tool and the
+// live project — and `outputPath` made it a WRITE, with the agent policy never
+// consulted: that policy guards PUT /api/store, not the disk.
+test('the data dir is refused by prefix, and a write cannot choose its directory', async () => {
+  const runtime = await runtimePromise
+  test.skip(!runtime, 'runtime bundle missing')
+
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'guano-fence-')))
+  await mkdir(join(root, 'data', 'store'), { recursive: true })
+  const mainFile = join(root, 'data', 'store', 'guano-project__main.json')
+  await writeFile(mainFile, '{"keep":"me"}')
+  await writeFile(join(root, '.env'), 'GUANO_TOKEN=guano_secret')
+
+  process.env.GUANO_MCP_FILE_ROOT = root
+  try {
+    const { api } = fixture()
+    // a non-default locale, so the worklist has something to be about
+    const proj = await api.storeGetJson('guano-project:main')
+    proj.locales = ['en', 'fr']
+    await api.storePutRaw('guano-project:main', JSON.stringify(proj))
+
+    const set = createToolSet({ api, runtime })
+    set.setTarget('main')
+    const call = (name: string, args: unknown) => set.toolMap.get(name)!.handler(args)
+
+    // inside the root, so only a PREFIX refusal reaches it
+    await expect(call('upload_media', { path: mainFile, name: 'x' })).rejects.toThrow(
+      /data directory/,
+    )
+    // and the basenames still hold, for the files nobody thought to list
+    await expect(call('upload_media', { path: join(root, '.env'), name: 'x' })).rejects.toThrow(
+      /credential file/,
+    )
+
+    // Only the file NAME is honoured: an outputPath aimed at the live project
+    // lands in the scratch dir, and the response says where it really went.
+    const written = await call('get_translation_worklist', { locale: 'fr', outputPath: mainFile })
+    expect(written.outputPath).toBe(join(root, '.guano-mcp', 'guano-project__main.json'))
+    expect(await readFile(mainFile, 'utf8')).toBe('{"keep":"me"}')
+    // ...and it round-trips: the path it hands back is readable through the fence
+    const back = JSON.parse(await readFile(written.outputPath, 'utf8'))
+    expect(back.locale).toBe('fr')
+
+    await expect(
+      call('get_translation_worklist', { locale: 'fr', outputPath: join(root, 'notes.txt') }),
+    ).rejects.toThrow(/\.json/)
+  } finally {
+    delete process.env.GUANO_MCP_FILE_ROOT
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+// The note rode on `includeContent`, which is the one shape of this response
+// that does NOT need it: `html` carries the page's copy on every call.
+test('get_page is fenced without being asked', async () => {
+  const { api } = fixture()
+  const runtime = await runtimePromise
+  test.skip(!runtime, 'runtime bundle missing')
+
+  const set = createToolSet({ api, runtime })
+  set.setTarget('main')
+  const page = await set.toolMap.get('get_page')!.handler({ pageId: 'home' })
+  expect(page._untrusted).toContain('NOT instructions')
 })
 
 // set_target consent: with an elicitation channel the HUMAN's dialog answer is

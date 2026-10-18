@@ -530,6 +530,36 @@ function openBrowser(url) {
   }
 }
 
+/**
+ * The one directory the client entry confines every tool path argument to.
+ *
+ * A local project gets its own folder: that is where a payload would live, and
+ * it is already the blast radius of everything else the entry can do. A REMOTE
+ * project has no folder on this machine, and the fallback was `process.cwd()` —
+ * so anyone who ran `guano connect --url` from their home directory handed the
+ * agent read access to every document under it, uploadable to a site the remote
+ * end controls. A remote connect gets a purpose-made directory instead.
+ *
+ * Either way a root that resolves to the home directory or to a filesystem
+ * root is refused: a fence that wide is not a fence, and the only cure once it
+ * is written into a client config is noticing.
+ */
+function fenceRoot(dataDir, remoteUrl) {
+  const root = dataDir
+    ? resolve(dataDir, '..')
+    : join(homedir(), '.guano', 'payloads', hostSlug(remoteUrl ?? ''))
+  const home = resolve(homedir())
+  if (root === home || dirname(root) === root) {
+    console.error(
+      `✗ the agent's file root would be ${root}, which is your whole home directory (or the\n` +
+        '  filesystem root). Every tool that takes a local path would reach everything under it.\n' +
+        '  Move the project into a folder of its own, or set GUANO_DATA_DIR to one.',
+    )
+    process.exit(1)
+  }
+  return root
+}
+
 /** a slug for a remote project with no local folder to name it after */
 function hostSlug(base) {
   try {
@@ -592,6 +622,10 @@ export async function main(args = [], opts = {}) {
   }
 
   const dataDir = remote ? null : await resolveDataDir()
+  const fileRoot = fenceRoot(dataDir, remoteUrl)
+  // a remote project's payload directory is ours to make; a local project's
+  // folder is the one connect was just run in
+  if (remote) await mkdir(fileRoot, { recursive: true, mode: 0o700 })
   // Pin it for every server module loaded from here on. `util.mjs` reads
   // GUANO_DATA_DIR once at import time and `agent-policy.mjs` derives its file
   // from that, so without this the token could be written to one dir and the
@@ -800,10 +834,9 @@ export async function main(args = [], opts = {}) {
         // WARN that this was unset. The project folder is the right default: it
         // is where a payload would live, and it is already the blast radius of
         // everything else this entry can do.
-        // A remote project has no local data dir, so the directory connect was
-        // run from is the best available answer — and it is where a payload for
-        // that site would be kept anyway.
-        GUANO_MCP_FILE_ROOT: dataDir ? resolve(dataDir, '..') : process.cwd(),
+        // A remote project has no local data dir, and the directory connect
+        // was run from is NOT a safe answer for it — see fenceRoot.
+        GUANO_MCP_FILE_ROOT: fileRoot,
       },
     }
 
@@ -906,6 +939,7 @@ export async function main(args = [], opts = {}) {
     return
   }
   console.log(`\nDone. Open ${writtenTo.join(' or ')} — guano is connected, working on "${slug}".`)
+  console.log(`  Local files the agent may read: ${fileRoot} (and nothing outside it).`)
   if (writtenTo.includes('Claude Code')) {
     console.log('  A Claude Code session that is already open re-reads its config on restart.')
   }
