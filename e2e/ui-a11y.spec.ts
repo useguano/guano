@@ -94,3 +94,45 @@ test('a titled dialog is named by its own header, with a named close', async ({ 
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 })
+
+// Every chip the AI panel offers is a real button with its label as its
+// accessible name — not a styled div, and not an icon whose meaning lives in a
+// tooltip. A chip is the only way to answer the agent without typing, so one
+// with no name takes the feature away rather than making it awkward.
+test('every chip the AI panel offers is a named button', async ({ page }) => {
+  await page.addInitScript(() => {
+    const posts: unknown[] = []
+    Object.defineProperty(window, '__hostPosts', { value: posts })
+    Object.defineProperty(window, 'webkit', {
+      value: { messageHandlers: { guano: { postMessage: (m: unknown) => posts.push(m) } } },
+    })
+  })
+  await openEditor(page)
+
+  const { AGENT_ASK_TURN, AGENT_INIT, AGENT_READY, agentReplay } = await import(
+    './fixtures/agentStream'
+  )
+  const feed = (lines: unknown[]) =>
+    page.evaluate((batch) => {
+      const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } })
+        .__guanoHost
+      for (const line of batch) host.agentEvent(line)
+    }, lines)
+
+  await feed([AGENT_READY, AGENT_INIT])
+  await page.locator('[data-agent-button]').click()
+  await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
+  await page.locator('[data-agent-send]').click()
+  await feed([agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
+
+  const chips = page.locator('[data-agent-ask] [data-agent-chip]')
+  await expect(chips).toHaveCount(4)
+  for (const label of [
+    'Stark editorial',
+    'Warm and rounded',
+    'Hero + contact',
+    'Hero + work + contact',
+  ]) {
+    await expect(page.getByRole('button', { name: new RegExp(label.replace(/\+/g, '\\+')) })).toBeVisible()
+  }
+})

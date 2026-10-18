@@ -296,6 +296,137 @@ test.describe('the AI panel', () => {
     await expect(tool).toContainText('not allowed in this panel')
   })
 
+  // (a) One question is answered by the click itself: there is nothing to
+  // collect, so the chip sends, with the page context, exactly once.
+  test('one question: a chip click sends the label, with the context, once', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('a coming soon page')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('a coming soon page'), ...AGENT_ASK_ONE])
+
+    const chips = page.locator('[data-agent-ask] [data-agent-chip]')
+    await expect(chips).toHaveCount(2)
+    await chips.first().click()
+
+    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
+      text: string
+    }[]
+    expect(sent).toHaveLength(2)
+    expect(sent[1]!.text).toContain('Stark editorial')
+    expect(sent[1]!.text).toContain('Context from the Guano editor')
+    // the picked chip stays highlighted, and a later turn makes them inert —
+    // which is also what stops a second click sending a second message
+    await expect(chips.first()).toHaveAttribute('data-agent-chip-picked', '')
+    await expect(chips.first()).toHaveAttribute('data-agent-chip-inert', '')
+    await expect(chips.first()).toBeDisabled()
+  })
+
+  // (b) Several questions go through the ONE composer. There is no second send
+  // button in this app (docs/ui.md), so the arrow is the thing that has to wait
+  // for the batch to be complete.
+  test('two questions: the arrow waits for both, then sends one message', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
+    const before = ((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-send').length
+
+    await expect(page.locator('[data-agent-input]')).toHaveAttribute(
+      'placeholder',
+      'Pick above, or type an answer',
+    )
+    await expect(page.locator('[data-agent-send]')).toBeDisabled()
+
+    const chips = page.locator('[data-agent-ask] [data-agent-chip]')
+    await chips.nth(0).click() // direction → Stark editorial
+    // one of two is not an answer
+    await expect(page.locator('[data-agent-send]')).toBeDisabled()
+    await chips.nth(3).click() // sections → Hero + work + contact
+    await expect(page.locator('[data-agent-send]')).toBeEnabled()
+    await page.locator('[data-agent-send]').click()
+
+    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
+      text: string
+    }[]
+    expect(sent).toHaveLength(before + 1)
+    const text = sent[sent.length - 1]!.text
+    expect(text).toContain('Q: Which direction? → Stark editorial')
+    expect(text).toContain('Q: What should it carry? → Hero + work + contact')
+    // ONE message, both lines, and the bubble says the same thing the wire did
+    await expect(page.locator('[data-agent-question]').last()).toContainText('Q: Which direction?')
+  })
+
+  // (c) Chips are not a cage: the composer stays live and a typed message
+  // answers in place of them.
+  test('typed text answers instead of the chips', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
+
+    await page.locator('[data-agent-input]').fill('neither — copy the look of our app')
+    await expect(page.locator('[data-agent-send]')).toBeEnabled()
+    await page.locator('[data-agent-send]').click()
+
+    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
+      text: string
+    }[]
+    const text = sent[sent.length - 1]!.text
+    expect(text).toContain('neither — copy the look of our app')
+    // a half-picked batch is not an answer, so no Q lines ride along
+    expect(text).not.toContain('Q: Which direction?')
+  })
+
+  // (d) The offer comes AFTER the recap, a click sends the suggestion's own
+  // prompt verbatim, and the chips are inert for the rest of the transcript.
+  test('a suggestion sends its prompt, and goes inert in the next turn', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('build it')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('build it'), ...AGENT_SUGGEST_TURN])
+
+    const suggest = page.locator('[data-agent-suggest]')
+    await expect(suggest.locator('[data-agent-chip]')).toHaveCount(3)
+    // after the recap, not before it
+    const order = await page.evaluate(() => {
+      const turn = document.querySelector('[data-agent-turn]')!
+      return [...turn.querySelectorAll('[data-agent-text],[data-agent-suggest]')].map((el) =>
+        el.hasAttribute('data-agent-suggest') ? 'suggest' : 'text',
+      )
+    })
+    expect(order).toEqual(['text', 'suggest'])
+
+    await suggest.locator('[data-agent-chip]').first().click()
+    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
+      text: string
+    }[]
+    expect(sent[sent.length - 1]!.text).toContain(
+      'Add a subtle load animation: the heading and the form fade and rise in, staggered.',
+    )
+
+    // kept, dimmed, the picked one highlighted — the transcript still reads as
+    // what was offered and what was taken
+    const chips = suggest.locator('[data-agent-chip]')
+    await expect(chips.first()).toHaveAttribute('data-agent-chip-picked', '')
+    for (let i = 0; i < 3; i++) await expect(chips.nth(i)).toBeDisabled()
+  })
+
+  test('chips are inert while a turn runs, so a click cannot fire twice', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('build it')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('build it'), ...AGENT_SUGGEST_TURN])
+    const chip = page.locator('[data-agent-suggest] [data-agent-chip]').first()
+    await expect(chip).toBeEnabled()
+
+    // the send the click makes puts the panel straight back into a turn
+    await chip.click()
+    await expect(chip).toBeDisabled()
+    const after = ((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-send').length
+    await chip.click({ force: true })
+    expect(((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-send').length).toBe(after)
+  })
+
   // (e) An ask is CONVERSATION, not work. If it lands in the activity bubble as
   // "1 step · Ask user", the reducer opened it as a tool from
   // `content_block_start` — which is why the id is registered there, before

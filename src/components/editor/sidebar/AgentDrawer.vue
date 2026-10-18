@@ -112,7 +112,54 @@ function segment(items: AgentItem[]): Segment[] {
   return out
 }
 
-const rendered = computed(() => turns.value.map((turn) => ({ turn, segments: segment(turn.items) })))
+const rendered = computed(() =>
+  turns.value.map((turn, i) => ({
+    turn,
+    segments: segment(turn.items),
+    /** only the last turn's chips are live — see `inert` */
+    last: i === turns.value.length - 1,
+  })),
+)
+
+/**
+ * Chips are kept once they are spent, dimmed rather than removed: the
+ * transcript has to still read as what was asked and what was answered. They
+ * go inert as soon as a later turn exists or a turn is running, which is also
+ * what stops a second click landing a second message.
+ */
+function inert(isLast: boolean): boolean {
+  return !isLast || busy.value
+}
+
+/** the ask the composer is currently answering, or null */
+const pendingAsk = computed<AgentAskItem | null>(() => {
+  const turn = turns.value[turns.value.length - 1]
+  if (!turn || busy.value) return null
+  for (let i = turn.items.length - 1; i >= 0; i--) {
+    const item = turn.items[i]
+    // one question needs no composer: a click IS the whole answer, so it sends
+    if (item?.kind === 'ask' && item.questions.length > 1) return item
+  }
+  return null
+})
+
+const allPicked = computed(() => {
+  const ask = pendingAsk.value
+  return !!ask && ask.questions.every((q) => !!ask.picks[q.id])
+})
+
+function pickOption(item: AgentAskItem, questionId: string, label: string) {
+  item.picks = { ...item.picks, [questionId]: label }
+  // A single question is answered by the click itself. Several are collected
+  // and sent as ONE message through the one composer — there is no second
+  // send button anywhere in this app.
+  if (item.questions.length === 1) send(label, context.value)
+}
+
+function pickSuggestion(item: AgentSuggestItem, suggestion: { label: string; prompt: string }) {
+  item.picked = suggestion.label
+  send(suggestion.prompt, context.value)
+}
 
 function activityState(tools: AgentToolItem[]): AgentToolState {
   if (tools.some((t) => t.state === 'running')) return 'running'
@@ -230,7 +277,7 @@ const currentLabel = computed(() => modelLabel(model.value))
 
 const canSend = computed(
   () =>
-    (!!draft.value.trim() || attachments.value.length > 0) &&
+    (!!draft.value.trim() || attachments.value.length > 0 || allPicked.value) &&
     !busy.value &&
     status.value !== 'unavailable' &&
     status.value !== 'switching',
@@ -238,10 +285,18 @@ const canSend = computed(
 
 function submit() {
   if (!canSend.value) return
+  const ask = pendingAsk.value
+  // the picks ride along only once every question has one: a typed message is
+  // always a valid answer, and a half-picked batch would send a half-answer
+  const answers =
+    ask && allPicked.value
+      ? ask.questions.map((q) => ({ question: q.question, label: ask.picks[q.id]! }))
+      : []
   send(
     draft.value,
     context.value,
     attachments.value.map(({ mediaType, data }) => ({ mediaType, data })),
+    answers,
   )
   draft.value = ''
   attachments.value = []
@@ -392,7 +447,12 @@ nextTick(() => input.value?.focus())
         write lands on the canvas as it works.
       </p>
 
-      <div v-for="{ turn, segments } in rendered" :key="turn.id" data-agent-turn class="flex flex-col gap-2.5">
+      <div
+        v-for="{ turn, segments, last } in rendered"
+        :key="turn.id"
+        data-agent-turn
+        class="flex flex-col gap-2.5"
+      >
         <div class="flex flex-col items-end gap-1">
           <span v-if="turn.context" class="max-w-full truncate font-mono text-[9px] text-muted-foreground">
             {{ turn.context }}
@@ -455,6 +515,60 @@ nextTick(() => input.value?.focus())
                 class="custom-scrollbar overflow-x-auto rounded-lg bg-input p-2 font-mono text-[10px] leading-snug whitespace-pre"
               >{{ block.text }}</pre>
             </template>
+          </div>
+
+          <div
+            v-else-if="seg.kind === 'ask'"
+            data-agent-ask
+            class="flex flex-col gap-2.5 px-0.5"
+          >
+            <div v-for="q in seg.item.questions" :key="q.id" class="flex flex-col gap-1.5">
+              <p class="text-[11px] leading-relaxed">{{ q.question }}</p>
+              <div class="flex flex-col items-stretch gap-1">
+                <ButtonUI
+                  v-for="option in q.options"
+                  :key="option.label"
+                  size="xs"
+                  :variant="seg.item.picks[q.id] === option.label ? 'default' : 'outline'"
+                  :disabled="inert(last)"
+                  class="!h-auto justify-start !px-2 py-1.5 text-left leading-snug whitespace-normal"
+                  data-agent-chip
+                  :data-agent-chip-picked="seg.item.picks[q.id] === option.label ? '' : undefined"
+                  :data-agent-chip-inert="inert(last) ? '' : undefined"
+                  @click="pickOption(seg.item, q.id, option.label)"
+                >
+                  <span class="flex min-w-0 flex-col items-start gap-0.5">
+                    <span>{{ option.label }}</span>
+                    <span v-if="option.hint" class="font-normal opacity-70">{{ option.hint }}</span>
+                  </span>
+                </ButtonUI>
+              </div>
+              <p v-if="q.freeText" class="text-[10px] text-muted-foreground">
+                …or type an answer instead.
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-else-if="seg.kind === 'suggest'"
+            data-agent-suggest
+            class="flex flex-col items-stretch gap-1 px-0.5"
+          >
+            <ButtonUI
+              v-for="suggestion in seg.item.suggestions"
+              :key="suggestion.label"
+              size="xs"
+              :variant="seg.item.picked === suggestion.label ? 'default' : 'outline'"
+              :disabled="inert(last)"
+              class="!h-auto justify-start !px-2 py-1.5 text-left leading-snug whitespace-normal"
+              data-agent-chip
+              data-agent-suggest-chip
+              :data-agent-chip-picked="seg.item.picked === suggestion.label ? '' : undefined"
+              :data-agent-chip-inert="inert(last) ? '' : undefined"
+              @click="pickSuggestion(seg.item, suggestion)"
+            >
+              {{ suggestion.label }}
+            </ButtonUI>
           </div>
 
           <div
@@ -574,7 +688,7 @@ nextTick(() => input.value?.focus())
           variant="bare"
           :rows="3"
           :disabled="status === 'switching'"
-          placeholder="Ask for a change…"
+          :placeholder="pendingAsk ? 'Pick above, or type an answer' : 'Ask for a change…'"
           data-agent-input
           @keydown.enter.exact.prevent="submit"
         />
