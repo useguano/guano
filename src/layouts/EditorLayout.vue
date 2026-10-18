@@ -1,6 +1,6 @@
 <script setup lang="ts">
 withDefaults(
-  defineProps<{ column?: 'pages' | 'components' | null; framed?: boolean }>(),
+  defineProps<{ column?: 'pages' | 'components' | 'agent' | null; framed?: boolean }>(),
   { column: null, framed: true },
 )
 </script>
@@ -15,6 +15,7 @@ withDefaults(
       <Transition name="column">
         <div v-if="column" class="h-full w-64 border-l border-input">
           <slot v-if="column === 'pages'" name="pages" />
+          <slot v-else-if="column === 'agent'" name="agent" />
           <slot v-else name="components" />
         </div>
       </Transition>

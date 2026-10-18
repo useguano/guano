@@ -216,6 +216,7 @@ Both surfaces (Edit and Play):
 | `⌘Z` / `⌘⇧Z` | Undo / redo |
 | `⌘S` | Save now |
 | `⌘P` | Publish |
+| `⌘J` | AI drawer (desktop launcher only) |
 | `C` | Comment mode — then click where the comment goes |
 
 Edit only:
@@ -223,7 +224,6 @@ Edit only:
 | Key | Action |
 |---|---|
 | `⌘E` | Insert dock |
-| `⌘J` | AI panel (desktop launcher only) |
 | `⌘⇧E` | Effects drawer |
 | `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste elements |
 | `⌘D` | Duplicate |

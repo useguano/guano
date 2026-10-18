@@ -16,6 +16,11 @@ import {
 // speaks the bridge protocol and that the reducer renders the recorded wire
 // correctly.
 //
+// The panel is the left rail's first button and a docked 16rem column, so
+// "open" is `useViewMode`'s one `column` ref — which is what makes the last
+// case (one column at a time) an assertion about the invariant rather than
+// about two components agreeing.
+//
 // Four of these protect against a visibly wrong transcript that types cannot
 // catch, each named in §5's trap 7 and step 0: the replayed question rendered
 // twice, a blank bubble built from empty thinking deltas, an interrupt
@@ -74,6 +79,8 @@ async function readyPanel(page: Page) {
   await expect(page.locator('[data-agent-panel]')).toBeVisible()
 }
 
+const railButton = (page: Page) => page.getByRole('button', { name: 'Ask the AI agent' })
+
 test.describe('the AI panel', () => {
   test.beforeEach(async ({ page }) => {
     await fakeHost(page)
@@ -91,8 +98,16 @@ test.describe('the AI panel', () => {
     await feed(page, [AGENT_READY, AGENT_INIT])
     await expect(page.locator('[data-agent-button]')).toBeVisible()
 
-    // the insert dock's own button is still there, beside it
-    await expect(page.getByRole('button', { name: 'Insert elements', exact: true })).toBeVisible()
+    // it is the rail's FIRST button: before Pages, after the logo
+    await expect(railButton(page)).toBeVisible()
+    const order = await page.evaluate(() => {
+      const rail = document.querySelector('aside')
+      return [...(rail?.querySelectorAll('button') ?? [])].map((b) => b.getAttribute('aria-label'))
+    })
+    expect(order.filter((label) => label !== 'App').slice(0, 2)).toEqual([
+      'Ask the AI agent',
+      'Pages',
+    ])
   })
 
   test('an unavailable host leaves no button and no panel', async ({ page }) => {
@@ -194,12 +209,26 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-tool]')).toHaveAttribute('data-agent-tool-state', 'done')
   })
 
-  test('only one dock panel is open at a time', async ({ page }) => {
+  test('one column at a time, and the chat survives being closed', async ({ page }) => {
     await readyPanel(page)
-    await page.getByRole('button', { name: 'Insert elements', exact: true }).click()
+    await page.locator('[data-agent-input]').fill('make the heading say Hello')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('Context…\n\nmake the heading say Hello'), ...AGENT_TURN])
+
+    // Pages and the chat are the same `column` ref, so opening one closes the
+    // other by the type rather than by two components agreeing
+    await page.getByRole('button', { name: 'Pages', exact: true }).click()
     await expect(page.locator('[data-agent-panel]')).toHaveCount(0)
-    await page.locator('[data-agent-button]').click()
+
+    // the transcript is composable state, not the drawer's: it comes back
+    await railButton(page).click()
+    await expect(page.locator('[data-agent-text]')).toHaveText('The heading now reads Hello.')
+  })
+
+  test('the chat is reachable in Play, where the dock never was', async ({ page }) => {
+    await readyPanel(page)
+    await page.getByRole('button', { name: 'Play', exact: true }).click()
     await expect(page.locator('[data-agent-panel]')).toBeVisible()
-    await expect(page.locator('[data-dock-tab]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-input]')).toBeVisible()
   })
 })

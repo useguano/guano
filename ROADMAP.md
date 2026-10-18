@@ -374,26 +374,20 @@ Flags that decide the panel's shape (all from `claude --help` on this build):
 
 ### Where it lives
 
-**Builder: a second round button in the Insert dock's corner.**
-`InsertDock.vue:200` is `absolute bottom-1 left-1`, a `size-10` round button
-with a `w-[28rem]` panel above it (list `max-h-96`). The AI button sits to its
-right in the same dock root — the two buttons in one `flex items-center gap-2`
-row, the dock root's `flex-col-reverse` kept so whichever panel is open grows
-upward from its button. **The AI panel is the insert panel's footprint**:
-`w-[28rem]`, the same `rounded-2xl border border-input bg-background/96
-shadow-xl backdrop-blur`, same `origin-bottom-left` transition, a `max-h-96`
-transcript where the insert panel has its list, and a composer where the insert
-panel has its search. Icon `Sparkles`; tooltip because the icon is ambiguous.
-One is open at a time: opening one calls the other's close.
-
-It mounts where `InsertDock` mounts — `CanvasEditor.vue:210`, the overlay slot
-— so it is **Edit-only in step 1**, like ⌘E (`docs/ui.md`: the insert dock is a
-surface that does not exist in Play). Play-mode availability is a later
-decision, not an oversight; it is listed under open.
+**The left rail's first button, and a docked 16rem column.** Decided
+2026-10-18, after one commit as a canvas dock: a chat is a place you work for
+minutes at a time, so a floating panel over the canvas was the wrong shape —
+it covered the page it was editing, and a canvas affordance cannot exist in
+Play, which is where contributors live. It is now the third value of
+`useViewMode`'s one `column` ref (`'pages' | 'components' | 'agent' | null`),
+which makes it mutually exclusive with the other drawers by the type alone, and
+`visibleColumn` lets it through in both surfaces like Pages does. Recorded in
+`docs/ui.md`; the transcript lives in the singleton, not the drawer, so closing
+the column keeps the conversation.
 
 **Shown by concern, not by host.** `useAuth` deliberately exports
 `showsPublishControl` and never `isLauncher` (`docs/ui.md`, The two rails; two
-bugs from gating on the cause). The AI button follows the rule: a new
+bugs from gating on the cause). The rail button follows the rule: a new
 `useAgentChat` singleton owns `available` (false until the host has answered
 that it found a `claude` binary), and the button renders on that. `host ===
 'launcher'` is never the test — a launcher on a machine with no Claude Code is

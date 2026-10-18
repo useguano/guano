@@ -6,7 +6,7 @@ const mode = ref<'build' | 'preview'>('build')
 
 const canvas = ref<'page' | 'components'>('page')
 
-const column = ref<'pages' | 'components' | null>(null)
+const column = ref<'pages' | 'components' | 'agent' | null>(null)
 let pinStarted = false
 
 export function useViewMode() {
@@ -45,6 +45,10 @@ export function useViewMode() {
     column.value = column.value === 'pages' ? null : 'pages'
   }
 
+  function toggleAgent() {
+    column.value = column.value === 'agent' ? null : 'agent'
+  }
+
   function showApp() {
     column.value = null
     canvas.value = 'page'
@@ -55,15 +59,16 @@ export function useViewMode() {
   const isBuild = computed(() => mode.value === 'build')
   const pagesOpen = computed(() => column.value === 'pages')
   const componentsOpen = computed(() => column.value === 'components')
+  const agentOpen = computed(() => column.value === 'agent')
   const showComponents = computed(() => isBuild.value && canvas.value === 'components')
 
   const visibleColumn = computed(() =>
-    column.value === 'pages' || isBuild.value ? column.value : null,
+    column.value === 'pages' || column.value === 'agent' || isBuild.value ? column.value : null,
   )
 
   return {
     mode, isPreview, isBuild, canvas,
-    column, visibleColumn, pagesOpen, componentsOpen, showComponents,
-    setMode, setCanvas, togglePages, toggleComponents, showApp,
+    column, visibleColumn, pagesOpen, componentsOpen, agentOpen, showComponents,
+    setMode, setCanvas, togglePages, toggleComponents, toggleAgent, showApp,
   }
 }

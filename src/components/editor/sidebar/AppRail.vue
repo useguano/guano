@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent, watch } from 'vue'
 import {
-  Component, Files, Image, Inbox, Settings, UserRound, LogOut,
+  Component, Files, Image, Inbox, Settings, Sparkles, UserRound, LogOut,
 } from 'lucide-vue-next'
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import MainLogo from '@/assets/MainLogo.vue'
@@ -11,6 +11,7 @@ import { useFormAlerts } from '@/composables/useFormAlerts'
 import { useModal } from '@/composables/useModal'
 import { useAuth } from '@/composables/useAuth'
 import { useViewMode } from '@/composables/useViewMode'
+import { useAgentChat } from '@/composables/useAgentChat'
 
 const SettingsPanel = defineAsyncComponent(() => import('@/components/shared/SettingsPanel.vue'))
 
@@ -20,9 +21,10 @@ const { canBuild, logout, showsAppHome, showsAccountControls } = useAuth()
 const { hasEnabledForm } = useProject()
 const { hasNew, newCount, refresh: refreshFormAlerts, openSubmissions } = useFormAlerts()
 const {
-  isBuild, canvas, column, showComponents, pagesOpen,
-  togglePages, toggleComponents, showApp,
+  isBuild, canvas, column, showComponents, pagesOpen, agentOpen,
+  togglePages, toggleComponents, toggleAgent, showApp,
 } = useViewMode()
+const { available: agentAvailable } = useAgentChat()
 
 watch(
   [canBuild, hasEnabledForm],
@@ -54,6 +56,17 @@ watch(
       </div>
       <div class="my-1 h-px w-full bg-input" />
     </template>
+
+    <ButtonUI
+      v-if="agentAvailable"
+      variant="ghost"
+      :icon="Sparkles"
+      aria-label="Ask the AI agent"
+      data-agent-button
+      class="w-7"
+      :class="agentOpen ? 'text-accent-foreground' : 'text-muted-foreground'"
+      @click="toggleAgent"
+    />
 
     <ButtonUI
       variant="ghost"

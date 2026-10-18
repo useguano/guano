@@ -3,6 +3,7 @@ import EditorLayout from '@/layouts/EditorLayout.vue'
 import AppRail from '@/components/editor/sidebar/AppRail.vue'
 import PagesDrawer from '@/components/editor/sidebar/PagesDrawer.vue'
 import ComponentsDrawer from '@/components/editor/sidebar/ComponentsDrawer.vue'
+import AgentDrawer from '@/components/editor/sidebar/AgentDrawer.vue'
 import CanvasEditor from '@/components/editor/canvas/CanvasEditor.vue'
 import SettingsEditor from '@/components/editor/sidebar/SettingsEditor.vue'
 import ContextMenu from '@/components/editor/canvas/ContextMenu.vue'
@@ -53,6 +54,10 @@ const { isBuild, visibleColumn, showComponents } = useViewMode()
 
       <template v-if="visibleColumn === 'components'" #components>
         <ComponentsDrawer />
+      </template>
+
+      <template v-if="visibleColumn === 'agent'" #agent>
+        <AgentDrawer />
       </template>
 
       <div class="flex h-full min-h-0 flex-col">

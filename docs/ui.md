@@ -65,7 +65,7 @@ The sidebar panel (`SettingsEditor` → `PanelPopoverBody`) opts out of host Esc
 
 ## The two rails
 
-**The left rail (`AppRail`)**: **App** (the logo — the bare page canvas, in Edit, no column), **Pages**, **Components**, then the media library, project settings + account (`SettingsPanel`, which contains `UsersSettings`) and logout. **The surface switch is not in the rail** — it is the canvas's Edit / Play toggle, because it is a mode of the page you are on rather than a place to go.
+**The left rail (`AppRail`)**: **App** (the logo — the bare page canvas, in Edit, no column), the **AI drawer** (first of the buttons, and only when a desktop host offers one), **Pages**, **Components**, then the media library, project settings + account (`SettingsPanel`, which contains `UsersSettings`) and logout. **The surface switch is not in the rail** — it is the canvas's Edit / Play toggle, because it is a mode of the page you are on rather than a place to go.
 
 **The right rail (`SettingsEditor`)**: the save-status button that opens the publish popover (`PublishPopover`), the comments popover (`CommentsEditor`), and the panel buttons. ⌘P opens `PublishDialog`, which auto-runs the publish on mount. Semantic status colour tokens are `text-success` / `text-pending` / `text-danger`.
 
@@ -75,25 +75,40 @@ There is no header: the two rails own the chrome.
 
 Two consequences worth knowing before changing any of it. The status button is **also the only save-status surface** (`SAVE_ICONS`/`SAVE_COLORS`, `aria-live`), so hiding it obliges the host to show save state: `src/lib/hostBridge.ts` posts `usePersistence().status` out over a `WKScriptMessageHandler` named `guano`, and the host calls back through `window.__guanoHost` (`openPublish`, `sessionRestored`, `sessionLost`). And the **Account section is NAVLESS** (`NAVLESS_SECTIONS`, reachable only from the My account button), so hiding that button removes password changes in launcher mode — accepted knowingly; they happen in a browser. Coverage: `e2e/auth-launcher-session.spec.ts`.
 
-## The canvas's bottom-left corner holds two docks
+## The AI drawer is the rail's first button and a third column
 
-`InsertDock` (the ⌘E insert palette) and `AgentDock` (the ⌘J AI panel) sit side
-by side in that corner — `left-1` and `left-13`, which is exactly the first
-button's right edge plus a `gap-2`. Both mount in `CanvasEditor`'s overlay
-slot, so both are **Edit-only**, like ⌘E itself: they are surfaces that do not
-exist in Play. One panel is open at a time, and each closes the other from the
-COMPONENT (`AgentDock` watches the palette's `open` and calls `closePalette`
-when it opens), so neither singleton imports the other — the same care
-`ModeToggle` takes not to pull `useStructure` into the view-mode singleton.
+`AgentDrawer` (⌘J) is the left rail's **first** item and a docked 16rem column,
+not a canvas affordance. It was a dock in the bottom-left corner beside
+`InsertDock` for exactly one commit: a chat is a place you work for minutes at
+a time, and a floating panel over the canvas is the wrong shape for that — it
+covered the page it was editing, and it could not exist in Play, which is where
+contributors live (→ `docs/agent-panel.md`, Who may drive it).
 
-The AI panel is `available`-gated and so normally absent: it needs a desktop
-host that found a `claude` binary, and the whole dock is `v-if`'d on that — not
-on `host === 'launcher'`, which is the cause rather than the concern.
-→ `docs/agent-panel.md`
+**It is the third value of `column`**, which is what keeps the drawers mutually
+exclusive for free: `'pages' | 'components' | 'agent' | null`, one ref, so
+opening the chat closes Pages by the type rather than by two components
+agreeing to. `visibleColumn` lets it through in **both surfaces** (like Pages,
+unlike Components) — a chat is not a Build-only surface.
 
-Both buttons carry an `aria-label`. They are raw icon buttons, and `v-tooltip`
-only sets `aria-describedby` while the tooltip is showing, so neither had an
-accessible name — the insert `+` had none since it was written.
+**The drawer owns no state.** The transcript lives in the `useAgentChat`
+singleton, so closing the column and reopening it brings the conversation back;
+there is deliberately no second `open` ref beside `column`. It does not use
+`DrawerShell` either — that shell always renders a search field above its list,
+and a chat has nothing to search.
+
+**No Escape, no outside-click.** A persistent column never closes on Escape
+(`useDrawerEscape` peels a layer *inside* a column, never the column itself),
+and the chat has no layer to peel. Same rule as the Layers view: only the rail
+button closes it.
+
+The button is `v-if`'d on `useAgentChat().available`, which is false until a
+desktop host says it found a `claude` binary — so in a browser the rail looks
+exactly as it always did. Not `host === 'launcher'`: that is the cause rather
+than the concern. → `docs/agent-panel.md`
+
+Both canvas dock buttons carry an `aria-label` for the same reason: they are
+raw icon buttons, and `v-tooltip` only sets `aria-describedby` while the tooltip
+is showing, so the insert `+` had no accessible name since it was written.
 
 ## The right sidebar's panels
 
@@ -113,11 +128,11 @@ The Palette and Paperclip badges beside it are gone — "this element has classe
 
 ## Canvas and column are independent
 
-`useViewMode`. `canvas` is `'page' | 'components'` — what the centre shows. `column` is `'pages' | 'components' | null` — which docked 16rem track is open.
+`useViewMode`. `canvas` is `'page' | 'components'` — what the centre shows. `column` is `'pages' | 'components' | 'agent' | null` — which docked 16rem track is open.
 
 Keeping them apart is what lets the board stay up at full width when Components is pressed again, and opening a page hands the canvas back — done inside `usePage.setActivePage`, not a watcher on the page id, so re-opening the page you are already on still works.
 
-`column` is ONE ref rather than a flag per column, so the invariant is the type. `pagesOpen`/`componentsOpen` are computeds over it; `visibleColumn` is what `EditorLayout` renders (it hides the Build-only column in Preview without forgetting it); `showComponents` is a *canvas* test. The contributor pin clears `components` and resets the canvas.
+`column` is ONE ref rather than a flag per column, so the invariant is the type — which is how the AI drawer became mutually exclusive with the other two by being added to it, with no code anywhere closing anything. `pagesOpen`/`componentsOpen` are computeds over it; `visibleColumn` is what `EditorLayout` renders (it hides the Build-only column in Preview without forgetting it); `showComponents` is a *canvas* test. The contributor pin clears `components` and resets the canvas.
 
 ## There is no Layers column
 
@@ -165,7 +180,7 @@ They are programmed in **four** places, by scope:
 
 **Escape is deliberately in none of them.** Each layer owns its own listener, so the peel order falls out of who is mounted: `ModalStackHost`, `useEffectsDrawer`, `PopoverHost`, `useDrawerEscape`, and `InteractionsEditor` for a pending target pick.
 
-In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces; ⌘J (the AI panel, `useAgentChat`) is Edit-only like its dock.
+In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces, and so does ⌘J (the AI drawer — it toggles `column`, and no-ops while the agent is unavailable).
 
 ## The two surfaces
 
@@ -177,7 +192,7 @@ One admin shell (`BuildView` at `/admin`, laid out by `EditorLayout`) with **two
 
 **Preview** (shown as **Play**) — the Build-only columns drop out and the centre becomes the full-site render (`SitePreview` → `PreviewRenderer`). For an admin or editor it is **read-only**: the site the way a visitor gets it, with links navigating (state-driven, no URL change), interactions, animations, scrub, sliders and smooth scroll all running for real, no editor affordance drawn over it, and text edited on the Edit canvas (`ElementRenderer`). Anyone can add a **comment** (hold C, click). **A contributor also edits content on the render** (`usePreviewEditing`, gated on `!canBuild`): double-click text to edit it in place (`useInlineEdit` with `escBehavior: 'save'`; field-bound text writes the entry, locale-aware), double-click an image/video to replace it from the media library, and right-click for **Edit content** / **Replace background** (the menu lives in `SitePreview`). Text inside a component instance is per-instance content, so it is editable; a background inside one is the master's (`backgroundInfo` renders from it, and the contributor merge keeps masters), so it is not offered. While editing is on, a link's single click waits 250ms (one shared `pendingNav` timer) so a double-click can cancel it; for builders a click navigates at once. The chrome around it still edits: the sidebar panels are per account type, not per mode, so an admin keeps the full Data/Style/Interactions inspector in Play, and the Pages drawer keeps its page/item settings. **Contributors are pinned here** (`useViewMode` forces the mode the moment `canBuild` resolves false; the Components rail button, the Pages drawer's Edit-layers icons and the toggle itself are hidden for them, so they only ever see Play and never learn there was a switch) — which means a contributor's content editing is the in-place editing above, plus the **Pages drawer's** item/page settings (entry field values, name/slug/status/seo) and comments.
 
-The toggle is a **page's** mode, so `BuildView` mounts it only when `canBuild && !showComponents` — the components board has nothing to play, and you leave it by opening a page. Leaving Edit closes the ⌘E palette (`ModeToggle` calls `closePalette`, not `setMode`, so the view-mode singleton never pulls in `useStructure`). It sits bottom-RIGHT so it never shares a corner with the two docks (`InsertDock` and `AgentDock`), and its Play offset pays back the framed pane's `my-2` + border so switching doesn't move it under the pointer.
+The toggle is a **page's** mode, so `BuildView` mounts it only when `canBuild && !showComponents` — the components board has nothing to play, and you leave it by opening a page. Leaving Edit closes the ⌘E palette (`ModeToggle` calls `closePalette`, not `setMode`, so the view-mode singleton never pulls in `useStructure`). It sits bottom-RIGHT so it never shares a corner with `InsertDock`, and its Play offset pays back the framed pane's `my-2` + border so switching doesn't move it under the pointer.
 
 ## Tailwind at runtime
 

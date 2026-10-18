@@ -6,10 +6,16 @@
 
 ## What it is, and what of it exists
 
-A chat panel in the canvas's bottom-left corner, beside the ⌘E insert dock. The
-person types next to the page they are looking at; an agent edits the site
-through the same MCP toolset any other client gets, and the canvas follows it
-live.
+The left rail's first button and a docked 16rem column (⌘J). The person types
+beside the page they are looking at; an agent edits the site through the same
+MCP toolset any other client gets, and the canvas follows it live.
+
+**It is the third value of `useViewMode`'s one `column` ref**, so it is
+mutually exclusive with Pages and Components for free, and it exists in **both
+surfaces** — unlike the canvas dock it replaced, which could not appear in Play
+at all. The shape and the reasons are in `docs/ui.md`; the transcript lives in
+the `useAgentChat` singleton rather than the drawer, so closing the column and
+reopening it brings the conversation back.
 
 **The model client is the person's own Claude Code install.** The launcher
 spawns `claude -p` with JSONL on both pipes and forwards the stream to the page;
@@ -167,9 +173,10 @@ agent token owned by an admin — which is what `guano connect` mints — is not
 scoped at all. **One token per driving person is the whole implementation**, and
 until it exists a contributor-driven turn must not run on an admin's token.
 
-Two consequences for this file's own code, when that lands: the dock stops
-being Edit-only (contributors are pinned to Play), and the context chip has no
-selection to name there.
+One consequence for this file's own code, when that lands: the context chip has
+no selection to name in Play, because that surface has no Layers tree. The
+other one is already paid for — the drawer exists in Play, which the canvas
+dock never could.
 
 Nothing is reachable for a contributor yet regardless: the panel needs a
 desktop host to spawn `claude`, and a contributor reaches the editor in a

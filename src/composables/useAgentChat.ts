@@ -41,7 +41,6 @@ export interface AgentContext {
 
 const INPUT_CAP = 300
 
-const open = ref(false)
 const available = ref(false)
 const status = ref<AgentStatus>('unknown')
 const unavailableReason = ref<string | null>(null)
@@ -372,20 +371,6 @@ function restart(): void {
   startAgent()
 }
 
-export function openChat(): void {
-  open.value = true
-  startAgent()
-}
-
-export function closeChat(): void {
-  open.value = false
-}
-
-export function toggleChat(): void {
-  if (open.value) closeChat()
-  else openChat()
-}
-
 export function useAgentChat() {
   function send(text: string, context?: AgentContext | null): void {
     const body = text.trim()
@@ -406,7 +391,6 @@ export function useAgentChat() {
   }
 
   return {
-    open,
     available,
     status,
     busy: agentBusy,
@@ -420,9 +404,6 @@ export function useAgentChat() {
     restart,
     ingest,
     exit,
-    openChat,
-    closeChat,
-    toggleChat,
     start: startAgent,
   }
 }

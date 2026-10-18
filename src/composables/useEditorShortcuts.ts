@@ -3,7 +3,7 @@ import { useContextMenu } from './useContextMenu'
 import { usePersistence } from './usePersistence'
 import { useStructure } from './useStructure'
 import { togglePalette } from './useCommandPalette'
-import { toggleChat } from './useAgentChat'
+import { useAgentChat } from './useAgentChat'
 import { useEffectsDrawer } from './useEffectsDrawer'
 import { usePublishDialog } from './usePublishDialog'
 import { useViewMode } from './useViewMode'
@@ -21,9 +21,10 @@ export function useEditorShortcuts() {
   const { backend } = useStructure()
   const { undo, redo, saveNow } = usePersistence()
   const { openPublish } = usePublishDialog()
-  const { isBuild } = useViewMode()
+  const { isBuild, toggleAgent } = useViewMode()
   const { toggleDrawer } = useEffectsDrawer()
   const { canBuild } = useAuth()
+  const { available: agentAvailable } = useAgentChat()
 
   const buildOnly = (fn: () => void) => () => {
     if (isBuild.value) fn()
@@ -48,6 +49,14 @@ export function useEditorShortcuts() {
     { key: 'e', mod: true, shift: false, allowInInput: true, handler: buildOnly(togglePalette) },
     { key: 'e', mod: true, shift: true, allowInInput: true, handler: buildOnly(toggleDrawer) },
     { key: 'p', mod: true, shift: false, allowInInput: true, handler: openPublish },
-    { key: 'j', mod: true, shift: false, allowInInput: true, handler: buildOnly(toggleChat) },
+    {
+      key: 'j',
+      mod: true,
+      shift: false,
+      allowInInput: true,
+      handler: () => {
+        if (agentAvailable.value) toggleAgent()
+      },
+    },
   ])
 }
