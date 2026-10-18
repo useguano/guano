@@ -1,10 +1,16 @@
 import { computed, ref } from 'vue'
 import { hostBridge, type HostAgentExit, type HostAgentImage } from '@/lib/hostBridge'
 import { uid } from '@/lib/shared/ids'
-import { describeTool } from '@/lib/agentLabels'
+import { describeTool, HARNESS_TOOLS } from '@/lib/agentLabels'
 import { useNotice } from './useNotice'
 
-export type AgentStatus = 'unknown' | 'unavailable' | 'idle' | 'thinking' | 'streaming'
+export type AgentStatus =
+  | 'unknown'
+  | 'unavailable'
+  | 'switching'
+  | 'idle'
+  | 'thinking'
+  | 'streaming'
 export type AgentToolState = 'running' | 'done' | 'error' | 'denied'
 
 export interface AgentTextItem {
@@ -56,12 +62,29 @@ const sessionId = ref<string | null>(null)
 const model = ref<string | null>(null)
 const rateLimit = ref<string | null>(null)
 const turns = ref<AgentTurn[]>([])
+/**
+ * Has the host answered AT ALL — `ready` or `unavailable`?
+ *
+ * The rail button renders on THIS, not on `available`. Panel-first means a
+ * person with no Claude Code install has to be able to find the feature and
+ * read how to get it; hiding the button left the whole thing undiscoverable
+ * on exactly the machines that needed the instructions. It is still the
+ * ANSWER and never `host === 'launcher'` (two recorded bugs, `docs/ui.md`), so
+ * a browser — where nothing answers — still has no button.
+ */
+const answered = ref(false)
+/** which branch the host is respawning onto, while `status === 'switching'` */
+const switchingTo = ref<string | null>(null)
 
 let requested = false
+/** the host has seen our `agent-target` since the last `ready` */
+let targetAcknowledged = false
 let interrupting = false
 let blockOwner = 'm0'
 let openText: { owner: string; key: string } | null = null
 let consolidated = 0
+/** tool_use ids the transcript is deliberately not showing — see HARNESS_TOOLS */
+let hiddenTools = new Set<string>()
 
 export const agentBusy = computed(
   () => status.value === 'thinking' || status.value === 'streaming',
@@ -221,6 +244,7 @@ function ingestSystem(event: Record<string, unknown>): void {
       const key = asString(event.tool_use_id)
       const name = asString(event.tool_name) ?? 'tool'
       if (!key) return
+      hiddenTools.delete(key) // a denial is never hidden, harness tool or not
       upsertTool(key, {
         name: toolLabel(name),
         state: 'denied',
@@ -252,7 +276,12 @@ function ingestStreamEvent(event: Record<string, unknown>): void {
     } else if (kind === 'tool_use') {
       const id = asString(block?.id)
       const name = toolLabel(asString(block?.name) ?? 'tool')
-      if (id) upsertTool(id, { name, summary: describeTool(name, null) })
+      if (!id) return
+      if (HARNESS_TOOLS.has(name)) {
+        hiddenTools.add(id)
+        return
+      }
+      upsertTool(id, { name, summary: describeTool(name, null) })
     }
     return
   }
@@ -287,6 +316,10 @@ function ingestAssistant(event: Record<string, unknown>): void {
       const id = asString(block?.id)
       if (id) {
         const name = toolLabel(asString(block?.name) ?? 'tool')
+        if (HARNESS_TOOLS.has(name)) {
+          hiddenTools.add(id)
+          continue
+        }
         upsertTool(id, {
           name,
           summary: describeTool(name, block?.input),
@@ -317,6 +350,7 @@ function ingestUser(event: Record<string, unknown>): void {
     if (asString(block?.type) !== 'tool_result') continue
     const key = asString(block?.tool_use_id)
     if (!key) continue
+    if (hiddenTools.has(key)) continue
     const failed = block?.is_error === true
     upsertTool(key, {
       state: failed ? 'error' : 'done',
@@ -332,6 +366,7 @@ function ingestResult(event: Record<string, unknown>): void {
     const denial = asRecord(raw)
     const key = asString(denial?.tool_use_id)
     if (!key) continue
+    hiddenTools.delete(key)
     const named = turn?.items.find(
       (item): item is AgentToolItem => item.kind === 'tool' && item.key === key,
     )
@@ -350,6 +385,7 @@ function ingestResult(event: Record<string, unknown>): void {
     }
   }
   interrupting = false
+  hiddenTools = new Set()
   status.value = 'idle'
 }
 
@@ -371,6 +407,9 @@ function ingest(raw: unknown): void {
   switch (asString(event.type)) {
     case 'ready': {
       available.value = true
+      answered.value = true
+      switchingTo.value = null
+      targetAcknowledged = false
       unavailableReason.value = null
       sessionId.value = asString(event.sessionId) ?? sessionId.value
       status.value = 'idle'
@@ -381,8 +420,17 @@ function ingest(raw: unknown): void {
     }
     case 'unavailable': {
       available.value = false
+      answered.value = true
       status.value = 'unavailable'
       unavailableReason.value = asString(event.reason) ?? 'Claude Code was not found'
+      return
+    }
+    // The branch the editor has open changed, so the host is respawning the
+    // agent against a config written for it. The composer waits; the next
+    // `ready` ends it.
+    case 'switching': {
+      status.value = 'switching'
+      switchingTo.value = asString(event.target) ?? null
       return
     }
     case 'system':
@@ -402,6 +450,7 @@ function ingest(raw: unknown): void {
 
 function exit(info?: HostAgentExit): void {
   requested = false
+  targetAcknowledged = false
   const turn = currentTurn()
   if (turn) {
     turn.done = true
@@ -424,8 +473,28 @@ export function startAgent(): void {
   hostBridge.post({ type: 'agent-start' })
 }
 
+/**
+ * Which branch the editor has loaded, for the host's `guano connect --target`.
+ *
+ * The host WAITS for this before it spawns, and never substitutes a default:
+ * an agent in the panel does not pick a target, so a lost message has to look
+ * like the bug it is rather than quietly become Main. Posted after
+ * `agent-start` at boot, on every branch switch, and again on a `ready` that
+ * has not seen one — a reload replays `agent-start` and the target must
+ * follow it.
+ */
+export function postAgentTarget(target: string): void {
+  if (!hostBridge.available || !target) return
+  targetAcknowledged = true
+  hostBridge.post({ type: 'agent-target', target })
+}
+
+/** has the host been told the target since the last `ready`? */
+export const agentTargetPosted = () => targetAcknowledged
+
 function restart(): void {
   requested = false
+  targetAcknowledged = false
   unavailableReason.value = null
   status.value = 'unknown'
   startAgent()
@@ -471,6 +540,8 @@ export function useAgentChat() {
 
   return {
     available,
+    answered,
+    switchingTo,
     status,
     busy: agentBusy,
     step: agentStep,

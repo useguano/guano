@@ -278,6 +278,57 @@ export const AGENT_DENIAL: unknown[] = [
   }),
 ]
 
+/**
+ * Claude Code's deferred tool loading, interleaved with real work: the CLI
+ * hands the model tool names and it fetches each schema on demand. Three of
+ * these opened the first real session, rendered as "Looked up its tools".
+ */
+export const AGENT_HARNESS_TURN: unknown[] = [
+  { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'h1' },
+  messageStart('msg_h1', 'h2'),
+  ...agentToolCall('toolu_h1', 'ToolSearch', { query: 'select:mcp__guano__get_page' }, 'msg_h1', 0, {
+    content: '<functions>…</functions>',
+  }),
+  messageStart('msg_h2', 'h3'),
+  ...agentToolCall('toolu_h2', 'ToolSearch', { query: 'select:mcp__guano__set_page_html' }, 'msg_h2', 0, {
+    content: '<functions>…</functions>',
+  }),
+  messageStart('msg_h3', 'h4'),
+  ...agentToolCall('toolu_h3', 'mcp__guano__list_pages', {}, 'msg_h3', 0),
+  messageStart('msg_h4', 'h5'),
+  ...textBlock('msg_h4', 0, ['One page: Home.'], 'h6'),
+  agentResult({ result: 'One page: Home.' }),
+]
+
+/** A denied harness tool: hidden is not the same as silent. */
+export const AGENT_HARNESS_DENIAL: unknown[] = [
+  { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'hd1' },
+  messageStart('msg_hd', 'hd2'),
+  {
+    type: 'stream_event',
+    event: {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: 'toolu_hd', name: 'ToolSearch', input: {} },
+    },
+    session_id: SESSION,
+    uuid: 'hd3',
+  },
+  {
+    type: 'system',
+    subtype: 'permission_denied',
+    tool_name: 'ToolSearch',
+    tool_use_id: 'toolu_hd',
+    message: 'ToolSearch is not allowed in this panel.',
+    uuid: 'hd4',
+    session_id: SESSION,
+  },
+  agentResult({
+    result: 'I could not load that tool.',
+    permission_denials: [{ tool_name: 'ToolSearch', tool_use_id: 'toolu_hd', tool_input: {} }],
+  }),
+]
+
 /** What an answered interrupt leaves behind: an error result with no text. */
 export const AGENT_INTERRUPT_RESULT = agentResult({
   subtype: 'error_during_execution',

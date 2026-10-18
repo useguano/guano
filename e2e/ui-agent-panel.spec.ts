@@ -3,6 +3,8 @@ import { loadFixture } from './fixtures/project'
 import {
   AGENT_BUSY_TURN,
   AGENT_DENIAL,
+  AGENT_HARNESS_DENIAL,
+  AGENT_HARNESS_TURN,
   AGENT_INIT,
   AGENT_INIT_SONNET,
   AGENT_INTERRUPT_RESULT,
@@ -129,6 +131,9 @@ test.describe('the AI panel', () => {
     expect(sent).toHaveLength(1)
     expect(sent[0]!.text).toContain('make the heading say Hello')
     expect(sent[0]!.text).toContain('Context from the Guano editor')
+    // the page is named the way the TOOLS take it — `pageId` resolves either
+    // way now, and the path alone cost the first embedded session two calls
+    expect(sent[0]!.text).toMatch(/pageId: \S+, path: \//)
 
     // the question shows immediately, dimmed until the host echoes it back
     await expect(page.locator('[data-agent-question]')).toHaveText('make the heading say Hello')
@@ -183,6 +188,37 @@ test.describe('the AI panel', () => {
     await expect(activity).toContainText('Listed the pages')
     await activity.getByRole('button').click()
     await expect(page.locator('[data-agent-tool]').nth(0)).toContainText('Read the guide: page-html')
+  })
+
+  test('harness bookkeeping is neither a step nor a row', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('what pages are there')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('what pages are there'), ...AGENT_HARNESS_TURN])
+
+    // two ToolSearch calls and one real one: the bubble counts the real one
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveCount(1)
+    await expect(activity).toHaveAttribute('data-agent-activity-count', '1')
+    await expect(activity).toContainText('1 step')
+    await expect(activity).toContainText('Listed the pages')
+    await activity.getByRole('button').click()
+    await expect(page.locator('[data-agent-tool]')).toHaveCount(1)
+    await expect(page.locator('[data-agent-panel]')).not.toContainText('ToolSearch')
+  })
+
+  test('a DENIED harness tool is still shown — hidden is not silent', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('read my notes')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('read my notes'), ...AGENT_HARNESS_DENIAL])
+
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveAttribute('data-agent-activity-state', 'error')
+    await activity.getByRole('button').click()
+    const tool = page.locator('[data-agent-tool]')
+    await expect(tool).toHaveAttribute('data-agent-tool-state', 'denied')
+    await expect(tool).toContainText('not allowed in this panel')
   })
 
   test('the strip above the composer says what the agent is doing right now', async ({ page }) => {

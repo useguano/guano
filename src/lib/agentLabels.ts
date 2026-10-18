@@ -34,6 +34,18 @@ export function modelChoice(id: string | null): string | null {
   return null
 }
 
+/**
+ * Harness bookkeeping, not something the agent did. Claude Code hands the
+ * model tool NAMES and makes it fetch each schema on demand, so a first turn
+ * carried three `ToolSearch` rows reading "Looked up its tools" — three of the
+ * seven steps the person was shown. These are dropped from the activity bubble
+ * and from the step count, and their results are consumed in silence.
+ *
+ * A DENIED harness tool still renders: a denial is never hidden
+ * (`docs/agent-panel.md`).
+ */
+export const HARNESS_TOOLS: ReadonlySet<string> = new Set(['ToolSearch'])
+
 type Input = Record<string, unknown>
 
 const str = (input: Input, key: string): string | null => {
@@ -108,7 +120,6 @@ const TOOLS: Record<string, (input: Input) => string> = {
   preview: () => 'Rendered a preview',
   publish: () => 'Published',
   use_project: () => 'Switched project',
-  ToolSearch: () => 'Looked up its tools',
   WebFetch: (i) => `Fetched ${str(i, 'url') ?? 'a page'}`,
   WebSearch: (i) => `Searched: ${str(i, 'query') ?? ''}`.trim(),
 }
