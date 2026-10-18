@@ -1702,6 +1702,80 @@ test.describe('the editor AI panel profile', () => {
     await expect(panel.call('get_page', { pageId: '/' })).rejects.not.toThrow(/set_target/)
   })
 
+  // `ask_user` and `suggest_next` are the other half of the profile: the panel
+  // ONLY. They are conversation, not work — the panel renders the call's input
+  // as clickable options and the answer is the next user message — and a tool
+  // whose contract is "end your turn" is wrong in a client that is already a
+  // chat. Both are inert on the server by design: the whole effect is in the
+  // panel, so the handler's only job is to refuse a shape it cannot render.
+  test('the two conversation tools exist here and nowhere else', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
+    expect(panel.toolNames()).toContain('ask_user')
+    expect(panel.toolNames()).toContain('suggest_next')
+
+    const external = await mcpSession()
+    expect(external.toolNames()).not.toContain('ask_user')
+    expect(external.toolNames()).not.toContain('suggest_next')
+    await expect(external.call('ask_user', { questions: [] })).rejects.toThrow(/unknown tool/)
+  })
+
+  test('an ask echoes back with the end-the-turn note, and refuses a shape the panel cannot render', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
+    const asked = await panel.call('ask_user', {
+      questions: [
+        { id: 'mood', question: 'Which direction?', options: [{ label: 'Stark' }, { label: 'Warm' }] },
+        { id: 'copy', question: 'Which sections?', options: [{ label: 'Hero only' }, { label: 'Hero + about' }] },
+      ],
+    })
+    expect(asked.asked).toBe(2)
+    // the contract, in the result as well as the description: there is no way
+    // to block on a person in print mode, so the model has to stop talking
+    expect(asked.note).toMatch(/End your turn now/)
+
+    // one option is not a choice
+    await expect(
+      panel.call('ask_user', { questions: [{ id: 'a', question: 'Which?', options: [{ label: 'Only' }] }] }),
+    ).rejects.toThrow(/2 to 5 options/)
+    // and a fifth question is a conversation, not one batch
+    await expect(
+      panel.call('ask_user', {
+        questions: ['a', 'b', 'c', 'd', 'e'].map((id) => ({
+          id,
+          question: 'Which?',
+          options: [{ label: 'This' }, { label: 'That' }],
+        })),
+      }),
+    ).rejects.toThrow(/1 to 4 questions/)
+    // the picks come back addressed by id, so two questions may not share one
+    await expect(
+      panel.call('ask_user', {
+        questions: [
+          { id: 'same', question: 'A?', options: [{ label: 'x' }, { label: 'y' }] },
+          { id: 'same', question: 'B?', options: [{ label: 'x' }, { label: 'y' }] },
+        ],
+      }),
+    ).rejects.toThrow(/share the id "same"/)
+  })
+
+  test('a suggestion needs a prompt, because the prompt is what a click sends', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
+    const offered = await panel.call('suggest_next', {
+      suggestions: [
+        { label: 'Animate the hero', prompt: 'Add a load animation to the hero.' },
+        { label: 'Add French', prompt: 'Add a French locale and translate the page.' },
+      ],
+    })
+    expect(offered.offered).toBe(2)
+    expect(offered.note).toMatch(/End your turn now/)
+
+    await expect(
+      panel.call('suggest_next', { suggestions: [{ label: 'Do it', prompt: '' }] }),
+    ).rejects.toThrow(/non-empty prompt/)
+    await expect(
+      panel.call('suggest_next', { suggestions: [{ label: 'Essay', prompt: 'x'.repeat(501) }] }),
+    ).rejects.toThrow(/over 500 characters/)
+  })
+
   test('a target the editor set is simply the target', async () => {
     const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
     const status = await panel.call('get_status')
