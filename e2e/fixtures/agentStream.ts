@@ -169,6 +169,14 @@ export const agentResult = (overrides: Record<string, unknown> = {}) => ({
   duration_api_ms: 3965,
   total_cost_usd: 0.0125953,
   permission_denials: [],
+  // the cache figures decide whether bigger MCP instructions cost once per
+  // session or once per turn — `docs/agent-panel.md`, Startup cost
+  usage: {
+    input_tokens: 4,
+    cache_read_input_tokens: 19_366,
+    cache_creation_input_tokens: 0,
+    output_tokens: 212,
+  },
   ...overrides,
 })
 

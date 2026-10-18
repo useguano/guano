@@ -131,13 +131,22 @@ function pickSuggestion(item: AgentSuggestItem, suggestion: { label: string; pro
   send(suggestion.prompt, context.value)
 }
 
+const thousands = (n: number): string =>
+  n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 1_000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+
 /**
- * `3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness)`.
+ * `3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness) · 19k cached`.
  *
  * Shown on every finished turn the page actually timed, never behind a dev
  * flag: the point of measuring the panel is that a person who says it is slow
  * can say by how much, and that the call counts say where the time went.
  * A turn rebuilt from a replayed transcript has no `sentAt` and gets nothing.
+ *
+ * The cached figure appears only once there is one, and it answers a question
+ * nothing else can: whether the system prompt and the MCP instructions are
+ * served from cache after turn one. **Bigger instructions cost once per
+ * session if they are and once per turn if they are not**, so anything that
+ * proposes to grow them is decided against this number.
  */
 function metaLine(turn: AgentTurn): string | null {
   const t = turn.timings
@@ -153,6 +162,8 @@ function metaLine(turn: AgentTurn): string | null {
     `${t.calls} call${t.calls === 1 ? '' : 's'}` +
       (breakdown.length ? ` (${breakdown.join(', ')})` : ''),
   )
+  const cached = t.usage?.cacheReadInputTokens ?? 0
+  if (cached > 0) parts.push(`${thousands(cached)} cached`)
   return parts.join(' · ')
 }
 

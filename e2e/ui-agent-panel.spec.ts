@@ -280,6 +280,9 @@ test.describe('the AI panel', () => {
     await expect(meta).toHaveCount(1)
     await expect(meta).toContainText('3 calls (2 guide)')
     await expect(meta).toContainText('to first word')
+    // the one number that says whether growing the MCP instructions costs
+    // once per session or once per turn
+    await expect(meta).toContainText('19k cached')
   })
 
   test('harness bookkeeping is neither a step nor a row', async ({ page }) => {

@@ -391,7 +391,7 @@ from the transcript and not from the clock. The page times its own half in
 turn ends with one mono line:
 
 ```
-3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness)
+3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness) · 19k cached
 ```
 
 **It is not dev-only, deliberately.** The whole point is that a person who
@@ -400,13 +400,14 @@ where the time went. A turn rebuilt from a replayed transcript has no `sentAt`
 and gets no line — those lines arrive in one burst and a duration taken from
 them would read as a fast turn rather than as a replayed one.
 
-The `result` line's `usage` is kept on the turn too (`input_tokens`,
-`cache_read_input_tokens`, `cache_creation_input_tokens`). It is the evidence
-for one question and only one: whether Claude Code serves the system prompt
-and the MCP instructions from cache after turn one. **Bigger instructions are
-paid once per session if it does and once per turn if it does not**, so
-anything that proposes to grow them is checked against this number rather than
-against the belief that caching happens.
+The `result` line's `usage` is kept on the turn (`input_tokens`,
+`cache_read_input_tokens`, `cache_creation_input_tokens`), and the cached
+figure joins the line once there is one. It is the evidence for one question
+and only one: whether Claude Code serves the system prompt and the MCP
+instructions from cache after turn one. **Bigger instructions are paid once
+per session if it does and once per turn if it does not**, so anything that
+proposes to grow them is checked against this number rather than against the
+belief that caching happens.
 
 ### The runs
 
