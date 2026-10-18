@@ -422,6 +422,15 @@ Nothing that touches the handbook, the instructions or the default model is
 justified before there are numbers in that table, and each change records its
 own before/after against the same prompt.
 
+**One link of the chain is already measured and already ruled out.** `node
+packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**
+(five runs, 2026-10-18, no instance listening). That boot reads the 185 KB
+`GUIDE.md` and imports the 242 KB runtime bundle before it answers
+`initialize`, which looked like the obvious thing to make lazy — it is not:
+the whole process is under a fifth of a second, so moving the guide read to
+the first `get_guide` would buy single-digit milliseconds. **Do not lazy-load
+`GUIDE.md`.** Whatever ready-time costs, it is not this.
+
 ## Onboarding
 
 The drawer's unavailable state distinguishes two things, because they need
