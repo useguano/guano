@@ -129,11 +129,31 @@ Local path arguments (`codePath`, `editsPath`, `manifestPath`, `upload_media.pat
 
 **One signal: `GUANO_MCP_EMBEDDED=1`** in the entry's `env`, written only by `guano connect --config <file> --embedded`. `server.mjs` reads it into `createToolSet({embedded})`; `connect` refuses the flag without `--config`, because the shared Claude configs belong to a client with no editor to ask.
 
-Three things change, all at toolset creation:
+Four things change, all at toolset creation:
 
 - **`PANEL_DROPPED`** is filtered out of `tools` and `toolMap`, so a call to one is `unknown tool` — which is already the right answer. It holds `use_project` and `set_target` (the panel knows the project and the branch), `publish` (the person's button), and `list_integrations` / `list_form_submissions` (a connected instance's operations surface, not design work beside a canvas). **`preview` stays**: it renders the target and returns the same `warnings` publish does, which is the only review the panel can run.
 - **`guideInstructions(embedded)`** replaces golden rules 5 and 6 — which site, which target — with the handbook's `## Inside the editor`, renumbering what is left, and drops the workflow recipe's `set_target` and `publish` steps. `GUIDE_INSTRUCTIONS` stays as the external value so nothing else moves.
 - **`get_status`** answers `embedded: true`, and its Main-vs-draft advice is trimmed from the tool description: in the panel the editor already chose, so "propose a DRAFT" is an instruction to do something there is no tool for.
+- **`PANEL_ONLY`** is the filter's other half: `ask_user` and `suggest_next` exist in this profile and nowhere else. Embedded drops `PANEL_DROPPED`; external drops `PANEL_ONLY`.
+
+### `ask_user` and `suggest_next`: the server never blocks
+
+```
+ask_user      {questions:    [{id, question, options: [{label, hint?}] (2–5), freeText?}] (1–4)}
+              → {asked: n,   note: "End your turn now — the answers arrive as the next message."}
+suggest_next  {suggestions:  [{label, prompt}] (1–4)}
+              → {offered: n, note: "End your turn now — a pick arrives as the next message."}
+```
+
+**Both are inert here.** They validate the shape, count it and return; they need no target, read no project and write nothing. The whole effect is in the panel, which reads the `tool_use` input the `assistant` event carries and renders clickable options — so the server's only real job is to refuse a shape the drawer cannot draw: a one-option question (not a choice), a fifth question (a conversation, not one batch), two questions sharing an `id` (the picks come back addressed by it), an empty label, or a `prompt` over 500 characters.
+
+**There is no way to block on a person in `claude -p`**, so the contract is a sentence rather than a mechanism: call it, say nothing more, **end the turn**. The answer is simply the next user message — `ask_user` with one question makes a chip click send `"<label>"`; with several, the panel collects one pick per question and sends `Q: <question> → <label>` lines as one message; `suggest_next` sends the picked suggestion's `prompt` verbatim. The instruction is in the tool DESCRIPTION as well as the result, because the description is what the model reads before it calls.
+
+**If a session shows the model calling `ask_user` and then carrying on building, the handbook sentence is not strong enough — fix the words, not the tool.** The same for the other half: `GUIDE.md` → **Inside the editor** carries the four conversational rules (ask before you guess; one batch, then build; end on the next move; the site is the whole of your world) with a worked example of each tool, and the launcher reinforces them in `AgentLaunch.systemPrompt`. Those rules are inside the section `guideInstructions(embedded)` injects whole, so they cost ~870 tokens a turn — paid deliberately, because the behaviour has to be right on the first message of a session, before any `get_guide` call.
+
+**Not in the external profile.** Claude Desktop and a Claude Code terminal are already a chat; a tool whose contract is "stop talking and wait" is telling the model to stop in the one place talking is all there is. The external `tools/list` therefore stays byte-identical at 79,355 B, and the embedded one grows by the two schemas to 78,304 B.
+
+What the panel does with them — the item kinds, why an ask must never become a step, and how the composer answers a batch — is `docs/agent-panel.md` → **Asking and suggesting**.
 
 **Nothing about the hardening changes.** The untrusted-content fence, `GUANO_MCP_FILE_ROOT`, the credential-file refusals and the server's agent policy are all identical — the panel runs the person's own `claude` over content the site's users wrote, which is the same attacker (`e2e/mcp-tools-security.spec.ts`).
 
