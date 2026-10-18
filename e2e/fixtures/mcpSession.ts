@@ -62,6 +62,8 @@ export interface McpSession {
    * the routes a collection generates */
   exportAll: () => Promise<Record<string, string>>
   home: () => Promise<{ id: string; version: string }>
+  /** every tool name this toolset presents — the two PROFILES differ */
+  toolNames: () => string[]
   /** the `kind` of every publish warning, which is what these specs assert on */
   kinds: () => Promise<string[]>
   runtime: any
@@ -87,6 +89,12 @@ export async function mcpSession(
   projectName = 'T',
   /** what the server would report back from the export — `route-size` reads it */
   publishStats: { routes: number; bytes: number } = { routes: 1, bytes: 1 },
+  /**
+   * `embedded` builds the EDITOR's profile (`GUANO_MCP_EMBEDDED=1`), `noTarget`
+   * skips the `setTarget('main')` every other session gets — which is the one
+   * way to see what a write says when the editor never named a branch.
+   */
+  opts: { embedded?: boolean; noTarget?: boolean } = {},
 ): Promise<McpSession> {
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime/mcp-runtime.mjs missing — run `npm run build:mcp-runtime`')
@@ -138,12 +146,18 @@ export async function mcpSession(
     mediaIndex: async () => ({ assets: [], folders: [] }),
     mediaUpload: async () => ({ id: 'm1' }),
   }
-  const set = createToolSet({ api, runtime })
-  set.setTarget('main')
+  const set = createToolSet({ api, runtime, embedded: !!opts.embedded })
+  set.setTarget(opts.noTarget ? null : 'main')
   const stored = () => JSON.parse(store.get('guano-project:main')!)
   return {
     runtime,
-    call: (name: string, args: Record<string, unknown> = {}) => set.toolMap.get(name)!.handler(args),
+    call: async (name: string, args: Record<string, unknown> = {}) => {
+      // async, so a tool the PROFILE does not carry rejects like any other
+      // refusal rather than throwing out of the caller's expression
+      const tool = set.toolMap.get(name)
+      if (!tool) throw new Error(`unknown tool: ${name}`)
+      return await tool.handler(args)
+    },
     tool: (name: string) => set.toolMap.get(name)!,
     stored,
     writeStore: (key: string, raw: string) => void store.set(key, raw),
@@ -206,6 +220,7 @@ export async function mcpSession(
         rmSync(dir, { recursive: true, force: true })
       }
     },
+    toolNames: () => [...set.toolMap.keys()],
     home: async () => (await set.toolMap.get('list_pages')!.handler({})).pages[0],
     kinds: async () =>
       ((await set.toolMap.get('publish')!.handler({})).warnings ?? []).map(

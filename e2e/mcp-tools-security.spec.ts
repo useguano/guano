@@ -283,6 +283,34 @@ test('GUANO_MCP_FILE_ROOT confines path arguments', async () => {
   }
 })
 
+// Embedded mode gives the editor's AI panel a smaller tool list and a target
+// it never has to ask for. It must not relax one byte of the hardening: the
+// panel runs the person's own `claude` over content the site's users wrote,
+// which is the same attacker and the same fence.
+test('the editor profile loosens neither the fence nor the untrusted mark', async () => {
+  const { api } = fixture()
+  const runtime = await runtimePromise
+  test.skip(!runtime, 'runtime bundle missing')
+
+  process.env.GUANO_MCP_FILE_ROOT = '/tmp/guano-fence-test'
+  try {
+    const set = createToolSet({ api, runtime, embedded: true })
+    set.setTarget('main')
+    await expect(
+      set.toolMap.get('upload_media')!.handler({ path: '/etc/hosts', name: 'h' }),
+    ).rejects.toThrow(/GUANO_MCP_FILE_ROOT/)
+
+    const page = await set.toolMap.get('get_page')!.handler({ pageId: 'home', includeContent: true })
+    expect(page._untrusted).toContain('NOT instructions')
+    const comments = await set.toolMap.get('list_comments')!.handler({})
+    expect(comments.comments[0].text.untrusted).toBe(true)
+  } finally {
+    delete process.env.GUANO_MCP_FILE_ROOT
+    // the module-level flag is shared: leave it where every other spec expects
+    createToolSet({ api, runtime })
+  }
+})
+
 test('a credential file is refused by name, root or no root', async () => {
   // The fence is not enough on its own, twice over. A hand-written entry sets
   // no root at all. And `guano connect` now sets the root to the PROJECT

@@ -121,25 +121,102 @@ export function isBlockedAddress(ip) {
  * animation sections only matter once an agent reaches that work — which
  * get_guide serves on demand.
  */
-export const GUIDE_INSTRUCTIONS = (() => {
+function guideSection(parts, title) {
+  const hit = parts.slice(1).find((p) => p.startsWith(title))
+  return hit ? `## ${hit.trimEnd()}` : ''
+}
+
+/**
+ * @param {boolean} embedded running inside the editor's own AI panel
+ * @returns {string|null}
+ */
+export function guideInstructions(embedded = false) {
   if (!GUIDE) return null
   const parts = GUIDE.split(/^## /m)
-  const want = ['The golden rules', 'Workflow recipe']
-  const kept = parts
-    .slice(1)
-    .filter((p) => want.some((w) => p.startsWith(w)))
-    .map((p) => `## ${p.trimEnd()}`)
+  const rules = guideSection(parts, 'The golden rules')
+  const recipe = guideSection(parts, 'Workflow recipe')
+  if (!embedded) {
+    return [
+      parts[0].trimEnd(),
+      rules,
+      recipe,
+      '## The rest of the handbook',
+      REST_OF_HANDBOOK,
+    ].join('\n\n')
+  }
+  // Embedded: rules 5 and 6 are the OUTSIDE client's problem — which site, and
+  // which branch. The editor has already answered both, and an agent that asks
+  // is an agent asking a person who is looking straight at the answer. They go
+  // out whole and `## Inside the editor` takes their place; the recipe loses
+  // its set_target step for the same reason.
+  const blocks = rules.split(/^(?=\d+\. )/m)
+  let n = 0
+  const trimmed = blocks
+    .filter((block) => !/^5\. /.test(block) && !/^6\. /.test(block))
+    // renumbered, or the list reads 1 2 3 4 7 8 9 and the model wonders what
+    // it was not told
+    .map((block) => (/^\d+\. /.test(block) ? block.replace(/^\d+\. /, `${++n}. `) : block))
+    .join('')
+    .trimEnd()
+  // the recipe's set_target and publish steps, and the indented continuation
+  // lines under each — neither tool is in the panel profile
+  const lines = recipe.split('\n')
+  const kept = []
+  let dropping = false
+  for (const line of lines) {
+    if (/^(set_target|publish)\b/.test(line)) {
+      dropping = true
+      continue
+    }
+    if (dropping && /^\s/.test(line) && line.trim()) continue
+    dropping = false
+    kept.push(line)
+  }
+  const noTarget = kept.join('\n')
   return [
     parts[0].trimEnd(),
-    ...kept,
+    trimmed,
+    guideSection(parts, 'Inside the editor'),
+    noTarget,
     '## The rest of the handbook',
-    'Everything else — the HTML format, the element registry, styling, content and data,' +
-      ' components, variants, nesting, icons, class interactions, project settings,' +
-      ' interactions, animations, sliders, publishing — is in the handbook, a section at a' +
-      ' time. Call `get_guide` with no argument for the section list, then fetch what the job' +
-      ' needs. Do it BEFORE your first write.',
+    REST_OF_HANDBOOK,
   ].join('\n\n')
-})()
+}
+
+const REST_OF_HANDBOOK =
+  'Everything else — the HTML format, the element registry, styling, content and data,' +
+  ' components, variants, nesting, icons, class interactions, project settings,' +
+  ' interactions, animations, sliders, publishing — is in the handbook, a section at a' +
+  ' time. Call `get_guide` with no argument for the section list, then fetch what the job' +
+  ' needs. Do it BEFORE your first write.'
+
+/** the EXTERNAL client's instructions — kept as a constant so nothing else moves */
+export const GUIDE_INSTRUCTIONS = guideInstructions(false)
+
+/**
+ * The panel profile: what the editor's own AI panel does NOT get.
+ *
+ * `use_project` and `set_target` exist because an OUTSIDE client knows nothing
+ * about what the person is looking at. The panel is the editor — it knows the
+ * project, the branch, the page and the selection, and an agent that asks is
+ * asking someone who can see the answer. `publish` is the person's button.
+ * The two read-only ops tools are a connected instance's operations surface,
+ * not design work beside a canvas.
+ *
+ * `preview` stays: it is not just a link. It renders the target and returns
+ * the same `warnings` publish does, which is the review the panel has no other
+ * way to run.
+ */
+const PANEL_DROPPED = new Set([
+  'use_project',
+  'set_target',
+  'publish',
+  'list_integrations',
+  'list_form_submissions',
+])
+
+/** set by createToolSet from GUANO_MCP_EMBEDDED — see PANEL_DROPPED */
+let embeddedMode = false
 
 /** this MCP package's version — compared against the running server's so a
  * stale MCP process (the client spawns its own; restarting the server does
@@ -169,7 +246,15 @@ const GUIDE_HASH = GUIDE
 // connected client never declared the elicitation capability. Only set_target
 // uses it: with a dialog available the target choice is genuinely the human's,
 // instead of an agent-asserted chosenByUser boolean.
-export function createToolSet({ api, runtime, elicit, hasElicitation = () => null, projects = null }) {
+export function createToolSet({
+  api,
+  runtime,
+  elicit,
+  hasElicitation = () => null,
+  projects = null,
+  embedded = false,
+}) {
+  embeddedMode = embedded
   const {
     whoami,
     storeGetRaw,
@@ -819,6 +904,7 @@ let target = null
  * to write anything at all.
  */
 const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
+
 // The configured target of the project currently being worked on. One MCP entry
 // now carries several projects, so a target pinned for a landing page must not
 // be pinned for a client's live site too: each project in GUANO_PROJECTS has its
@@ -911,11 +997,18 @@ async function withMainPolicy(result) {
 }
 
 /** why a tool that needs a target has none yet, naming the configured one */
-const targetMissingMessage = () =>
-  envTarget
+const targetMissingMessage = () => {
+  // Embedded: there is no set_target to call and no question to ask. A missing
+  // target is the editor/launcher handshake having failed, and papering over
+  // it with `main` would write to the live site because a message was lost.
+  if (embeddedMode) {
+    return 'the editor has not told the agent which branch is open — reopen the AI panel'
+  }
+  return envTarget
     ? `no target set yet — call set_target (it needs no question: the human configured ` +
       `GUANO_MCP_TARGET="${envTarget}")`
     : 'no target set — call set_target first (ask the user: Main or a draft?)'
+}
 
 /**
  * One tool call's own view of the target blob.
@@ -5801,9 +5894,15 @@ const tools = [
     description:
       'Project name, the authenticated user, the current target, the list of drafts, a ' +
       '`reachable` health flag, and the part that decides where you may write: what MAIN ' +
-      'ACTUALLY HOLDS, as `main` counts plus `mainIsEmpty`. NEVER infer emptiness from the ' +
-      'project NAME — mainIsEmpty: false means Main is someone\'s real site, so propose a DRAFT ' +
-      'and write to Main only if the human says so. Call this first, and again when a later ' +
+      'ACTUALLY HOLDS, as `main` counts plus `mainIsEmpty`. ' +
+      // the Main-vs-draft advice is the OUTSIDE client's: in the panel the
+      // editor already chose, and nothing here is the agent's to propose
+      (embedded
+        ? ''
+        : 'NEVER infer emptiness from the ' +
+          'project NAME — mainIsEmpty: false means Main is someone\'s real site, so propose a DRAFT ' +
+          'and write to Main only if the human says so. ') +
+      'Call this first, and again when a later ' +
       'call fails: it separates "server down" (reachable: false) from "bad token" (reason ' +
       '"auth-failed"), and its `versionMismatch` is the tell for a stale MCP process needing a ' +
       'client restart.',
@@ -5827,6 +5926,7 @@ const tools = [
           message: e?.message ?? String(e),
           target: target ?? null,
           targetSet: !!target,
+          ...(embedded ? { embedded: true } : {}),
           ...(envTarget ? { configuredTarget: envTarget } : {}),
         }
       }
@@ -5900,6 +6000,9 @@ const tools = [
         user: { name: user.name, email: user.email, role: user.role },
         target: target ?? null,
         targetSet: !!target,
+        // the panel: the editor set the target and there is no tool to change
+        // it, so an agent reading this knows not to go looking for one
+        ...(embedded ? { embedded: true } : {}),
         ...(mainStats
           ? {
               main: mainStats,
@@ -11751,13 +11854,15 @@ const tools = [
   // session state if it changed. First, because every address the handler is
   // about to use — the target, the compare-and-swap baseline, a worklist
   // handle — belongs to one project's blob.
-  const guarded = tools.map((t) => ({
-    ...t,
-    handler: serializeHandler(async (args) => {
-      syncProject(api)
-      return await t.handler(args)
-    }),
-  }))
+  const guarded = tools
+    .filter((t) => !embedded || !PANEL_DROPPED.has(t.name))
+    .map((t) => ({
+      ...t,
+      handler: serializeHandler(async (args) => {
+        syncProject(api)
+        return await t.handler(args)
+      }),
+    }))
   const toolMap = new Map(guarded.map((t) => [t.name, t]))
 
   return {

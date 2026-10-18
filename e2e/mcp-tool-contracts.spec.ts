@@ -1655,3 +1655,60 @@ test.describe('pageId takes a path', () => {
     )
   })
 })
+
+// Embedded mode: the editor's own AI panel. `GUANO_MCP_EMBEDDED=1` on the
+// entry, written only by `guano connect --config … --embedded`, is the ONE
+// signal — the panel knows the project, the branch, the page and the
+// selection, so the tools that exist to ask about any of them are gone.
+test.describe('the editor AI panel profile', () => {
+  test('omits the five tools an outside client needs, and keeps the rest', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
+    const names = panel.toolNames()
+    for (const gone of [
+      'use_project',
+      'set_target',
+      'publish',
+      'list_integrations',
+      'list_form_submissions',
+    ]) {
+      expect(names).not.toContain(gone)
+    }
+    // preview stays: it renders the target and returns publish's warnings,
+    // which is the only review the panel can run
+    for (const kept of ['preview', 'get_settings', 'update_settings', 'set_page_html']) {
+      expect(names).toContain(kept)
+    }
+    // a call to a dropped tool is simply unknown
+    await expect(panel.call('set_target', { target: 'main' })).rejects.toThrow(/unknown tool/)
+
+    // and the external profile still has all of them
+    const external = await mcpSession()
+    for (const there of ['use_project', 'set_target', 'publish']) {
+      expect(external.toolNames()).toContain(there)
+    }
+  })
+
+  test('get_status says so, and a write with no target names the editor', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true, noTarget: true })
+    const status = await panel.call('get_status')
+    expect(status.embedded).toBe(true)
+    expect(status.targetSet).toBe(false)
+
+    // NOT "call set_target": there is none, and picking `main` to paper over a
+    // lost message would write to the live site
+    await expect(panel.call('get_page', { pageId: '/' })).rejects.toThrow(
+      /the editor has not told the agent which branch is open/,
+    )
+    await expect(panel.call('get_page', { pageId: '/' })).rejects.not.toThrow(/set_target/)
+  })
+
+  test('a target the editor set is simply the target', async () => {
+    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
+    const status = await panel.call('get_status')
+    expect(status.embedded).toBe(true)
+    expect(status.targetSet).toBe(true)
+    expect(status.target).toBe('main')
+    const home = await panel.call('list_pages')
+    expect(home.pages.length).toBeGreaterThan(0)
+  })
+})

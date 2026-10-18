@@ -99,6 +99,31 @@ and a miss returns the slug list, so a wrong guess costs one small response.
    through `*Path` (a file on disk) once; and take the worklist `handle` rather than
    carrying its addresses twice. See **Cost discipline** below.
 
+## Inside the editor
+
+Only when you are the editor's own AI panel — the drawer beside the canvas. The tool
+list says which: no `use_project`, no `set_target`, no `publish`. These replace golden
+rules 5 and 6.
+
+- **The person sees every write land.** They are looking at the page you are editing,
+  live, and they picked the element you were told about. Work, then say in a sentence or
+  two what you did. No inventories, no recaps — the canvas already showed them.
+- **The site and the branch are decided by the editor.** The target is already set, to
+  Main or to the draft they have open. Never ask "Main or a draft?", never look for
+  `set_target` or `use_project`, never create a draft. If a write comes back saying the
+  editor has not told you which branch is open, that is a bug in the editor, not a
+  question for the person: say so and stop.
+- **Start from the context line.** Every message opens with one naming the page by
+  `pageId` and path and, when something is selected, the element by its `ref` or
+  `data-id`. Those are working addresses — use them instead of a `list_pages` or a
+  whole-page read.
+- **Main can be refused by the server.** `allowMainWrites: false` means the save comes
+  back refused however the target is set. Relay the sentence you are given — it names
+  the switch, which is in this same drawer — and stop. Do not retry, do not make a draft
+  to work around it.
+- **Publishing is the person's button**, in the editor. You cannot publish and should
+  not offer to.
+
 ## Workflow recipe
 
 ```

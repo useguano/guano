@@ -17,7 +17,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 
 import * as api from './api.mjs'
 import { createProjectRouter } from './projects.mjs'
-import { createToolSet, GUIDE_INSTRUCTIONS, MCP_VERSION } from './tools.mjs'
+import { createToolSet, guideInstructions, MCP_VERSION } from './tools.mjs'
 
 // the bundled editor runtime (built by `npm run build:mcp-runtime`)
 const RUNTIME_URL = new URL('../runtime/mcp-runtime.mjs', import.meta.url)
@@ -98,9 +98,18 @@ const routedApi = multi
     }
   : { ...api, base: api.BASE }
 
+/**
+ * The ONE signal, written only by `guano connect --config <file> --embedded`:
+ * this process is the editor's own AI panel, not an outside client. It decides
+ * the tool profile, the instructions, and what a write with no target says.
+ * → docs/mcp.md (Embedded mode)
+ */
+const EMBEDDED = process.env.GUANO_MCP_EMBEDDED === '1'
+
 const { tools, toolMap } = createToolSet({
   api: routedApi,
   runtime,
+  embedded: EMBEDDED,
   // `use_project`: switching sites from inside the conversation, which is the
   // only place anybody actually wants to do it. The agent never DECIDES — the
   // human answers an elicitation dialog, the same consent channel set_target
@@ -151,7 +160,10 @@ const { tools, toolMap } = createToolSet({
 // turn, and get_guide serves the rest a section at a time, on demand.
 const server = new Server(
   { name: 'guano', version: MCP_VERSION },
-  { capabilities: { tools: {} }, ...(GUIDE_INSTRUCTIONS ? { instructions: GUIDE_INSTRUCTIONS } : {}) },
+  (() => {
+    const instructions = guideInstructions(EMBEDDED)
+    return { capabilities: { tools: {} }, ...(instructions ? { instructions } : {}) }
+  })(),
 )
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

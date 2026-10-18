@@ -11,6 +11,7 @@ type OutboundMessage =
   | { type: 'agent-start' }
   | { type: 'agent-send'; text: string; images?: HostAgentImage[] }
   | { type: 'agent-model'; model: string }
+  | { type: 'agent-target'; target: string }
   | { type: 'agent-interrupt' }
   | { type: 'agent-stop' }
 
