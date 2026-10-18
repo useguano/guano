@@ -158,8 +158,18 @@ const timings = ref<{ startedAt: number | null; readyAt: number | null; initAt: 
 })
 
 let requested = false
-/** `ready - agent-start`, waiting for the first turn that follows it */
+/**
+ * `system/init - agent-start`, waiting for the first turn that follows it.
+ *
+ * Measured to the INIT and not to `ready`, which is the lie the first
+ * instrumented run told: the host emits `ready` the moment `claude` is
+ * spawned, so the panel reported *0.8s to start* for a spawn whose
+ * `system/init` the launcher logged 35 s later. The person waited 35 s. What
+ * is being measured is when the agent can be TALKED TO.
+ */
 let pendingBoot: number | null = null
+/** a `set_model` emits a second `system/init`; only the spawn's one counts */
+let bootPending = false
 /** tool_use ids already counted, so the stream and the `assistant` echo agree */
 let countedTools = new Set<string>()
 /** the host has seen our `agent-target` since the last `ready` */
@@ -396,8 +406,13 @@ function imageUrls(content: unknown): string[] {
 function ingestSystem(event: Record<string, unknown>): void {
   switch (asString(event.subtype)) {
     case 'init': {
+      const initAt = Date.now()
       available.value = true
-      timings.value.initAt = Date.now()
+      timings.value.initAt = initAt
+      if (bootPending && timings.value.startedAt !== null) {
+        pendingBoot = initAt - timings.value.startedAt
+        bootPending = false
+      }
       unavailableReason.value = null
       sessionId.value = asString(event.session_id) ?? sessionId.value
       model.value = asString(event.model) ?? model.value
@@ -615,10 +630,7 @@ function ingest(raw: unknown): void {
       const replay = asList(event.replay)
       for (const line of replay) ingest(line)
       if (!currentTurn()) status.value = 'idle'
-      // after the replay: a turn rebuilt from the transcript is not the turn
-      // this spawn's boot time belongs to
       timings.value.readyAt = readyAt
-      pendingBoot = timings.value.startedAt ? readyAt - timings.value.startedAt : null
       return
     }
     case 'unavailable': {
@@ -630,6 +642,8 @@ function ingest(raw: unknown): void {
     }
     case 'switching': {
       timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
+      pendingBoot = null
+      bootPending = true
       status.value = 'switching'
       switchingTo.value = asString(event.target) ?? null
       return
@@ -672,6 +686,8 @@ export function startAgent(): void {
   if (requested || !hostBridge.available) return
   requested = true
   timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
+  pendingBoot = null
+  bootPending = true
   hostBridge.post({ type: 'agent-start' })
 }
 

@@ -62,6 +62,11 @@ test.describe('get_guide', () => {
       expect([...at].sort((a, b) => a - b), job).toEqual(at)
       // one response a client will actually return
       expect(got.guide.length, job).toBeLessThan(60_000)
+      // and it says what it contains INSIDE the text, because the first run
+      // with `for` re-read three sections this response had already given it
+      for (const h of headings) expect(got.guide, job).toContain(h)
+      expect(got.guide.split('\n')[1], job).toContain('Do not call get_guide again')
+      expect(got.note, job).toContain('wasted round trip')
     }
   })
 

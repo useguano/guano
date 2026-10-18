@@ -415,24 +415,47 @@ The same prompt three times on a fresh project — *create an email capture
 landing page for a SaaS company named "Atelier"* — with every later change
 appending its own row.
 
-| when | to `ready` | to first word | steps | guide calls |
-|---|---|---|---|---|
-| step 0 baseline | **5.16 s** | not captured | 21 | **6** |
+| when | to `system/init` | to first word | steps | guide | harness | cache read |
+|---|---|---|---|---|---|---|
+| step 0 baseline | 5.2 s | not captured | 21 | **6** | ? | ? |
+| after steps 1–3, turn 1 | 35.3 s | 81.1 s | 10 | **4** | **1** | 258k |
+| after steps 1–3, turn 2 | — | 49.1 s | 5 | **0** | 2 | 363k |
 
-**The answer is not close, and it is not the process chain.** The launcher's
-log breaks the 5.16 s down: 0.70 s waiting for the page's `agent-target` (the
-editor was still booting), 0.19 s for `guano connect` — which ran because a
-brand-new project has no config yet, `isCurrent: false` being correct there
-and not the stale-config bug — and then **4.27 s from `claude spawned` to
-`system/init`**, which is Claude Code's own boot and its MCP child. None of
-that is a lever worth pulling.
+**The baseline's answer was not close, and it was not the process chain.**
+The launcher's log breaks that 5.2 s down: 0.70 s waiting for the page's
+`agent-target` (the editor was still booting), 0.19 s for `guano connect` —
+which ran because a brand-new project has no config yet, `isCurrent: false`
+being correct there and not the stale-config bug — and then 4.27 s from
+`claude spawned` to `system/init`. The first turn, meanwhile, spent **six
+`get_guide` calls** before it built anything, one model round-trip each on
+Opus, every one of them asked for by the handbook: *"fetch the sections the
+job needs … BEFORE your first write"*. So: collapse the round-trips.
 
-The first turn spent **six `get_guide` calls** before it built anything: the
-bare call for the section list, then page-html, styling, design-standards,
-forms and components, one round-trip each on Opus. That is the wait the person
-sees, and the handbook asked for every one of them — *"fetch the sections the
-job needs … BEFORE your first write"*. **So: collapse the round-trips, in the
-order steps 1–4 set out.**
+**Four things the instrumented runs then said that nothing else could.**
+
+1. **`ready` is not readiness, and measuring to it lied.** The host emits
+   `ready` the moment `claude` is spawned. The panel reported *0.8s to start*
+   for a spawn whose `system/init` the launcher logged **35.3 s** later — the
+   person waited 35 s and the number said 0.8. `bootMs` is measured to
+   `system/init` now, which is when the agent can be talked to. A `set_model`
+   emits a second `system/init` and is deliberately not counted.
+2. **`claude -p`'s own boot is wildly variable and is the biggest single
+   number here**: 4.27 s on one spawn, 34.5 s on the next, same machine, same
+   project shape. It is not ours and there is no lever on it in this repo.
+   Anything else measured against a single spawn is measured against noise.
+3. **Prompt caching is real.** 258k and 363k `cache_read_input_tokens` on the
+   two turns. **Step 4's premise holds**: the system prompt and the MCP
+   instructions are paid once per session, not per turn, so growing the
+   embedded instructions is a one-off cost.
+4. **The ladder works and the job bundle half-worked.** Turn two — a whole
+   second page — read the handbook **not once**, which is step 3 doing exactly
+   what it was for. Turn one went 6 → 4, not 6 → 1: the model called
+   `get_guide {for: "build-page"}` and then re-read page-html, forms and
+   styling **one at a time, sections that response had already handed it in
+   full**. A `sections: [...]` key beside 52 KB of handbook is easy to walk
+   past, so the job response now says what it contains on the first line of
+   the text itself and tells the model not to ask again. Whether that is
+   enough is the next measurement, not a claim.
 
 Each change records its own before/after against the same prompt.
 
@@ -450,14 +473,17 @@ Each change records its own before/after against the same prompt.
    nothing (the context line is the address); a section or a page is one
    `for`; a kind of work new to the session is its own `for`, once; and a
    section already in the conversation is never re-read.
-4. **Whether the essentials move INTO the instructions** — gated on the cache
-   figures above, and not decided yet.
-5. **The panel's default model** — today it is whatever `~/.claude/settings.json`
-   says, i.e. the person's TERMINAL default. The baseline run above was on
-   Opus 5 · 1M, which nobody chose for a canvas.
+4. **Whether the essentials move INTO the instructions.** The premise is
+   confirmed (caching, above), so this is now a live option rather than a
+   conditional one — but it is worth doing only if turn one is still spending
+   guide calls after the manifest fix. Measure before building.
+5. **The panel's default model.** Today it is whatever
+   `~/.claude/settings.json` says — the person's TERMINAL default. Both
+   measured runs were on **Opus 5 · 1M**, which nobody chose for a canvas, and
+   81.1 s and 49.1 s to first word are mostly that choice. This is the largest
+   remaining lever and the only one with a real trade-off in it.
 
-Steps 1–3 are in. Step 4 needs a `cache_read_input_tokens` from a second turn;
-step 5 is a product change and wants a row in the table first.
+Steps 1–3 are in.
 
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**

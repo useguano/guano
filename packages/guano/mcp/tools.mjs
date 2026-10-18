@@ -5935,10 +5935,24 @@ const tools = [
           }
         }
         const hits = slugs.map(resolve).filter(Boolean)
+        // Named INSIDE the blob, not just in a sibling field. The first run
+        // with `for` took the advice and then re-read page-html, forms and
+        // styling one at a time — sections this very response had already
+        // given it in full. A `sections: [...]` key beside 52 KB of handbook
+        // is easy to walk past; a line at the top of the text the model is
+        // reading is not.
+        const manifest =
+          `<!-- for: ${job} — this response contains these sections IN FULL: ` +
+          `${hits.map((x) => x.title).join(', ')}. You have them. Do not call get_guide ` +
+          'again for any of them. -->'
         return {
-          guide: [header, ...hits.map((x) => x.body)].join('\n'),
+          guide: [header, manifest, ...hits.map((x) => x.body)].join('\n'),
           for: job,
           sections: hits.map((x) => x.slug),
+          note:
+            `You now have ${hits.length} section${hits.length === 1 ? '' : 's'} in full: ` +
+            `${hits.map((x) => x.slug).join(', ')}. Re-reading any of them is a wasted round ` +
+            'trip — scroll up instead.',
         }
       }
 

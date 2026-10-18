@@ -126,9 +126,12 @@ rules 5 and 6.
   - A **one-element change named precisely** — the text, a class, an attribute, a
     link — reads **nothing**. The context line already gave you the address;
     `edit_elements` or `edit_structure`, and done.
-  - A **section or a page**: one `get_guide {for: "build-page"}`, then work.
-  - A **kind of work you have not done in this session** — motion, data, a component,
-    content — its own `for`, once.
+  - A **section or a page**: one `get_guide {for: "build-page"}`, then work. That one
+    response contains page-html, styling, the design standards, components and forms
+    **in full** — it says so at the top of what it returns. Asking for any of them
+    again afterwards is a round trip that buys you nothing.
+  - A **kind of work you have not done in this session** — motion, data, content —
+    its own `for`, once.
   - **Never re-read a section already in this conversation.** It is still there.
 - **Main can be refused by the server.** `allowMainWrites: false` means the save comes
   back refused however the target is set. Relay the sentence you are given — it names
@@ -141,10 +144,11 @@ rules 5 and 6.
 - **Your tools, in ONE call.** This harness hands you tool NAMES and makes you fetch
   each schema before you can call it — and it takes a whole list at once, which nothing
   tells you. So load the set the job needs in a single `ToolSearch`:
-  `select:mcp__guano__get_page,mcp__guano__set_page_html,mcp__guano__edit_structure,mcp__guano__edit_elements,mcp__guano__list_components,mcp__guano__get_guide,mcp__guano__suggest_next`.
-  Add `mcp__guano__create_component,mcp__guano__update_component` for component work,
-  `mcp__guano__update_settings` for tokens and fonts, `mcp__guano__upload_media` and
-  `mcp__guano__list_icons` for media. One call, not one per tool: each one is a round
+  `select:mcp__guano__get_page,mcp__guano__set_page_html,mcp__guano__edit_structure,mcp__guano__edit_elements,mcp__guano__list_components,mcp__guano__create_component,mcp__guano__create_page,mcp__guano__update_settings,mcp__guano__get_guide,mcp__guano__suggest_next`.
+  That set covers a build and the edits after it. Add
+  `mcp__guano__update_component,mcp__guano__set_component_variants` for deeper component
+  work, `mcp__guano__upload_media,mcp__guano__list_icons` for media,
+  `mcp__guano__set_page_seo` for SEO. One call, not one per tool: each one is a round
   trip the person waits through, and they are invisible in the transcript.
 - **The site is the whole of your world.** Its pages, components, collections, media and
   settings, exactly as the guano tools expose them. You have no file system, no shell, no
