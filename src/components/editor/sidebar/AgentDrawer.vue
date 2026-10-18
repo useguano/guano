@@ -119,7 +119,7 @@ const context = computed(() => {
   const label = `${page.name}${node ? ` · ${node.ref ? `#${node.ref}` : node.type}` : ''}`
   const prompt =
     `Context from the Guano editor: the person is looking at the page ` +
-    `"${page.name}" (${page.path})` +
+    `"${page.name}" (pageId: ${page.id}, path: ${page.path})` +
     (node ? `, with the <${node.type}> element ${address} selected.` : '.')
   return { label, prompt }
 })
