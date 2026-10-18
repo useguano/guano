@@ -4,6 +4,14 @@
      or the agent half of src/lib/hostBridge.ts. The forward-looking plan,
      the options weighed and the launcher's half are ROADMAP.md §5. -->
 
+**The panel is Guano's main AI integration** (decided 2026-10-18). The
+external client path — `guano connect` into Claude Desktop or a Claude Code
+terminal — stays supported and is secondary: it pushes the person into another
+app, and everything it needs to orient itself (`use_project`, the `set_target`
+dialog, the pin file) exists only because an outside client knows nothing about
+what the person is looking at. The panel knows the project, the branch, the
+page and the selected element, and never asks for any of them.
+
 ## What it is, and what of it exists
 
 The left rail's first button and a docked 16rem column (⌘J). The person types
