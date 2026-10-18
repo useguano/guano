@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
+import { fakeHost, hostViewMode } from './fixtures/host'
 
 // The Layers tree — the surface that replaced the code editor.
 //
@@ -282,6 +283,29 @@ test('a button lands holding its words, on a page and in a component', async ({ 
   await expect(rows(page)).toHaveCount(masterRows + 2)
 })
 
+test('a decorative span loses its placeholder once it has a box of its own', async ({ page }) => {
+  await openEditor(page)
+  await openLayers(page)
+
+  // a fresh span shows its lorem on the canvas — something to see and click
+  await rows(page).first().click()
+  await insertFromDock(page, 'span')
+  const frame = page.locator('[data-frame-drop]').first()
+  const lorem = frame.locator('span', { hasText: 'Dolor sit amet' })
+  await expect(lorem.first()).toBeVisible()
+  const before = await lorem.count()
+
+  // give it geometry: a dot is a span with a size and no words, and the
+  // placeholder would otherwise spill out of it as text nobody can delete
+  await page.keyboard.press('s')
+  const add = page.getByPlaceholder('Add class')
+  await expect(add).toBeFocused()
+  await add.fill('size-2 rounded-full bg-red-500')
+  await add.press('Enter')
+  await expect(lorem).toHaveCount(before - 1)
+  await expect(frame.locator('span.size-2.rounded-full')).toHaveCount(1)
+})
+
 test('an icon is picked from the grid and publishes as an inline svg', async ({ page }) => {
   await openEditor(page)
   await openLayers(page)
@@ -445,16 +469,16 @@ test('a collection has settings: its fields and its URL', async ({ page }) => {
   await expect(page.getByText('/journal/my-entry')).toBeVisible()
 })
 
-test('the Edit / Play toggle swaps the surface, and Play edits nothing', async ({
+test("the host's Edit / Play switch swaps the surface, and Play edits nothing", async ({
   page,
 }) => {
+  // The switch is the LAUNCHER's Preview / Editor button: the editor draws
+  // none of its own, and a browser session stays on the Edit canvas. The
+  // page posts its mode over the bridge and the host calls back.
+  await fakeHost(page)
   await openEditor(page)
-
-  // the switch is on the canvas beside Insert, never in the rail
-  const edit = page.getByRole('button', { name: 'Edit', exact: true })
-  const play = page.getByRole('button', { name: 'Play', exact: true })
-  await expect(edit).toBeVisible()
-  await expect(play).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)
 
   // A builder's layers are NOT an Edit-surface view: the tree is how they
@@ -462,7 +486,7 @@ test('the Edit / Play toggle swaps the surface, and Play edits nothing', async (
   // and a row still offers the way in. Only the canvas changes.
   await openLayers(page)
   await expect(rows(page).first()).toBeVisible()
-  await play.click()
+  await hostViewMode(page, 'preview')
 
   await expect(page.locator('[data-frame-drop]')).toHaveCount(0) // no frames
   await expect(rows(page).first()).toBeVisible() // the tree stays
@@ -488,12 +512,6 @@ test('the Edit / Play toggle swaps the surface, and Play edits nothing', async (
   await expect(page.getByRole('button', { name: 'Edit content' })).toHaveCount(0)
 
   // Edit brings the frames back
-  await edit.click()
+  await hostViewMode(page, 'build')
   await expect(page.locator('[data-frame-drop]').first()).toBeVisible()
-
-  // the board has nothing to play, so it carries no toggle
-  await rail(page, 'Components').click()
-  await expect(page.locator('[data-board-card]').first()).toBeVisible({ timeout: 15_000 })
-  await expect(play).toHaveCount(0)
-  await expect(edit).toHaveCount(0)
 })

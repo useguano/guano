@@ -25,6 +25,8 @@ It still lives in the project document, so it autosaves, undoes, and travels on 
 
 `def.defaultContent` in `shared/elements.js` — "Lorem ipsum" on a heading, "Dolor sit amet" on a `span`/`paragraph`, "Option" on an `option`.
 
+**A leaf whose own classes declare a box gets no placeholder, even on the Build canvas** (`declaresOwnBox` in `lib/emptyBox.ts`, the empty box's rule, applied to the style node — the master inside an instance). An empty `span` is also how a decorative element is built, and "Dolor sit amet" spilling out of a `size-2 rounded-full` dot read as text the person had to delete and could not: there was nothing to delete. A box of its own is already something to see and click, so the affordance has nothing left to do. Coverage: `e2e/ui-layers.spec.ts`, "a decorative span".
+
 It is the third Build-only affordance, beside the empty box and the Layers eye: a fresh element needs something to see and click, and a published page needs the words someone actually wrote. `contentInfo` in `useRenderNode.ts` returns `''` when `isPreview`, and `server/export.mjs` has no `defaultContent` fallback at all.
 
 It used to ship. An empty `<span>` is how a colour dot, a badge dot and a toggle knob are built — geometry with no words — and every one of them published **"Dolor sit amet"**, once per dot, with the canvas giving no hint that it would: the placeholder looked exactly like content someone had typed. The content precedence is therefore **bound collection field → the node's own content → the mapped master's content**, and nothing after it.
@@ -33,7 +35,7 @@ This was the one change in this area that moved published bytes: one half-built 
 
 ## An empty container gets a box on the Build canvas, and NOWHERE else
 
-`emptyBox` in `ElementRenderer.vue`, `declaresOwnBox` in `canvas/emptyBox.ts`.
+`emptyBox` in `ElementRenderer.vue`, `declaresOwnBox` in `lib/emptyBox.ts`.
 
 `section`/`div`/`header`/`grid` seed no child — only `label`/`button`/`link` do — so a fresh one renders as zero height with no background: invisible, unselectable on the canvas and impossible to drop into, which is the one thing a tree editor must not be.
 

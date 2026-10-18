@@ -1,5 +1,6 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ELEMENTS } from '@/lib/elements'
+import { declaresOwnBox } from '@/lib/emptyBox'
 import { usePage } from './usePage'
 import { useCollections } from './useCollections'
 import {
@@ -372,6 +373,12 @@ export function useRenderNode(
     // and the canvas gave no hint that it would — the placeholder looked
     // exactly like content someone had typed.
     if (isPreview.value) return { value: '', untranslated: false }
+    // A leaf whose own classes declare a box is geometry, not words: the
+    // placeholder would spill out of a size-2 dot and read as text the person
+    // cannot delete. Same rule as the empty box — a box of its own needs no
+    // affordance to be seen or clicked.
+    const styleNode = mapping.value ? mapping.value.master : node.value
+    if (declaresOwnBox(styleNode.classes ?? '')) return { value: '', untranslated: false }
     return { value: def.value?.defaultContent, untranslated: false }
   })
   const displayContent = computed(() => motionText.value ?? contentInfo.value.value)

@@ -42,8 +42,9 @@ Code install shows instead.
 ## The bridge is one contract with the launcher
 
 `src/lib/hostBridge.ts`, over the `guano` `WKScriptMessageHandler` and
-`window.__guanoHost` — the same channel that already carries save status and the
-reauth round-trip (→ `docs/ui.md`, The two rails).
+`window.__guanoHost` — the same channel that already carries save status, the
+Edit / Play switch (`view-mode` out, `setViewMode` back) and the reauth
+round-trip (→ `docs/ui.md`, The two rails and The two surfaces).
 
 | page → host | the host's job |
 |---|---|
@@ -500,7 +501,25 @@ Each change records its own before/after against the same prompt.
    change the default back and leave the per-project memory, which is useful
    either way.
 
-Steps 1–5 are in.
+6. **The process chain** — measured and ruled out above. Neither half is a
+   lever: `claude -p`'s boot is not ours, and the MCP server's own is a fifth
+   of a second.
+7. **Reopening does not resume an unbounded conversation.** `--resume`
+   replays Claude Code's OWN session file, which is not the launcher's
+   `AgentTranscript` and is not bounded by its `ceiling` — that bounds only
+   what is replayed to the PAGE. So a long conversation made every reopen
+   slower and every later turn heavier, with nothing stopping it.
+
+   `AgentReopen.decide` resumes at or below **20 finished turns** and starts
+   fresh above it. Always-fresh was the simpler rule and was rejected: it
+   loses the five-minute conversation you closed by accident, which is the
+   common case. **A dropped conversation is always said out loud** — the host
+   seeds `{type:'notice'}` into the transcript before the `ready`, so it
+   keeps its place, reaches the panel as a quiet mono line, and survives a
+   reload like any other line. A panel that silently forgot is
+   indistinguishable from one that is broken.
+
+Steps 1–3 and 5–7 are in; step 4 is waiting on a measurement.
 
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**

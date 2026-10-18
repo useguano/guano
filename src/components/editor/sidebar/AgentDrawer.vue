@@ -42,6 +42,7 @@ const {
   unavailableReason,
   model,
   rateLimit,
+  notice,
   turns,
   send,
   setModel,
@@ -390,6 +391,14 @@ nextTick(() => input.value?.focus())
       ref="listEl"
       class="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2.5 pt-3 pb-3"
     >
+      <p
+        v-if="notice"
+        data-agent-notice
+        class="self-start px-0.5 font-mono text-[9px] text-muted-foreground"
+      >
+        {{ notice }}
+      </p>
+
       <div
         v-if="status === 'unavailable' && notInstalled"
         data-agent-install

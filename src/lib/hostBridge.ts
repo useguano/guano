@@ -1,5 +1,7 @@
 export type HostSaveStatus = 'saved' | 'pending' | 'error'
 
+export type HostViewMode = 'build' | 'preview'
+
 export interface HostAgentImage {
   mediaType: string
   data: string
@@ -7,6 +9,7 @@ export interface HostAgentImage {
 
 type OutboundMessage =
   | { type: 'save-status'; status: HostSaveStatus }
+  | { type: 'view-mode'; mode: HostViewMode }
   | { type: 'unauthorized' }
   | { type: 'agent-start' }
   | { type: 'agent-send'; text: string; images?: HostAgentImage[] }
@@ -24,12 +27,14 @@ interface HostCallbacks {
   sessionRestored: () => void
   sessionLost: (reason?: string) => void
   openPublish: () => void
+  setViewMode: (mode: HostViewMode) => void
   agentEvent: (event: unknown) => void
   agentExit: (info?: HostAgentExit) => void
 }
 
 export interface HostHandlers {
   openPublish: () => void
+  setViewMode: (mode: HostViewMode) => void
   agentEvent: (event: unknown) => void
   agentExit: (info?: HostAgentExit) => void
 }
@@ -106,6 +111,7 @@ export function installHostCallbacks(handlers: HostHandlers): void {
     sessionLost: (reason?: string) =>
       settle((p) => p.reject(new Error(reason || 'the session could not be restored'))),
     openPublish: handlers.openPublish,
+    setViewMode: handlers.setViewMode,
     agentEvent: handlers.agentEvent,
     agentExit: handlers.agentExit,
   }

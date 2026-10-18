@@ -139,6 +139,16 @@ const answered = ref(false)
 /** which branch the host is respawning onto, while `status === 'switching'` */
 const switchingTo = ref<string | null>(null)
 /**
+ * Something the HOST did to this session, said plainly at the top of the
+ * transcript — today only *"Started a new conversation; the last one was
+ * long."*
+ *
+ * It arrives in the `ready`'s replay, so it keeps its place and survives a
+ * reload. A panel that silently forgot a conversation is indistinguishable
+ * from one that is broken, which is the whole reason the line exists.
+ */
+const notice = ref<string | null>(null)
+/**
  * Bumped on every `ready`. The target has to be re-posted after one — a
  * reload replays `agent-start` and the host dropped what it knew with the
  * page that told it — and a `ready` does not always move `status`, so this is
@@ -619,6 +629,8 @@ function ingest(raw: unknown): void {
   switch (asString(event.type)) {
     case 'ready': {
       const readyAt = Date.now()
+      // cleared BEFORE the replay, which is where a notice for this spawn is
+      notice.value = null
       available.value = true
       answered.value = true
       switchingTo.value = null
@@ -631,6 +643,10 @@ function ingest(raw: unknown): void {
       for (const line of replay) ingest(line)
       if (!currentTurn()) status.value = 'idle'
       timings.value.readyAt = readyAt
+      return
+    }
+    case 'notice': {
+      notice.value = asString(event.text)
       return
     }
     case 'unavailable': {
@@ -768,6 +784,7 @@ export function useAgentChat() {
     sessionId,
     model,
     rateLimit,
+    notice,
     turns,
     timings,
     send,

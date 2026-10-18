@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
+import { hostViewMode } from './fixtures/host'
 import {
   AGENT_BUSY_TURN,
   AGENT_DENIAL,
@@ -464,6 +465,31 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-activity]')).toHaveAttribute('data-agent-activity-state', 'done')
   })
 
+  // Step 7 (docs/agent-panel.md): `--resume` replays Claude Code's OWN
+  // session file, which nothing bounds, so a long conversation makes every
+  // reopen slower. The host starts fresh above its ceiling — and SAYS so,
+  // because a panel that silently forgot is indistinguishable from a broken
+  // one.
+  test('a conversation dropped for its length says so, quietly', async ({ page }) => {
+    await feed(page, [
+      {
+        type: 'ready',
+        sessionId: 'fresh-one',
+        replay: [{ type: 'notice', text: 'Started a new conversation; the last one was long.' }],
+      },
+      AGENT_INIT,
+    ])
+    await page.locator('[data-agent-button]').click()
+    const note = page.locator('[data-agent-notice]')
+    await expect(note).toHaveText('Started a new conversation; the last one was long.')
+    // it is a note, not a turn: nothing was asked and nothing was answered
+    await expect(page.locator('[data-agent-turn]')).toHaveCount(0)
+
+    // and the next spawn, which dropped nothing, does not keep saying it
+    await feed(page, [AGENT_READY, AGENT_INIT])
+    await expect(page.locator('[data-agent-notice]')).toHaveCount(0)
+  })
+
   test('the model menu switches the session and shows what came back', async ({ page }) => {
     await readyPanel(page)
     const trigger = page.locator('[data-agent-model] button').first()
@@ -521,7 +547,7 @@ test.describe('the AI panel', () => {
 
   test('the chat is reachable in Play, where the dock never was', async ({ page }) => {
     await readyPanel(page)
-    await page.getByRole('button', { name: 'Play', exact: true }).click()
+    await hostViewMode(page, 'preview')
     await expect(page.locator('[data-agent-panel]')).toBeVisible()
     await expect(page.locator('[data-agent-input]')).toBeVisible()
   })

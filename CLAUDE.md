@@ -8,7 +8,7 @@ A browser-based visual website builder. The user builds pages on a live canvas w
 
 A page's structure is an `ElementNode` **tree, and the tree is all there is** — no text format sits beside it (there was an indentation DSL until the v2 schema).
 
-There is **one admin shell** with **two surfaces** over one shared document, switched by the **Edit / Play** toggle on the page canvas: Edit is the rails + canvas + Layers builder, Play is the full-site render. It is a runtime mode in `useViewMode`, **not a route**, and contributors are pinned to Play. → `docs/ui.md`
+There is **one admin shell** with **two surfaces** over one shared document, switched by the desktop launcher's **Preview / Editor** button over the host bridge (the editor draws no switch of its own): Edit is the rails + canvas + Layers builder, Play is the full-site render. It is a runtime mode in `useViewMode`, **not a route**, and contributors are pinned to Play. → `docs/ui.md`
 
 The published site is a **static export** (`server/export.mjs`) served by the node server at `/`; it never enters the Vue app. → `docs/export.md`
 

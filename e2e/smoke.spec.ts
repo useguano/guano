@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
+import { fakeHost, hostViewMode } from './fixtures/host'
 
 // End-to-end smoke: first-run setup → load the demo project → edit a text
 // node on the Edit canvas → see it in Play → publish → assert the edit on the
@@ -9,6 +10,8 @@ import { loadFixture } from './fixtures/project'
 
 test('setup, edit content, publish, view live, auth guard', async ({ page, context }) => {
   const marker = `SMOKE-${Date.now()}`
+  // the Edit / Play switch is the launcher's, reached over the host bridge
+  await fakeHost(page)
 
   // 1. fresh server has no admin → /admin redirects to first-run setup
   await page.goto('/admin')
@@ -55,9 +58,10 @@ test('setup, edit content, publish, view live, auth guard', async ({ page, conte
 
   // 4b. Play renders the edited site. Play (the Preview surface internally) is
   //     a MODE inside the one editor shell, not a route — so the assertion
-  //     is that the site renders, not the URL. The switch is the canvas's Edit / Play toggle, not a rail
-  //     button. It is read-only: what it shows is what publish will emit.
-  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  //     is that the site renders, not the URL. The switch is the HOST's
+  //     Preview / Editor button, over the bridge — the editor draws none of
+  //     its own. It is read-only: what it shows is what publish will emit.
+  await hostViewMode(page, 'preview')
   await expect(page.locator('h1', { hasText: marker }).first()).toBeVisible({ timeout: 30_000 })
 
   // 5. publish — ⌘P opens PublishDialog, which auto-runs the publish on open.

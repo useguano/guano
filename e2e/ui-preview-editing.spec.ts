@@ -127,8 +127,8 @@ test('a contributor edits text in place on Play, and it survives the server merg
   const hero = site.locator('h2', { hasText: HEADING })
   await expect(hero).toBeVisible({ timeout: 30_000 })
 
-  // there is no Edit / Play switch for a contributor — the render IS the surface
-  await expect(contrib.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
+  // a contributor is pinned to Play — the render IS the surface, no frames
+  await expect(contrib.locator('[data-frame-drop]')).toHaveCount(0)
 
   // 1. double-click a heading, retype it, Enter commits
   const marker = `Edited by a contributor ${Date.now()}`
