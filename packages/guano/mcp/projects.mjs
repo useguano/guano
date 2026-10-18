@@ -392,7 +392,15 @@ export function createProjectRouter({
     /** this project's pinned write target, which is per project rather than one
      *  GUANO_MCP_TARGET for the whole entry */
     targetFor: (slug) => projects[slug]?.target ?? '',
-    configured: () => ({ count: slugs.length, pinned: pinned || null, dropped: dropped ?? [] }),
+    configured: () => ({
+      count: slugs.length,
+      // the slugs themselves, because "which project is this" is answerable
+      // from the CONFIG when there is only one — before anything has resolved,
+      // and without a server to ask (see server.mjs, soleSlug)
+      slugs: [...slugs],
+      pinned: pinned || null,
+      dropped: dropped ?? [],
+    }),
     has: (slug) => !!projects[slug],
   }
 }

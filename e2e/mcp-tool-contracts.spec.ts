@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml, PREVIEW_TOKEN, PREVIEW_MOUNT } from './fixtures/mcpSession'
 import { motionTriggers } from './fixtures/fxWire'
+// @ts-expect-error — plain .mjs, no types
+import { createToolSet } from '../packages/guano/mcp/tools.mjs'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
 // comes from something that cost the Cocoapp session real calls: a response too
@@ -1774,6 +1776,66 @@ test.describe('the editor AI panel profile', () => {
     await expect(
       panel.call('suggest_next', { suggestions: [{ label: 'Essay', prompt: 'x'.repeat(501) }] }),
     ).rejects.toThrow(/over 500 characters/)
+  })
+
+  // The FIRST project-touching call of a session, built the way `server.mjs`
+  // builds it — `configuredTarget()` from the config, and NOTHING calling
+  // `setTarget`. Every other case here goes through `mcpSession`, which sets
+  // the target itself, which is exactly why this shipped broken:
+  //
+  // `syncProject` runs BEFORE the handler, and both `projectKey()` and
+  // `configuredTarget()` used to read a slug that only a forwarded api call
+  // resolves. So on call one the key was null, `null === null` made the sync a
+  // no-op, the configured target was never read, and the call refused with
+  // "the editor has not told the agent which branch is open — reopen the AI
+  // panel". Call two worked. In the panel that is the whole first turn, and
+  // the handbook tells the model to treat that refusal as an editor bug and
+  // STOP — so the turn died rather than retrying.
+  test('the FIRST call already has the target the config carries', async () => {
+    const runtime = await import('../packages/guano/runtime/mcp-runtime.mjs').catch(() => null)
+    test.skip(!runtime, 'runtime/mcp-runtime.mjs missing — run `npm run build:mcp-runtime`')
+
+    // null until a forwarded call resolves it, as the real one is
+    let resolvedSlug: string | null = null
+    const api = {
+      base: 'http://localhost:4174',
+      whoami: async () => {
+        resolvedSlug = 'only'
+        return { id: 'u1', email: 'a@b.c', role: 'admin', name: 'A' }
+      },
+      storeGetRaw: async () => {
+        resolvedSlug = 'only'
+        return JSON.stringify(runtime!.createProject('T'))
+      },
+      storeGetJson: async () => {
+        resolvedSlug = 'only'
+        return runtime!.createProject('T')
+      },
+      storePutRaw: async () => {},
+      publish: async () => ({ routes: 1, bytes: 1 }),
+      preview: async () => ({ ok: true, routes: 1, bytes: 1, url: '', routeUrls: [] }),
+      mediaIndex: async () => ({ assets: [], folders: [] }),
+      mediaUpload: async () => ({ id: 'm1' }),
+      // the sole-project fallback: with one project configured there is nothing
+      // to resolve, so both answers come out of the config file
+      projectKey: () => resolvedSlug ?? 'only',
+      configuredTarget: () => (resolvedSlug ?? 'only' ? 'main' : ''),
+    }
+    const set = createToolSet({ api, runtime, embedded: true })
+    // deliberately NO set.setTarget(...) — the editor's choice reaches the
+    // toolset through the config and nowhere else
+
+    const status = await set.toolMap.get('get_status')!.handler({})
+    expect(status.embedded).toBe(true)
+    expect(status.targetSet).toBe(true)
+    expect(status.target).toBe('main')
+
+    // and a fresh toolset whose very first call touches the project, rather
+    // than get_status, must not refuse either
+    resolvedSlug = null
+    const fresh = createToolSet({ api, runtime, embedded: true })
+    const pages = await fresh.toolMap.get('list_pages')!.handler({})
+    expect(pages.pages.length).toBeGreaterThan(0)
   })
 
   test('a target the editor set is simply the target', async () => {

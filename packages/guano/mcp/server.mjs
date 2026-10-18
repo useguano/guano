@@ -53,6 +53,18 @@ const multi = router.configured().count > 0
 let resolvedBase = api.BASE
 let resolvedSlug = null
 
+/**
+ * The one configured project's slug, or null when there are several.
+ *
+ * With several, which one is live genuinely needs resolving (the pin, then the
+ * sole reachable one — `docs/instance.md`) and guessing would put a write on
+ * somebody else's site. With one, there is no guess to make.
+ */
+function soleSlug() {
+  const { slugs } = router.configured()
+  return slugs.length === 1 ? slugs[0] : null
+}
+
 async function liveApi() {
   const project = await router.current()
   resolvedBase = project.api.base
@@ -90,11 +102,29 @@ const routedApi = multi
         return resolvedBase
       },
       // how the toolset knows the live project changed, so it can drop a target
-      // and a baseline that belong to the project before it
-      projectKey: () => resolvedSlug,
+      // and a baseline that belong to the project before it.
+      //
+      // `soleSlug()` is what makes it answerable on the FIRST call. Both of
+      // these used to read `resolvedSlug`, which is null until a forwarded api
+      // call has resolved one — and `syncProject` runs BEFORE the handler, so
+      // on the first call of a session the key was null and the configured
+      // target read as ''. In the panel that is the whole session: no
+      // GUANO_MCP_TARGET, so `target` stayed null and the first
+      // project-touching call refused with "the editor has not told the agent
+      // which branch is open — reopen the AI panel", while the second
+      // succeeded. The handbook tells the model to treat that refusal as an
+      // editor bug and STOP, so the first turn of every panel session died.
+      //
+      // With one project configured there is nothing to resolve: which project
+      // this is, and the target the editor wrote for it, are both in the config
+      // file. Reading them there costs no round trip and cannot be wrong.
+      projectKey: () => resolvedSlug ?? soleSlug(),
       // per project, not one GUANO_MCP_TARGET for the whole entry: pinning
       // Main for a landing page must not pin it for a client's live site
-      configuredTarget: () => (resolvedSlug ? router.targetFor(resolvedSlug) : ''),
+      configuredTarget: () => {
+        const slug = resolvedSlug ?? soleSlug()
+        return slug ? router.targetFor(slug) : ''
+      },
     }
   : { ...api, base: api.BASE }
 

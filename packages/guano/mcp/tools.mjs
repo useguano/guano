@@ -926,6 +926,14 @@ let envTarget = ENV_TARGET
 
 // Which project the per-project session state below belongs to. null until the
 // first call resolves one.
+//
+// The early return below is "the project has not changed", and it must stay
+// that: a caller that set the target itself (`setTarget`, the in-process
+// harness) has no `configuredTarget` for this to re-read, so running the body
+// would clear the target rather than confirm it. What made the first call of a
+// panel session refuse was the KEY being unknowable that early, and that is
+// fixed where it belongs — `server.mjs` answers both from the config when one
+// project is configured, so the key is the same from call one.
 let activeProjectKey = null
 
 /**
