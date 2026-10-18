@@ -230,6 +230,8 @@ of an instance, and to read each one's `masterClasses` — the shared class stri
 need before restyling an inherited component. `includeInteractions: true` adds each
 element's bindings with their `bindingId`, which is what `unbindInteractionIds` needs.
 Never scrape the published HTML — the export lags the project until the next publish.
+**A `pageId` may be the page's id or its path** — `"/"`, `"/about"` — so the page a
+context line or a URL names is addressable without a lookup.
 `list_pages` returns each page's `version`, so you can write to an existing page (a
 fresh project's Home) without a `get_page` round trip first. Both `list_pages` and
 `get_page` return the page's stored `seo` (including per-locale buckets), and `get_page`

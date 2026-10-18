@@ -1152,9 +1152,21 @@ async function saveTargetProject(project) {
   slot.loadedKey = key
 }
 
+/**
+ * The one page lookup. Takes the page's id OR its path — the editor's own
+ * context line names a page the way a person does (`"Home" (/)`), and the
+ * first embedded session spent two calls discovering that `/` was not an id.
+ * A path match is exact against `page.path`; ids win, so a project that
+ * somehow had a page whose path equalled another page's id still resolves by
+ * id first.
+ *
+ * @param {{pages?: Array<{id: string, path?: string}>}} project
+ * @param {string} pageId
+ */
 function findPage(project, pageId) {
-  const page = (project.pages ?? []).find((p) => p.id === pageId)
-  if (!page) throw new Error(`no page with id "${pageId}" in the target (use list_pages)`)
+  const pages = project.pages ?? []
+  const page = pages.find((p) => p.id === pageId) ?? pages.find((p) => p.path === pageId)
+  if (!page) throw new Error(`no page with id or path "${pageId}" in the target (use list_pages)`)
   return page
 }
 
@@ -1165,8 +1177,12 @@ function findPage(project, pageId) {
  * { ok:false, reason } instead of throwing so a batch can report per item.
  */
 function applySeo(project, item) {
-  const page = (project.pages ?? []).find((p) => p.id === item.pageId)
-  if (!page) return { ok: false, reason: 'no-page', message: `no page with id "${item.pageId}"` }
+  let page
+  try {
+    page = findPage(project, item.pageId)
+  } catch (e) {
+    return { ok: false, reason: 'no-page', message: e.message }
+  }
   const defaultLocale = project.defaultLocale || 'en'
   const localized = item.locale && item.locale !== defaultLocale
   // a write to an unregistered locale would store overrides nothing renders —
@@ -6362,7 +6378,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string' },
+        pageId: { type: 'string', description: 'page id, or its path such as `/about`' },
         elements: {
           type: 'string',
           enum: ['own', 'all', 'refs', 'ref-parts', 'none'],
@@ -7347,7 +7363,23 @@ const tools = [
 
       // every page is version-checked BEFORE the first write: a half-applied
       // batch would leave components whose instances the caller does not know about
-      const pageIds = [...new Set(args.items.map((i) => i.pageId))]
+      // deduped by the RESOLVED page, not the spelling: a pageId may be an id
+      // or a path, so two items can name one page two ways — which would
+      // demand two versions for it and echo it twice in `versions`
+      const pageIds = []
+      const seenPages = new Set()
+      for (const item of args.items) {
+        let resolved
+        try {
+          resolved = findPage(project, item.pageId)
+        } catch {
+          resolved = null
+        }
+        const key = resolved ? resolved.id : item.pageId
+        if (seenPages.has(key)) continue
+        seenPages.add(key)
+        pageIds.push(item.pageId)
+      }
       const stale = []
       for (const pageId of pageIds) {
         let page
@@ -9807,9 +9839,11 @@ const tools = [
           }
           let node = null
           if (item.kind === 'element') {
-            const page = (project.pages ?? []).find((p) => p.id === item.pageId)
-            if (!page) {
-              fail(item, `no page with id "${item.pageId}"`)
+            let page
+            try {
+              page = findPage(project, item.pageId)
+            } catch (e) {
+              fail(item, e.message)
               continue
             }
             // the SHORT 8-hex data-id a read prints is a valid address
@@ -9849,9 +9883,11 @@ const tools = [
             )
             continue
           }
-          const page = (project.pages ?? []).find((p) => p.id === item.pageId)
-          if (!page) {
-            fail(item, `no page with id "${item.pageId}"`)
+          let page
+          try {
+            page = findPage(project, item.pageId)
+          } catch (e) {
+            fail(item, e.message)
             continue
           }
           const node = findNode(page.elements ?? [], fullNodeId(page.elements ?? [], item.id))
@@ -9915,9 +9951,11 @@ const tools = [
           written++
         } else if (item.kind === 'seo') {
           // the SAME path set_page_seo {locale} writes: page.seo.locales[code]
-          const page = (project.pages ?? []).find((p) => p.id === item.pageId)
-          if (!page) {
-            fail(item, `no page with id "${item.pageId}"`)
+          let page
+          try {
+            page = findPage(project, item.pageId)
+          } catch (e) {
+            fail(item, e.message)
             continue
           }
           const field = String(item.field ?? '')

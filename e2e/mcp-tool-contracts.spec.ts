@@ -1605,3 +1605,53 @@ test.describe('301 redirects', () => {
     expect(await s.kinds()).toContain('redirect-shadowed')
   })
 })
+
+// A pageId is an id or a path, everywhere one is taken — the panel's context
+// line names a page by path, and so does every URL a person can read.
+test.describe('pageId takes a path', () => {
+  test('every tool that takes one resolves it', async () => {
+    const s = await mcpSession()
+    await s.call('create_page', { name: 'Pricing', slug: '/pricing' })
+
+    const read = await s.call('get_page', { pageId: '/pricing' })
+    expect(read.pageId).toBeTruthy()
+
+    const seo = await s.call('set_page_seo', { pageId: '/pricing', title: 'Plans' })
+    expect(seo.saved).toBe(true)
+
+    const wrote = await s.call('set_page_html', {
+      pageId: '/pricing',
+      html: pageHtml('<h1 data-ref="t">Plans</h1>'),
+      version: read.version,
+    })
+    expect(wrote.saved).toBe(true)
+
+    const after = await s.call('get_page', { pageId: '/pricing' })
+    const named = await s.call('update_page', {
+      pageId: '/pricing',
+      version: after.version,
+      name: 'Plans',
+    })
+    expect(named.saved).toBe(true)
+
+    const edited = await s.call('edit_elements', {
+      pageId: '/pricing',
+      version: (await s.call('get_page', { pageId: '/pricing' })).version,
+      edits: [{ ref: 't', content: 'Our plans' }],
+    })
+    expect(edited.failed).toBe(0)
+
+    const gone = await s.call('delete_page', {
+      pageId: '/pricing',
+      version: (await s.call('get_page', { pageId: '/pricing' })).version,
+    })
+    expect(gone.deleted ?? gone.saved).toBeTruthy()
+  })
+
+  test('an unknown path refuses, naming the tool that lists them', async () => {
+    const s = await mcpSession()
+    await expect(s.call('get_page', { pageId: '/missing' })).rejects.toThrow(
+      /no page with id or path "\/missing".*list_pages/,
+    )
+  })
+})

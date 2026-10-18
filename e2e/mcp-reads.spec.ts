@@ -373,3 +373,26 @@ test('a part is addressable by its HTML tag', async () => {
   expect(html).toContain('first')
   expect(html).toContain('second')
 })
+
+// The embedded panel names the page the way a person does — `"Home" (/)` —
+// and the first session spent two calls discovering that `/` was not an id.
+test.describe('a pageId may be a path', () => {
+  test('a path reads and writes the same page an id does', async () => {
+    const { s, pageId } = await built()
+    const byId = await s.call('get_page', { pageId, elements: 'refs' })
+    const byPath = await s.call('get_page', { pageId: '/', elements: 'refs' })
+    expect(byPath.pageId).toBe(pageId)
+    expect(byPath.html).toBe(byId.html)
+    await s.call('edit_structure', {
+      pageId: '/',
+      version: byPath.version,
+      ops: [{ op: 'insert', parent: 'hero', html: '<p data-ref="note">hi</p>' }],
+    })
+    expect(await s.html()).toContain('hi')
+  })
+
+  test('an unknown path refuses by naming list_pages', async () => {
+    const { s } = await built()
+    await expect(s.call('get_page', { pageId: '/nope' })).rejects.toThrow(/list_pages/)
+  })
+})
