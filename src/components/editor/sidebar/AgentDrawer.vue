@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   Plus,
   RotateCw,
+  Sparkles,
   Square,
   TriangleAlert,
   X,
@@ -16,6 +17,7 @@ import {
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import MenuUI from '@/components/ui/MenuUI.vue'
 import TextareaUI from '@/components/ui/TextareaUI.vue'
+import BriefStepper from './BriefStepper.vue'
 import {
   useAgentChat,
   type AgentAskItem,
@@ -30,6 +32,7 @@ import { useBranches } from '@/composables/useBranches'
 import { useElement } from '@/composables/useElement'
 import { useNotice } from '@/composables/useNotice'
 import { usePage } from '@/composables/usePage'
+import { useProject } from '@/composables/useProject'
 import { apiJson } from '@/lib/api'
 import { MODEL_CHOICES, modelChoice, modelLabel } from '@/lib/agentLabels'
 import { blocks, type Block } from '@/lib/agentMarkdown'
@@ -49,12 +52,48 @@ const {
   restart,
 } = useAgentChat()
 const { activePage } = usePage()
+const { isEmptyProject } = useProject()
 const { selectedElement, selectedElementIds } = useElement()
 const { notify } = useNotice()
 const { isAdmin } = useAuth()
 const { branches, onMain } = useBranches()
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+/**
+ * The brief (`docs/agent-panel.md`, The brief).
+ *
+ * On an EMPTY project the list area opens on two cards instead of the
+ * placeholder sentence — the person who typed *"a simple coming-soon page for
+ * Acme"* did not have less to say, they had no place to say it. Once the site
+ * has content the cards go and a **New brief** item sits in the composer
+ * toolbar, because a brief then restyles rather than starts over.
+ *
+ * `chatOnly` is *Just chat*: a per-session dismissal, not a setting, so
+ * nothing about the project changes by declining.
+ */
+const briefOpen = ref(false)
+const chatOnly = ref(false)
+const showCards = computed(
+  () => isEmptyProject.value && !turns.value.length && !chatOnly.value && !briefOpen.value,
+)
+
+/**
+ * The stepper replaces the transcript INSIDE the column: a persistent column
+ * never closes on Escape (`docs/ui.md`), so here Escape closes the stepper and
+ * not the column. The answers live in a module ref in `BriefStepper`, so a
+ * mis-click does not lose fourteen screens.
+ */
+function closeBrief() {
+  briefOpen.value = false
+  chatOnly.value = true
+}
+
+function sendBrief(text: string, images: AgentAttachment[]) {
+  briefOpen.value = false
+  chatOnly.value = true
+  send(text, context.value, images)
+}
 
 const draft = ref('')
 const attachments = ref<(AgentAttachment & { url: string })[]>([])
@@ -368,7 +407,11 @@ nextTick(() => input.value?.focus())
 </script>
 
 <template>
-  <div data-agent-panel class="flex h-full flex-col bg-background">
+  <div
+    data-agent-panel
+    class="flex h-full flex-col bg-background"
+    @keydown.escape="briefOpen && closeBrief()"
+  >
     <div
       v-if="status === 'unavailable' && !notInstalled"
       class="flex items-center gap-1 border-b border-input px-2.5 py-2"
@@ -388,7 +431,10 @@ nextTick(() => input.value?.focus())
       />
     </div>
 
+    <BriefStepper v-if="briefOpen" @close="closeBrief" @send="sendBrief" />
+
     <div
+      v-else
       ref="listEl"
       class="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2.5 pt-3 pb-3"
     >
@@ -436,6 +482,35 @@ nextTick(() => input.value?.focus())
           @click="allowMainWrites"
         >
           Allow
+        </ButtonUI>
+      </div>
+
+      <div v-else-if="showCards" data-agent-cards class="flex flex-col gap-1.5 pt-2">
+        <p class="px-0.5 pb-1 text-[11px] leading-relaxed text-muted-foreground">
+          Nothing here yet. Tell the agent what you want in your own words, or answer a few
+          questions first and it will have everything it needs.
+        </p>
+        <ButtonUI
+          variant="outline"
+          size="xs"
+          class="!h-auto flex-col items-start gap-0.5 !px-2.5 py-2 text-left whitespace-normal"
+          data-agent-card-brief
+          @click="briefOpen = true"
+        >
+          <span>Build a brief</span>
+          <span class="font-normal text-muted-foreground">
+            Fourteen quick questions — palette, shape, pages, languages. Skip any of them.
+          </span>
+        </ButtonUI>
+        <ButtonUI
+          variant="ghost"
+          size="xs"
+          class="!h-auto flex-col items-start gap-0.5 !px-2.5 py-2 text-left whitespace-normal"
+          data-agent-card-chat
+          @click="chatOnly = true"
+        >
+          <span>Just chat</span>
+          <span class="font-normal text-muted-foreground">Type what you want instead.</span>
         </ButtonUI>
       </div>
 
@@ -709,6 +784,15 @@ nextTick(() => input.value?.focus())
             class="w-6 text-muted-foreground"
             data-agent-attach
             @click="pickFiles"
+          />
+          <ButtonUI
+            variant="icon"
+            size="xs"
+            :icon="Sparkles"
+            tooltip="Build a brief"
+            class="w-6 text-muted-foreground"
+            data-brief-new
+            @click="briefOpen = true"
           />
           <MenuUI
             side="top"

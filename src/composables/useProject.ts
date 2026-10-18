@@ -34,6 +34,25 @@ function nameFor(width: number): string {
 export function useProject() {
   const breakpoints = computed(() => project.value.breakpoints)
 
+  /**
+   * Nothing has been built yet: the seeded Home page and no content anywhere.
+   *
+   * What the AI panel opens on — two cards, *Just chat* or *Build a brief*,
+   * instead of the placeholder sentence (`docs/agent-panel.md`, The brief).
+   *
+   * **Derived, never cached.** It has to go false the moment the agent writes
+   * one element, or a reload mid-build would offer the cards over a live
+   * transcript. The seed is `createProject` in `src/lib/factories.ts`: one
+   * page at `/` whose body has no children.
+   */
+  const isEmptyProject = computed(() => {
+    const p = project.value
+    if (p.pages.length !== 1) return false
+    if (p.components.length || p.collections.length) return false
+    const body = p.pages[0]?.elements[0]
+    return !!body && !(body.children?.length ?? 0)
+  })
+
   const hasEnabledForm = computed(() => {
     let found = false
     const look = (nodes: ElementNode[]) =>
@@ -105,6 +124,7 @@ export function useProject() {
   return {
     project,
     projectVersion,
+    isEmptyProject,
     hasEnabledForm,
     breakpoints,
     baseBreakpoint,
