@@ -6,26 +6,29 @@ import { agentTargetPosted, postAgentTarget, useAgentChat } from './useAgentChat
 
 let started = false
 
+/**
+ * The page's half of the host bridge.
+ *
+ * `agent-target` is posted IMMEDIATELY, so it follows `agent-start` in the
+ * same tick: the host waits for it rather than defaulting to Main. It is
+ * posted again on every `ready` that has not seen one — a reload replays
+ * `agent-start`, and the host dropped what it knew with the page that told
+ * it. Keyed on `readyTick` rather than the status, which a `ready` does not
+ * always move. → docs/agent-panel.md, The target follows the branch
+ */
+
 export function useHostBridge() {
   function start() {
     if (started || !hostBridge.available) return
     started = true
     const { status } = usePersistence()
     const { openPublish } = usePublishDialog()
-    const { ingest, exit, start: startAgent, status: agentStatus } = useAgentChat()
+    const { ingest, exit, start: startAgent, readyTick } = useAgentChat()
     installHostCallbacks({ openPublish, agentEvent: ingest, agentExit: exit })
     startAgent()
-    // The branch the editor has loaded, which the host turns into
-    // `guano connect --target` and the agent never has to be asked about.
-    // Immediate, because it has to follow `agent-start` in the same tick: the
-    // host WAITS for it rather than defaulting to Main.
     watch(activeBranchId, (id) => postAgentTarget(id), { immediate: true })
-    // A reload replays `agent-start`, and the target has to follow it — the
-    // host clears what it knew with the page that told it.
-    watch(agentStatus, (value) => {
-      if (value !== 'unavailable' && value !== 'unknown' && !agentTargetPosted()) {
-        postAgentTarget(activeBranchId.value)
-      }
+    watch(readyTick, () => {
+      if (!agentTargetPosted()) postAgentTarget(activeBranchId.value)
     })
     watch(status, (value) => hostBridge.post({ type: 'save-status', status: value }), {
       immediate: true,

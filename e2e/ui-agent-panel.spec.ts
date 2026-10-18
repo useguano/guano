@@ -145,6 +145,18 @@ test.describe('the AI panel', () => {
         return start !== -1 && target > start ? sent[target]!.target : null
       })
       .toBe('main')
+
+    // ...and again after a `ready`: a reload replays `agent-start`, and the
+    // host dropped what it knew along with the page that told it
+    const before = ((await posts(page)) as { type: string }[]).filter(
+      (m) => m.type === 'agent-target',
+    ).length
+    await feed(page, [AGENT_READY, AGENT_INIT])
+    await expect
+      .poll(async () =>
+        ((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-target').length,
+      )
+      .toBe(before + 1)
   })
 
   test('switching the branch names it and holds the composer', async ({ page }) => {

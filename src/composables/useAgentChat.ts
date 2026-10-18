@@ -63,6 +63,10 @@ const model = ref<string | null>(null)
 const rateLimit = ref<string | null>(null)
 const turns = ref<AgentTurn[]>([])
 /**
+ * `{type:'switching', target}`: the branch the editor has open changed and the
+ * host is respawning the agent against a config written for it. The composer
+ * waits; the next `ready` ends it.
+ *
  * Has the host answered AT ALL — `ready` or `unavailable`?
  *
  * The rail button renders on THIS, not on `available`. Panel-first means a
@@ -75,6 +79,13 @@ const turns = ref<AgentTurn[]>([])
 const answered = ref(false)
 /** which branch the host is respawning onto, while `status === 'switching'` */
 const switchingTo = ref<string | null>(null)
+/**
+ * Bumped on every `ready`. The target has to be re-posted after one — a
+ * reload replays `agent-start` and the host dropped what it knew with the
+ * page that told it — and a `ready` does not always move `status`, so this is
+ * the thing to watch rather than the status.
+ */
+const readyTick = ref(0)
 
 let requested = false
 /** the host has seen our `agent-target` since the last `ready` */
@@ -410,6 +421,7 @@ function ingest(raw: unknown): void {
       answered.value = true
       switchingTo.value = null
       targetAcknowledged = false
+      readyTick.value++
       unavailableReason.value = null
       sessionId.value = asString(event.sessionId) ?? sessionId.value
       status.value = 'idle'
@@ -425,9 +437,6 @@ function ingest(raw: unknown): void {
       unavailableReason.value = asString(event.reason) ?? 'Claude Code was not found'
       return
     }
-    // The branch the editor has open changed, so the host is respawning the
-    // agent against a config written for it. The composer waits; the next
-    // `ready` ends it.
     case 'switching': {
       status.value = 'switching'
       switchingTo.value = asString(event.target) ?? null
@@ -542,6 +551,7 @@ export function useAgentChat() {
     available,
     answered,
     switchingTo,
+    readyTick,
     status,
     busy: agentBusy,
     step: agentStep,

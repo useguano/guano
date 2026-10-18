@@ -147,7 +147,9 @@ const switchingLabel = computed(() => {
  * refusal used to arrive as a 403 on the first save after a conversation's
  * worth of work. The notice says it before the asking does, and puts the
  * control where the refusal is seen — the same `PUT /api/agent-policy` that
- * Settings → MCP → Agent permissions sends, not a second endpoint.
+ * Settings → MCP → Agent permissions sends, not a second endpoint. An older
+ * server does not report the policy at all: `null` stays silent, and the
+ * write itself still refuses with its own sentence.
  */
 const mainWritesAllowed = ref<boolean | null>(null)
 const allowBusy = ref(false)
@@ -161,8 +163,6 @@ watch(
     apiJson('/api/agent-policy')
       .then((policy) => (mainWritesAllowed.value = policy?.allowMainWrites === true))
       .catch(() => {
-        // an older server does not report it; silence here is the honest
-        // answer — the write itself still refuses, with its own sentence
         mainWritesAllowed.value = null
       })
   },
