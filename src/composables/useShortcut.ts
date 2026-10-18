@@ -7,6 +7,22 @@ export function isEditable(target: EventTarget | null) {
   )
 }
 
+/**
+ * Does the focused field still have something Escape would discard?
+ *
+ * `isEditable` alone is too blunt for a container that closes on Escape: a
+ * class strip commits its value on Enter and keeps focus, so the field is
+ * EMPTY and has no claim on the key, while the drawer around it does. A field
+ * with text in it keeps Escape, because there the key means "discard this".
+ */
+export function hasPendingText(target: EventTarget | null) {
+  if (!isEditable(target)) return false
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return target.value.length > 0
+  }
+  return true
+}
+
 export function useShortcut(
   code: string,
   handlers?: { onDown?: (e: KeyboardEvent) => void; onUp?: (e: KeyboardEvent) => void },

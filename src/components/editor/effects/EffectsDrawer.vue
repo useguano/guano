@@ -10,7 +10,7 @@ import { useElementEffects } from '@/composables/useElementEffects'
 import { useInteraction } from '@/composables/useInteraction'
 import { useModal } from '@/composables/useModal'
 import { usePopover } from '@/composables/usePopover'
-import { isEditable } from '@/composables/useShortcut'
+import { hasPendingText } from '@/composables/useShortcut'
 
 const { open, selected, trigger, view, closeDrawer } = useEffectsDrawer()
 const interactions = useInteraction()
@@ -21,7 +21,7 @@ function onKeydownCapture(e: KeyboardEvent) {
   if (interactions.pickingFor.value) return
   if (useModal().stack.value.length) return
   if (usePopover().current.value?.closeOnEscape !== false) return
-  if (isEditable(document.activeElement)) return
+  if (hasPendingText(document.activeElement)) return
   e.stopPropagation()
   closeDrawer()
 }

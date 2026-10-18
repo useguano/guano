@@ -54,6 +54,20 @@ function errorFor(item: LibraryItem): string | null {
   return animation ? animations.animationError(animation) : null
 }
 
+/**
+ * The whole ROW opens the effect, not just its name.
+ *
+ * The name stays a real `<button>` — it is the accessible control, and the
+ * keyboard reaches it — but a row is what a person aims at, and the click
+ * landed on the spacer between the name and the usage count and did nothing.
+ * A click that reached one of the row's own buttons (rename, delete, the name
+ * itself) is left to it.
+ */
+function openFromRow(item: LibraryItem, e: MouseEvent) {
+  if ((e.target as HTMLElement | null)?.closest('button')) return
+  void pick(item)
+}
+
 async function pick(item: LibraryItem) {
   const here = view.value === 'trigger' ? trigger.value : null
   if (!here || !canEdit.value) {
@@ -145,8 +159,9 @@ async function remove(item: LibraryItem) {
         :key="item.id"
         data-effect-row
         :data-open="isOpen(item) ? '' : undefined"
-        class="group/row flex h-7 items-center gap-1 rounded-lg px-2"
+        class="group/row flex h-7 cursor-default items-center gap-1 rounded-lg px-2"
         :class="isOpen(item) ? 'bg-accent/30' : 'hover:bg-accent/15'"
+        @click="openFromRow(item, $event)"
       >
         <button
           type="button"

@@ -115,6 +115,8 @@ The Pages drawer's list swaps for three detail views: `LayersPane`, `PageSetting
 
 `useDrawerEscape`: a persistent column may claim the key only while the last pointerdown or focus landed inside it AND it has a layer to peel (a filter, a detail pane). It never closes the column, and it stands down while an insert drag is in flight.
 
+**A text field keeps Escape only while it has something to discard** (`hasPendingText` in `useShortcut.ts`, used by the effects drawer's own capture handler). `isEditable` alone was too blunt: the class strip commits on Enter and KEEPS focus, so the field sat there empty with no claim on the key while the drawer around it had one — and ⌘⇧E → type a class → Escape left the drawer open, which read as the drawer ignoring Escape entirely. A field with text in it still wins, because there Escape means "discard this". Coverage: `e2e/ui-interactions-panel.spec.ts` (three of its cases press Escape straight after typing a class).
+
 ## Styling state and the class validator
 
 Styling state is the whitespace-separated `node.classes` string, edited as tokens through `useClassField` / `ClassInput` and the `STYLE_SECTIONS` catalog + `applyClass` in `lib/styles.ts`, which validates a typed class, replaces the conflicting token on the same property, and auto-injects flex/grid prerequisites.
