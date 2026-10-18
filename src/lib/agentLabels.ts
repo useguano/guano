@@ -10,9 +10,19 @@ const MODELS: [RegExp, string][] = [
   [/^claude-fable-5/, 'Fable 5'],
 ]
 
+/**
+ * The panel's models, default first.
+ *
+ * Sonnet leads because the panel's default is Sonnet (`AgentModel` in the
+ * launcher) — the panel writes a strict HTML subset against a handbook in a
+ * column the person is watching, and the two measured runs on the terminal's
+ * Opus took 81 s and 49 s to their first word. The pick is remembered per
+ * project by the host, so choosing Opus for the site that needs it sticks for
+ * that site. → `docs/agent-panel.md`, Startup cost.
+ */
 export const MODEL_CHOICES: { value: string; label: string }[] = [
-  { value: 'opus', label: 'Opus 5' },
   { value: 'sonnet', label: 'Sonnet 5' },
+  { value: 'opus', label: 'Opus 5' },
   { value: 'haiku', label: 'Haiku 4.5' },
 ]
 

@@ -477,13 +477,30 @@ Each change records its own before/after against the same prompt.
    confirmed (caching, above), so this is now a live option rather than a
    conditional one — but it is worth doing only if turn one is still spending
    guide calls after the manifest fix. Measure before building.
-5. **The panel's default model.** Today it is whatever
-   `~/.claude/settings.json` says — the person's TERMINAL default. Both
-   measured runs were on **Opus 5 · 1M**, which nobody chose for a canvas, and
-   81.1 s and 49.1 s to first word are mostly that choice. This is the largest
-   remaining lever and the only one with a real trade-off in it.
+5. **The panel's default model is the panel's, not the terminal's.** It used
+   to be whatever `~/.claude/settings.json` said; both measured runs were on
+   **Opus 5 · 1M**, which nobody chose for a canvas, and 81.1 s and 49.1 s to
+   first word are mostly that choice. `AgentLaunch.spawn` passes `--model`
+   after `--setting-sources user` so it wins, and the default is **`sonnet`**.
 
-Steps 1–3 are in.
+   **The person's pick is remembered per project** (`AgentModel`, in
+   `UserDefaults` keyed by the project's path): choosing Opus for the site
+   that needs it sticks for that site at the next spawn and does not follow
+   them to every other one. An alias that is not a model is ignored rather
+   than stored, because it arrives over the page bridge and a bad value would
+   pin the project to a spawn that fails with nothing on screen saying why.
+   The menu lists the default first.
+
+   **This is the one step here with a real trade-off**, and it is reversible
+   in one line: `AgentModel.fallback`. The measured turns produced good work —
+   a considered palette, wired forms, placeholders flagged as placeholders —
+   and some of that is the model. The bet is that on a canvas, where every
+   change lands in front of the person and a wrong one costs a sentence to
+   correct, speed beats the last few points of judgement. If it reads worse,
+   change the default back and leave the per-project memory, which is useful
+   either way.
+
+Steps 1–5 are in.
 
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**
