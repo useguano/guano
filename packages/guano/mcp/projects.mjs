@@ -16,13 +16,16 @@
 //   1. GUANO_MCP_PROJECT — pinned in the entry's env. The human edited a config
 //      file, which is the one consent channel a prompt-injected agent cannot
 //      reach. Never asked, never overridden.
-//   2. the sole REACHABLE project — if exactly one of the mapped projects
+//   2. `guano use <slug>` — the human's "this one, for now", in a file outside
+//      every project so the agent cannot reach it either. Read on every
+//      resolve, so switching needs no client restart.
+//   3. the sole REACHABLE project — if exactly one of the mapped projects
 //      answers /api/health with its own instance id, that is the one. Starting
 //      a server is a human action an agent has no way to perform (it has no
 //      shell; its only reach is HTTP to something already running), so this is
 //      consent by action and needs no prompt. It is also the whole of the
 //      plug-and-play case: one local project, nothing configured.
-//   3. otherwise REFUSE and name the candidates. Guessing between two running
+//   4. otherwise REFUSE and name the candidates. Guessing between two running
 //      projects is how "which site am I editing" becomes a question nobody can
 //      answer from the outside, which is the bug docs/instance.md exists to end.
 //
@@ -47,6 +50,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createApi } from './api.mjs'
+import { readPin } from './pin.mjs'
 
 /**
  * Where this project is listening NOW.
@@ -279,6 +283,18 @@ export function createProjectRouter({
       active = pinned
       return { slug: pinned, pinned: true }
     }
+    // `guano use` — the human's "this one, for now". Read every time, so a
+    // switch needs no client restart. A pin naming a project that is no
+    // longer in the map is simply stale (it was disconnected) and is ignored
+    // rather than treated as an error; one naming a project that is mapped is
+    // honoured WITHOUT probing, exactly as the env pin is — consent is the
+    // human's, and silently falling through to a different site because this
+    // one is off is the misdirected write this whole file exists to prevent.
+    const chosen = readPin()
+    if (chosen && projects[chosen]) {
+      active = chosen
+      return { slug: chosen, pinned: true, viaPin: true }
+    }
     if (slugs.length === 1) {
       active = slugs[0]
       return { slug: slugs[0], sole: true }
@@ -319,8 +335,9 @@ export function createProjectRouter({
     return {
       error:
         `${up.length} projects are running (${up.join(', ')}), so which one to edit is ambiguous ` +
-        '— and guessing would mean editing the wrong site and reporting success. Stop the ones ' +
-        'you are not working on, or pin one with GUANO_MCP_PROJECT in the MCP config.',
+        '— and guessing would mean editing the wrong site and reporting success.\n' +
+        `Pick one with \`guano use ${up[0]}\` (it takes effect on the next tool call — no restart), ` +
+        'or stop the ones you are not working on.',
       candidates: up,
     }
   }

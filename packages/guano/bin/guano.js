@@ -49,6 +49,10 @@ Usage:
                          --url https://host --token guano_… connects a REMOTE
                          instance (a VPS): make the token in its editor under
                          My account → API tokens
+  guano use [slug]       pick which project the agent works on when more
+                         than one is running. No argument lists them,
+                         \`.\` means this folder, --none unpins. Takes effect
+                         on the next tool call — no client restart.
   guano disconnect       remove a project from Claude's MCP config — this
                          folder's by default, or \`guano disconnect <slug>\`.
                          --list shows every configured project with a live
@@ -141,6 +145,16 @@ switch (cmd) {
   }
   case 'connect': {
     const { main } = await import(pathToFileURL(join(ROOT, 'mcp', 'connect.mjs')).href)
+    try {
+      await main(rest)
+    } catch (e) {
+      console.error(`✗ ${e.message}`)
+      process.exit(1)
+    }
+    break
+  }
+  case 'use': {
+    const { main } = await import(pathToFileURL(join(ROOT, 'mcp', 'use.mjs')).href)
     try {
       await main(rest)
     } catch (e) {
