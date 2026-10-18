@@ -4458,8 +4458,8 @@ function clearForOverlay(node, mirror) {
 }
 //#endregion
 //#region src/lib/shared/urls.js
-var SAFE_HREF = /^(\/|#|https?:|mailto:|tel:)/i;
-var SAFE_SRC = /^(\/|#|https?:|mailto:|tel:|data:image\/|data:video\/)/i;
+var SAFE_HREF = /^(?!.*\\)(\/|#|https?:|mailto:|tel:)/i;
+var SAFE_SRC = /^(?!.*\\)(\/|#|https?:|mailto:|tel:|data:image\/|data:video\/)/i;
 //#endregion
 //#region src/lib/shared/richtext.js
 var ALLOWED = {
@@ -4847,7 +4847,8 @@ function parseHtml(input, components = []) {
 	function reportStrayText(text, offset) {
 		if (!text.trim()) return;
 		const parent = stack[stack.length - 1];
-		const quoted = text.trim().slice(0, 40);
+		const stray = text.trim();
+		const quoted = stray.length > 12 ? `${stray.slice(0, 12)}…` : stray;
 		fail(offset + (text.length - text.trimStart().length), parent ? `"${quoted}" sits directly inside <${parent.tag}>, which is a container. Put text in a text element: <p>, <span>, <h2>, or <div data-type="text">.` : `"${quoted}" is outside any element`);
 	}
 	function readAttrs(tag, tagStart) {
