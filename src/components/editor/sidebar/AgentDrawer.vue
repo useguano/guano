@@ -9,7 +9,6 @@ import {
   LoaderCircle,
   Plus,
   RotateCw,
-  Sparkles,
   Square,
   TriangleAlert,
   X,
@@ -17,10 +16,8 @@ import {
 import ButtonUI from '@/components/ui/ButtonUI.vue'
 import MenuUI from '@/components/ui/MenuUI.vue'
 import TextareaUI from '@/components/ui/TextareaUI.vue'
-import BriefStepper from './BriefStepper.vue'
 import {
   useAgentChat,
-  type AgentAskItem,
   type AgentAttachment,
   type AgentItem,
   type AgentSuggestItem,
@@ -32,7 +29,6 @@ import { useBranches } from '@/composables/useBranches'
 import { useElement } from '@/composables/useElement'
 import { useNotice } from '@/composables/useNotice'
 import { usePage } from '@/composables/usePage'
-import { useProject } from '@/composables/useProject'
 import { apiJson } from '@/lib/api'
 import { MODEL_CHOICES, modelChoice, modelLabel } from '@/lib/agentLabels'
 import { blocks, type Block } from '@/lib/agentMarkdown'
@@ -52,48 +48,12 @@ const {
   restart,
 } = useAgentChat()
 const { activePage } = usePage()
-const { isEmptyProject } = useProject()
 const { selectedElement, selectedElementIds } = useElement()
 const { notify } = useNotice()
 const { isAdmin } = useAuth()
 const { branches, onMain } = useBranches()
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-
-/**
- * The brief (`docs/agent-panel.md`, The brief).
- *
- * On an EMPTY project the list area opens on two cards instead of the
- * placeholder sentence — the person who typed *"a simple coming-soon page for
- * Acme"* did not have less to say, they had no place to say it. Once the site
- * has content the cards go and a **New brief** item sits in the composer
- * toolbar, because a brief then restyles rather than starts over.
- *
- * `chatOnly` is *Just chat*: a per-session dismissal, not a setting, so
- * nothing about the project changes by declining.
- */
-const briefOpen = ref(false)
-const chatOnly = ref(false)
-const showCards = computed(
-  () => isEmptyProject.value && !turns.value.length && !chatOnly.value && !briefOpen.value,
-)
-
-/**
- * The stepper replaces the transcript INSIDE the column: a persistent column
- * never closes on Escape (`docs/ui.md`), so here Escape closes the stepper and
- * not the column. The answers live in a module ref in `BriefStepper`, so a
- * mis-click does not lose fourteen screens.
- */
-function closeBrief() {
-  briefOpen.value = false
-  chatOnly.value = true
-}
-
-function sendBrief(text: string, images: AgentAttachment[]) {
-  briefOpen.value = false
-  chatOnly.value = true
-  send(text, context.value, images)
-}
 
 const draft = ref('')
 const attachments = ref<(AgentAttachment & { url: string })[]>([])
@@ -119,15 +79,14 @@ const TOOL_TONES: Record<AgentToolState, string> = {
 type Segment =
   | { kind: 'text'; key: string; blocks: Block[] }
   | { kind: 'activity'; key: string; tools: AgentToolItem[] }
-  | { kind: 'ask'; key: string; item: AgentAskItem }
   | { kind: 'suggest'; key: string; item: AgentSuggestItem }
 
 /**
- * An ask is NOT a step. It gets a segment of its own rather than joining the
- * run of tool rows beside it, so it neither lands in the activity bubble nor
- * counts towards "3 steps · …" — it is something the agent said, not something
- * it did. Ending the activity run is deliberate too: the sentences and the
- * chips keep their order in the column.
+ * A suggestion is NOT a step. It gets a segment of its own rather than joining
+ * the run of tool rows beside it, so it neither lands in the activity bubble
+ * nor counts towards "3 steps · …" — it is something the agent said, not
+ * something it did. Ending the activity run is deliberate too: the sentences
+ * and the chips keep their order in the column.
  */
 function segment(items: AgentItem[]): Segment[] {
   const out: Segment[] = []
@@ -136,12 +95,8 @@ function segment(items: AgentItem[]): Segment[] {
       if (item.text.trim()) out.push({ kind: 'text', key: item.key, blocks: blocks(item.text) })
       continue
     }
-    if (item.kind === 'ask' || item.kind === 'suggest') {
-      out.push(
-        item.kind === 'ask'
-          ? { kind: 'ask', key: item.key, item }
-          : { kind: 'suggest', key: item.key, item },
-      )
+    if (item.kind === 'suggest') {
+      out.push({ kind: 'suggest', key: item.key, item })
       continue
     }
     const last = out[out.length - 1]
@@ -168,31 +123,6 @@ const rendered = computed(() =>
  */
 function inert(isLast: boolean): boolean {
   return !isLast || busy.value
-}
-
-/** the ask the composer is currently answering, or null */
-const pendingAsk = computed<AgentAskItem | null>(() => {
-  const turn = turns.value[turns.value.length - 1]
-  if (!turn || busy.value) return null
-  for (let i = turn.items.length - 1; i >= 0; i--) {
-    const item = turn.items[i]
-    // one question needs no composer: a click IS the whole answer, so it sends
-    if (item?.kind === 'ask' && item.questions.length > 1) return item
-  }
-  return null
-})
-
-const allPicked = computed(() => {
-  const ask = pendingAsk.value
-  return !!ask && ask.questions.every((q) => !!ask.picks[q.id])
-})
-
-function pickOption(item: AgentAskItem, questionId: string, label: string) {
-  item.picks = { ...item.picks, [questionId]: label }
-  // A single question is answered by the click itself. Several are collected
-  // and sent as ONE message through the one composer — there is no second
-  // send button anywhere in this app.
-  if (item.questions.length === 1) send(label, context.value)
 }
 
 function pickSuggestion(item: AgentSuggestItem, suggestion: { label: string; prompt: string }) {
@@ -316,7 +246,7 @@ const currentLabel = computed(() => modelLabel(model.value))
 
 const canSend = computed(
   () =>
-    (!!draft.value.trim() || attachments.value.length > 0 || allPicked.value) &&
+    (!!draft.value.trim() || attachments.value.length > 0) &&
     !busy.value &&
     status.value !== 'unavailable' &&
     status.value !== 'switching',
@@ -324,18 +254,10 @@ const canSend = computed(
 
 function submit() {
   if (!canSend.value) return
-  const ask = pendingAsk.value
-  // the picks ride along only once every question has one: a typed message is
-  // always a valid answer, and a half-picked batch would send a half-answer
-  const answers =
-    ask && allPicked.value
-      ? ask.questions.map((q) => ({ question: q.question, label: ask.picks[q.id]! }))
-      : []
   send(
     draft.value,
     context.value,
     attachments.value.map(({ mediaType, data }) => ({ mediaType, data })),
-    answers,
   )
   draft.value = ''
   attachments.value = []
@@ -407,11 +329,7 @@ nextTick(() => input.value?.focus())
 </script>
 
 <template>
-  <div
-    data-agent-panel
-    class="flex h-full flex-col bg-background"
-    @keydown.escape="briefOpen && closeBrief()"
-  >
+  <div data-agent-panel class="flex h-full flex-col bg-background">
     <div
       v-if="status === 'unavailable' && !notInstalled"
       class="flex items-center gap-1 border-b border-input px-2.5 py-2"
@@ -431,10 +349,7 @@ nextTick(() => input.value?.focus())
       />
     </div>
 
-    <BriefStepper v-if="briefOpen" @close="closeBrief" @send="sendBrief" />
-
     <div
-      v-else
       ref="listEl"
       class="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2.5 pt-3 pb-3"
     >
@@ -482,35 +397,6 @@ nextTick(() => input.value?.focus())
           @click="allowMainWrites"
         >
           Allow
-        </ButtonUI>
-      </div>
-
-      <div v-else-if="showCards" data-agent-cards class="flex flex-col gap-1.5 pt-2">
-        <p class="px-0.5 pb-1 text-[11px] leading-relaxed text-muted-foreground">
-          Nothing here yet. Tell the agent what you want in your own words, or answer a few
-          questions first and it will have everything it needs.
-        </p>
-        <ButtonUI
-          variant="outline"
-          size="xs"
-          class="!h-auto flex-col items-start gap-0.5 !px-2.5 py-2 text-left whitespace-normal"
-          data-agent-card-brief
-          @click="briefOpen = true"
-        >
-          <span>Build a brief</span>
-          <span class="font-normal text-muted-foreground">
-            Fourteen quick questions — palette, shape, pages, languages. Skip any of them.
-          </span>
-        </ButtonUI>
-        <ButtonUI
-          variant="ghost"
-          size="xs"
-          class="!h-auto flex-col items-start gap-0.5 !px-2.5 py-2 text-left whitespace-normal"
-          data-agent-card-chat
-          @click="chatOnly = true"
-        >
-          <span>Just chat</span>
-          <span class="font-normal text-muted-foreground">Type what you want instead.</span>
         </ButtonUI>
       </div>
 
@@ -590,38 +476,6 @@ nextTick(() => input.value?.focus())
                 class="custom-scrollbar overflow-x-auto rounded-lg bg-input p-2 font-mono text-[10px] leading-snug whitespace-pre"
               >{{ block.text }}</pre>
             </template>
-          </div>
-
-          <div
-            v-else-if="seg.kind === 'ask'"
-            data-agent-ask
-            class="flex flex-col gap-2.5 px-0.5"
-          >
-            <div v-for="q in seg.item.questions" :key="q.id" class="flex flex-col gap-1.5">
-              <p class="text-[11px] leading-relaxed">{{ q.question }}</p>
-              <div class="flex flex-col items-stretch gap-1">
-                <ButtonUI
-                  v-for="option in q.options"
-                  :key="option.label"
-                  size="xs"
-                  :variant="seg.item.picks[q.id] === option.label ? 'default' : 'outline'"
-                  :disabled="inert(last)"
-                  class="!h-auto justify-start !px-2 py-1.5 text-left leading-snug whitespace-normal"
-                  data-agent-chip
-                  :data-agent-chip-picked="seg.item.picks[q.id] === option.label ? '' : undefined"
-                  :data-agent-chip-inert="inert(last) ? '' : undefined"
-                  @click="pickOption(seg.item, q.id, option.label)"
-                >
-                  <span class="flex min-w-0 flex-col items-start gap-0.5">
-                    <span>{{ option.label }}</span>
-                    <span v-if="option.hint" class="font-normal opacity-70">{{ option.hint }}</span>
-                  </span>
-                </ButtonUI>
-              </div>
-              <p v-if="q.freeText" class="text-[10px] text-muted-foreground">
-                …or type an answer instead.
-              </p>
-            </div>
           </div>
 
           <div
@@ -763,7 +617,7 @@ nextTick(() => input.value?.focus())
           variant="bare"
           :rows="3"
           :disabled="status === 'switching'"
-          :placeholder="pendingAsk ? 'Pick above, or type an answer' : 'Ask for a change…'"
+          placeholder="Ask for a change…"
           data-agent-input
           @keydown.enter.exact.prevent="submit"
         />
@@ -784,15 +638,6 @@ nextTick(() => input.value?.focus())
             class="w-6 text-muted-foreground"
             data-agent-attach
             @click="pickFiles"
-          />
-          <ButtonUI
-            variant="icon"
-            size="xs"
-            :icon="Sparkles"
-            tooltip="Build a brief"
-            class="w-6 text-muted-foreground"
-            data-brief-new
-            @click="briefOpen = true"
           />
           <MenuUI
             side="top"

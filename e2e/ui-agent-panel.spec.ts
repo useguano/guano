@@ -5,15 +5,13 @@ import {
   AGENT_DENIAL,
   AGENT_HARNESS_DENIAL,
   AGENT_HARNESS_TURN,
-  AGENT_ASK_DENIAL,
-  AGENT_ASK_ONE,
-  AGENT_ASK_TURN,
   AGENT_INIT,
   AGENT_INIT_SONNET,
   AGENT_INTERRUPT_RESULT,
   AGENT_RATE_LIMITED,
   AGENT_READY,
   AGENT_STEP_IN_FLIGHT,
+  AGENT_SUGGEST_DENIAL,
   AGENT_SUGGEST_TURN,
   AGENT_TURN,
   agentReplay,
@@ -72,62 +70,6 @@ async function openEditor(page: Page) {
   await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
   await loadFixture(page)
   await expect(ready).toBeVisible({ timeout: 30_000 })
-}
-
-/**
- * The Main-writes notice and the brief's two cards are the same slot, and the
- * notice wins — offering "Build a brief" to an agent that cannot write Main
- * would be a dead end. So the brief's cases turn the policy on first, which is
- * also the state any real brief is given from.
- */
-async function allowMainWrites(page: Page) {
-  await page.route('**/api/agent-policy', (route) =>
-    route.fulfill({ json: { allowMainWrites: true, allowPublish: false } }),
-  )
-}
-
-const storedProject = async (page: Page) => {
-  const res = await page.request.get('/api/store?keys=guano-project:main')
-  const blob = (await res.json())['guano-project:main']
-  return JSON.parse(blob)
-}
-
-/**
- * Strip Main back to the seed: one page whose body has no children, no
- * components, no collections. `isEmptyProject` is derived from exactly that
- * (`useProject`), and the suite's fixture is a finished site — so the brief's
- * two cards are unreachable without this.
- */
-async function loadEmptyProject(page: Page) {
-  await page.goto('about:blank')
-  const project = await storedProject(page)
-  const home = project.pages[0]
-  project.pages = [{ ...home, path: '/', elements: [{ ...home.elements[0], children: [] }] }]
-  project.components = []
-  project.collections = []
-  project.settings.tokens = []
-  const res = await page.request.put('/api/store/guano-project%3Amain', {
-    data: JSON.stringify(project),
-  })
-  if (!res.ok()) throw new Error(`could not empty the project (${res.status()})`)
-  await page.goto('/admin/')
-  await expect(page.getByRole('button', { name: 'Pages', exact: true })).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
-const posts = (page: Page) => page.evaluate(() => (window as unknown as { __hostPosts: unknown[] }).__hostPosts)
-
-const feed = (page: Page, lines: unknown[]) =>
-  page.evaluate((batch) => {
-    const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } }).__guanoHost
-    for (const line of batch) host.agentEvent(line)
-  }, lines)
-
-async function readyPanel(page: Page) {
-  await feed(page, [AGENT_READY, AGENT_INIT])
-  await page.locator('[data-agent-button]').click()
-  await expect(page.locator('[data-agent-panel]')).toBeVisible()
 }
 
 const railButton = (page: Page) => page.getByRole('button', { name: 'Ask the AI agent' })
@@ -338,87 +280,6 @@ test.describe('the AI panel', () => {
     await expect(tool).toContainText('not allowed in this panel')
   })
 
-  // (a) One question is answered by the click itself: there is nothing to
-  // collect, so the chip sends, with the page context, exactly once.
-  test('one question: a chip click sends the label, with the context, once', async ({ page }) => {
-    await readyPanel(page)
-    await page.locator('[data-agent-input]').fill('a coming soon page')
-    await page.locator('[data-agent-send]').click()
-    await feed(page, [agentReplay('a coming soon page'), ...AGENT_ASK_ONE])
-
-    const chips = page.locator('[data-agent-ask] [data-agent-chip]')
-    await expect(chips).toHaveCount(2)
-    await chips.first().click()
-
-    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
-      text: string
-    }[]
-    expect(sent).toHaveLength(2)
-    expect(sent[1]!.text).toContain('Stark editorial')
-    expect(sent[1]!.text).toContain('Context from the Guano editor')
-    // the picked chip stays highlighted, and a later turn makes them inert —
-    // which is also what stops a second click sending a second message
-    await expect(chips.first()).toHaveAttribute('data-agent-chip-picked', '')
-    await expect(chips.first()).toHaveAttribute('data-agent-chip-inert', '')
-    await expect(chips.first()).toBeDisabled()
-  })
-
-  // (b) Several questions go through the ONE composer. There is no second send
-  // button in this app (docs/ui.md), so the arrow is the thing that has to wait
-  // for the batch to be complete.
-  test('two questions: the arrow waits for both, then sends one message', async ({ page }) => {
-    await readyPanel(page)
-    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
-    await page.locator('[data-agent-send]').click()
-    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
-    const before = ((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-send').length
-
-    await expect(page.locator('[data-agent-input]')).toHaveAttribute(
-      'placeholder',
-      'Pick above, or type an answer',
-    )
-    await expect(page.locator('[data-agent-send]')).toBeDisabled()
-
-    const chips = page.locator('[data-agent-ask] [data-agent-chip]')
-    await chips.nth(0).click() // direction → Stark editorial
-    // one of two is not an answer
-    await expect(page.locator('[data-agent-send]')).toBeDisabled()
-    await chips.nth(3).click() // sections → Hero + work + contact
-    await expect(page.locator('[data-agent-send]')).toBeEnabled()
-    await page.locator('[data-agent-send]').click()
-
-    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
-      text: string
-    }[]
-    expect(sent).toHaveLength(before + 1)
-    const text = sent[sent.length - 1]!.text
-    expect(text).toContain('Q: Which direction? → Stark editorial')
-    expect(text).toContain('Q: What should it carry? → Hero + work + contact')
-    // ONE message, both lines, and the bubble says the same thing the wire did
-    await expect(page.locator('[data-agent-question]').last()).toContainText('Q: Which direction?')
-  })
-
-  // (c) Chips are not a cage: the composer stays live and a typed message
-  // answers in place of them.
-  test('typed text answers instead of the chips', async ({ page }) => {
-    await readyPanel(page)
-    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
-    await page.locator('[data-agent-send]').click()
-    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
-
-    await page.locator('[data-agent-input]').fill('neither — copy the look of our app')
-    await expect(page.locator('[data-agent-send]')).toBeEnabled()
-    await page.locator('[data-agent-send]').click()
-
-    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
-      text: string
-    }[]
-    const text = sent[sent.length - 1]!.text
-    expect(text).toContain('neither — copy the look of our app')
-    // a half-picked batch is not an answer, so no Q lines ride along
-    expect(text).not.toContain('Q: Which direction?')
-  })
-
   // (d) The offer comes AFTER the recap, a click sends the suggestion's own
   // prompt verbatim, and the chips are inert for the rest of the transcript.
   test('a suggestion sends its prompt, and goes inert in the next turn', async ({ page }) => {
@@ -469,23 +330,6 @@ test.describe('the AI panel', () => {
     expect(((await posts(page)) as { type: string }[]).filter((m) => m.type === 'agent-send').length).toBe(after)
   })
 
-  // (e) An ask is CONVERSATION, not work. If it lands in the activity bubble as
-  // "1 step · Ask user", the reducer opened it as a tool from
-  // `content_block_start` — which is why the id is registered there, before
-  // anything can reach `upsertTool` with it.
-  test('an ask is not a step, and its result is consumed in silence', async ({ page }) => {
-    await readyPanel(page)
-    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
-    await page.locator('[data-agent-send]').click()
-    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
-
-    await expect(page.locator('[data-agent-ask]')).toHaveCount(1)
-    // no bubble at all: the ask was the only tool call in the turn
-    await expect(page.locator('[data-agent-activity]')).toHaveCount(0)
-    await expect(page.locator('[data-agent-panel]')).not.toContainText('ask_user')
-    await expect(page.locator('[data-agent-text]')).toHaveText('Two things before I start.')
-  })
-
   test('a suggestion is not a step either — the build beside it is', async ({ page }) => {
     await readyPanel(page)
     await page.locator('[data-agent-input]').fill('build it')
@@ -500,13 +344,15 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-suggest]')).toHaveCount(1)
   })
 
-  test('a DENIED ask is a denied tool row — a denial is never hidden', async ({ page }) => {
+  // A denial is never hidden, whatever the tool — including the one that is
+  // rendered as conversation rather than as a step.
+  test('a DENIED suggestion is a denied tool row', async ({ page }) => {
     await readyPanel(page)
-    await page.locator('[data-agent-input]').fill('ask me something')
+    await page.locator('[data-agent-input]').fill('what next')
     await page.locator('[data-agent-send]').click()
-    await feed(page, [agentReplay('ask me something'), ...AGENT_ASK_DENIAL])
+    await feed(page, [agentReplay('what next'), ...AGENT_SUGGEST_DENIAL])
 
-    await expect(page.locator('[data-agent-ask]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-suggest]')).toHaveCount(0)
     const activity = page.locator('[data-agent-activity]')
     await expect(activity).toHaveAttribute('data-agent-activity-state', 'error')
     await activity.getByRole('button').click()
@@ -633,118 +479,6 @@ test.describe('the AI panel', () => {
     // the transcript is composable state, not the drawer's: it comes back
     await railButton(page).click()
     await expect(page.locator('[data-agent-text]')).toHaveText('The heading now reads Hello.')
-  })
-
-  // (f) The person who typed "a simple coming-soon page for Acme" did not have
-  // less to say — they had no place to say it. An empty project opens on the
-  // choice instead of a placeholder sentence.
-  test('an empty project opens on the two cards, and Just chat dismisses them', async ({ page }) => {
-    await loadEmptyProject(page)
-    await allowMainWrites(page)
-    await readyPanel(page)
-
-    const cards = page.locator('[data-agent-cards]')
-    await expect(cards).toBeVisible()
-    await expect(page.locator('[data-agent-card-brief]')).toBeVisible()
-    await page.locator('[data-agent-card-chat]').click()
-    await expect(cards).toHaveCount(0)
-    await expect(page.locator('[data-agent-input]')).toBeVisible()
-  })
-
-  // (g) Once the site has content a brief RESTYLES rather than starts over, so
-  // the cards go and the action lives in the composer toolbar instead.
-  test('a project with content opens on the composer, with New brief in the toolbar', async ({ page }) => {
-    await allowMainWrites(page)
-    await readyPanel(page)
-    await expect(page.locator('[data-agent-cards]')).toHaveCount(0)
-    await expect(page.locator('[data-agent-input]')).toBeVisible()
-    await expect(page.locator('[data-brief-new]')).toBeVisible()
-    await page.locator('[data-brief-new]').click()
-    await expect(page.locator('[data-brief]')).toBeVisible()
-  })
-
-  // (h) and (i) together: Finish SENDS, and the writes land before it does.
-  test('a mostly-skipped brief sends one message, and its tokens are already written', async ({ page }) => {
-    await loadEmptyProject(page)
-    await allowMainWrites(page)
-    await readyPanel(page)
-    await page.locator('[data-agent-card-brief]').click()
-
-    // screen 1 — the only required one
-    await page.locator('[data-brief-subject]').fill('A coming-soon page for Acme, a tech startup')
-    await page.locator('[data-brief-next]').click()
-
-    // screen 2 skipped, screen 3 skipped, screen 4 — the palette
-    await page.locator('[data-brief-skip]').click()
-    await page.locator('[data-brief-skip]').click()
-    await page.locator('[data-brief-palette="dark"]').click()
-    await page.locator('[data-brief-next]').click()
-
-    // screen 5 — the colour mode
-    await page.locator('[data-brief-mode="dark"]').click()
-    await page.locator('[data-brief-next]').click()
-
-    // screen 6 — the shape, at the last stop
-    await page.locator('[data-brief-shape]').fill('3')
-    await expect(page.locator('[data-brief-shape-name]')).toHaveText('bubbly')
-
-    // skip the rest, which is what makes this a valid two-and-a-bit brief
-    for (let i = 5; i < 13; i++) await page.locator('[data-brief-skip]').click()
-    const finish = page.locator('[data-brief-finish]')
-    await expect(finish).toBeVisible()
-    await expect(page.locator('[data-brief-next]')).toHaveCount(0)
-    await finish.click()
-
-    // ONE message, and the stepper gives way to the transcript
-    await expect(page.locator('[data-brief]')).toHaveCount(0)
-    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
-      text: string
-    }[]
-    expect(sent).toHaveLength(1)
-    const text = sent[0]!.text
-    expect(text).toContain('# Brief')
-    expect(text).toContain('Acme')
-    expect(text).toContain('dark (already written into the tokens)')
-    expect(text).toContain('bubbly')
-    expect(text).toContain('do not replace them')
-    // nothing for a skipped screen
-    expect(text).not.toContain('Pages or sections')
-    expect(text).not.toContain('Grid:')
-    expect(text).not.toContain('Languages')
-
-    // (i) a token is a FACT: the write went through the same useSettings path
-    // Settings → Design uses, and it landed BEFORE the send
-    await expect
-      .poll(async () => {
-        const project = await storedProject(page)
-        const primary = project.settings.tokens.find((t: { name: string }) => t.name === 'primary')
-        return [primary?.value, project.settings.theme?.radius?.lg, project.settings.theme?.colorMode]
-      }, { timeout: 15_000 })
-      .toEqual(['#22d3ee', '2rem', 'dark'])
-  })
-
-  // (j) The stepper is NOT a modal — a persistent column never closes on
-  // Escape (docs/ui.md), so Escape closes the stepper inside it. Fourteen
-  // screens is too many to lose to a mis-key, so the answers survive.
-  test('Escape closes the stepper, and reopening it restores the answers', async ({ page }) => {
-    await loadEmptyProject(page)
-    await allowMainWrites(page)
-    await readyPanel(page)
-    await page.locator('[data-agent-card-brief]').click()
-    await page.locator('[data-brief-subject]').fill('A one-page site for a bakery')
-    await page.locator('[data-brief-next]').click()
-    await page.locator('[data-brief-chip]').first().click()
-
-    await page.locator('[data-brief]').press('Escape')
-    await expect(page.locator('[data-brief]')).toHaveCount(0)
-    // the column itself is still open
-    await expect(page.locator('[data-agent-panel]')).toBeVisible()
-
-    await page.locator('[data-brief-new]').click()
-    await expect(page.locator('[data-brief]')).toBeVisible()
-    await expect(page.locator('[data-brief-chip]').first()).toHaveClass(/bg-primary/)
-    await page.locator('[data-brief-back]').click()
-    await expect(page.locator('[data-brief-subject]')).toHaveValue('A one-page site for a bakery')
   })
 
   test('the chat is reachable in Play, where the dock never was', async ({ page }) => {

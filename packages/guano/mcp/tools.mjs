@@ -218,14 +218,18 @@ const PANEL_DROPPED = new Set([
 /**
  * The other half of the panel profile: what ONLY the editor's AI panel gets.
  *
- * Both tools are conversation rather than work — the panel reads the call's
- * input and renders clickable options, and the answer comes back as the next
- * user message. In Claude Desktop or a Claude Code terminal the person already
- * has a chat, and a tool whose contract is "say nothing more and end your
- * turn" would be telling the model to stop talking in the one place talking is
- * all there is. So they are dropped there, not merely unused.
+ * `suggest_next` is conversation rather than work — the panel reads the call's
+ * input and renders clickable options, and a pick comes back as the next user
+ * message. In Claude Desktop or a Claude Code terminal the person already has
+ * a chat, and a tool whose contract is "say nothing more and end your turn"
+ * would be telling the model to stop talking in the one place talking is all
+ * there is. So it is dropped there, not merely unused.
+ *
+ * There was an `ask_user` beside it for one day. It went because asking is not
+ * what this panel is for: the person is looking at a canvas, and a page they
+ * can react to beats a form they have to fill in. → BUILD FIRST in GUIDE.md.
  */
-const PANEL_ONLY = new Set(['ask_user', 'suggest_next'])
+const PANEL_ONLY = new Set(['suggest_next'])
 
 /** set by createToolSet from GUANO_MCP_EMBEDDED — see PANEL_DROPPED */
 let embeddedMode = false
@@ -6044,88 +6048,6 @@ const tools = [
                 'no project on Main yet — the server seeds it on first access, so this should ' +
                 'resolve by your next call; retry get_status before reporting it as broken',
             }),
-      }
-    },
-  },
-  {
-    name: 'ask_user',
-    description:
-      'Put 1-4 short questions in front of the person as clickable options, instead of guessing. ' +
-      'Call it ONCE on a request that leaves real choices open — a new page or site, a redesign, ' +
-      'anything where you would otherwise invent a palette, a tone, section copy, names or links — ' +
-      'and never for an edit you were told precisely enough to make. ' +
-      'IT DOES NOT WAIT: it returns at once and the answers arrive as the NEXT user message, so say ' +
-      'nothing after calling it and END YOUR TURN.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        questions: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 4,
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'unique within this call' },
-              question: { type: 'string', description: 'one short line, as you would say it' },
-              options: {
-                type: 'array',
-                minItems: 2,
-                maxItems: 5,
-                items: {
-                  type: 'object',
-                  properties: {
-                    label: { type: 'string', description: 'the chip itself, a few words' },
-                    hint: { type: 'string', description: 'one clause under it' },
-                  },
-                  required: ['label'],
-                },
-              },
-              freeText: { type: 'boolean', description: 'true when typing an answer is as good' },
-            },
-            required: ['id', 'question', 'options'],
-          },
-        },
-      },
-      required: ['questions'],
-      additionalProperties: false,
-    },
-    // INERT on the server: validate, count, return. The whole effect is in the
-    // panel, which reads this call's input off the `assistant` event and
-    // renders the chips. `claude -p` has no way to block on a person, so the
-    // contract is the note: end the turn, and the answer is the next message.
-    handler: async (args) => {
-      const questions = Array.isArray(args.questions) ? args.questions : null
-      if (!questions || !questions.length || questions.length > 4) {
-        throw new Error('ask_user takes 1 to 4 questions')
-      }
-      const seen = new Set()
-      for (const raw of questions) {
-        const q = raw && typeof raw === 'object' ? raw : {}
-        const id = typeof q.id === 'string' ? q.id.trim() : ''
-        if (!id) throw new Error('every question needs a non-empty id')
-        if (seen.has(id)) throw new Error(`two questions share the id "${id}"`)
-        seen.add(id)
-        if (typeof q.question !== 'string' || !q.question.trim()) {
-          throw new Error(`question "${id}" needs a question`)
-        }
-        const options = Array.isArray(q.options) ? q.options : []
-        if (options.length < 2 || options.length > 5) {
-          throw new Error(
-            `question "${id}" needs 2 to 5 options — one option is not a choice, and more than ` +
-              'five does not fit the panel. Ask a narrower question instead.',
-          )
-        }
-        for (const option of options) {
-          const label = option && typeof option === 'object' ? option.label : null
-          if (typeof label !== 'string' || !label.trim()) {
-            throw new Error(`every option of "${id}" needs a non-empty label`)
-          }
-        }
-      }
-      return {
-        asked: questions.length,
-        note: 'End your turn now — the answers arrive as the next message.',
       }
     },
   },

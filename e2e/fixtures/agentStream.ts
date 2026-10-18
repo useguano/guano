@@ -348,70 +348,6 @@ export const AGENT_RATE_LIMITED = {
   session_id: SESSION,
 }
 
-/**
- * `ask_user`: text, then the call, then its inert result.
- *
- * Built with `agentToolCall` like every other call, because the wire shape is
- * the thing being tested — the panel has to pick these two names out of the
- * same stream everything else arrives on, and turn them into conversation
- * rather than into a step.
- */
-export const AGENT_ASK_TURN: unknown[] = [
-  { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'ak1' },
-  messageStart('msg_ask', 'ak2'),
-  ...textBlock('msg_ask', 0, ['Two things before I start.'], 'ak3'),
-  ...agentToolCall(
-    'toolu_ask',
-    'mcp__guano__ask_user',
-    {
-      questions: [
-        {
-          id: 'direction',
-          question: 'Which direction?',
-          options: [
-            { label: 'Stark editorial', hint: 'near-black on off-white, big type' },
-            { label: 'Warm and rounded', hint: 'soft neutrals, one warm accent' },
-          ],
-        },
-        {
-          id: 'sections',
-          question: 'What should it carry?',
-          options: [{ label: 'Hero + contact' }, { label: 'Hero + work + contact' }],
-          freeText: true,
-        },
-      ],
-    },
-    'msg_ask',
-    1,
-    { content: '{"asked":2,"note":"End your turn now — the answers arrive as the next message."}' },
-  ),
-  agentResult({ result: 'Two things before I start.' }),
-]
-
-/** One question: a chip click is the whole answer, so it sends immediately. */
-export const AGENT_ASK_ONE: unknown[] = [
-  { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'ao1' },
-  messageStart('msg_ask_one', 'ao2'),
-  ...textBlock('msg_ask_one', 0, ['One thing first.'], 'ao3'),
-  ...agentToolCall(
-    'toolu_ask_one',
-    'mcp__guano__ask_user',
-    {
-      questions: [
-        {
-          id: 'direction',
-          question: 'Which direction?',
-          options: [{ label: 'Stark editorial' }, { label: 'Warm and rounded' }],
-        },
-      ],
-    },
-    'msg_ask_one',
-    1,
-    { content: '{"asked":1}' },
-  ),
-  agentResult({ result: 'One thing first.' }),
-]
-
 /** A build, a two-sentence recap, and the next move offered as three chips. */
 export const AGENT_SUGGEST_TURN: unknown[] = [
   { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'sg1' },
@@ -438,8 +374,8 @@ export const AGENT_SUGGEST_TURN: unknown[] = [
   agentResult({ result: 'The page is up.' }),
 ]
 
-/** A denied ask: hidden is not silent, whatever the tool (docs/agent-panel.md). */
-export const AGENT_ASK_DENIAL: unknown[] = [
+/** A denied suggestion: hidden is not silent, whatever the tool. */
+export const AGENT_SUGGEST_DENIAL: unknown[] = [
   { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'ad1' },
   messageStart('msg_ad', 'ad2'),
   {
@@ -447,7 +383,7 @@ export const AGENT_ASK_DENIAL: unknown[] = [
     event: {
       type: 'content_block_start',
       index: 0,
-      content_block: { type: 'tool_use', id: 'toolu_ad', name: 'mcp__guano__ask_user', input: {} },
+      content_block: { type: 'tool_use', id: 'toolu_ad', name: 'mcp__guano__suggest_next', input: {} },
     },
     session_id: SESSION,
     uuid: 'ad3',
@@ -455,14 +391,14 @@ export const AGENT_ASK_DENIAL: unknown[] = [
   {
     type: 'system',
     subtype: 'permission_denied',
-    tool_name: 'mcp__guano__ask_user',
+    tool_name: 'mcp__guano__suggest_next',
     tool_use_id: 'toolu_ad',
-    message: 'ask_user is not allowed in this panel.',
+    message: 'suggest_next is not allowed in this panel.',
     uuid: 'ad4',
     session_id: SESSION,
   },
   agentResult({
-    result: 'I could not ask.',
-    permission_denials: [{ tool_name: 'mcp__guano__ask_user', tool_use_id: 'toolu_ad', tool_input: {} }],
+    result: 'I could not offer anything.',
+    permission_denials: [{ tool_name: 'mcp__guano__suggest_next', tool_use_id: 'toolu_ad', tool_input: {} }],
   }),
 ]

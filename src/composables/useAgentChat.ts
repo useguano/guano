@@ -29,41 +29,23 @@ export interface AgentToolItem {
   detail: string | null
 }
 
-export interface AgentAskOption {
-  label: string
-  hint: string | null
-}
-
-export interface AgentAskQuestion {
-  id: string
-  question: string
-  options: AgentAskOption[]
-  freeText: boolean
-}
-
-/**
- * An `ask_user` call, rendered as chips rather than as a step.
- *
- * It is CONVERSATION, not work: it neither joins the activity bubble nor
- * counts towards it. The server's handler is inert — the input this is built
- * from is the whole of the tool call — and the answer is the next user
- * message, because `claude -p` has no way to block on a person.
- */
-export interface AgentAskItem {
-  kind: 'ask'
-  key: string
-  questions: AgentAskQuestion[]
-  /** question id → the picked label, as the person clicks */
-  picks: Record<string, string>
-}
-
 export interface AgentSuggestion {
   label: string
   /** what a click sends, verbatim, as the person's next message */
   prompt: string
 }
 
-/** @see AgentAskItem — the same contract, offering instead of asking */
+/**
+ * A `suggest_next` call, rendered as chips rather than as a step.
+ *
+ * It is CONVERSATION, not work: it neither joins the activity bubble nor
+ * counts towards it. The server's handler is inert — the input this is built
+ * from is the whole of the tool call — and a pick is the next user message,
+ * because `claude -p` has no way to block on a person.
+ *
+ * It is also how a choice the agent made on its own gets corrected, which is
+ * what lets it build without asking first (GUIDE.md, **Build first**).
+ */
 export interface AgentSuggestItem {
   kind: 'suggest'
   key: string
@@ -71,16 +53,10 @@ export interface AgentSuggestItem {
   picked: string | null
 }
 
-export type AgentItem = AgentTextItem | AgentToolItem | AgentAskItem | AgentSuggestItem
+export type AgentItem = AgentTextItem | AgentToolItem | AgentSuggestItem
 
-/** one answer to one `ask_user` question, as the composer sends it */
-export interface AgentAnswer {
-  question: string
-  label: string
-}
-
-/** the two tools the panel renders as conversation — see AgentAskItem */
-const PROMPT_TOOLS = new Set(['ask_user', 'suggest_next'])
+/** the one tool the panel renders as conversation — see AgentSuggestItem */
+const PROMPT_TOOLS = new Set(['suggest_next'])
 
 export interface AgentTurn {
   id: string
@@ -148,12 +124,12 @@ let consolidated = 0
 /** tool_use ids the transcript is deliberately not showing — see HARNESS_TOOLS */
 let hiddenTools = new Set<string>()
 /**
- * tool_use ids that became an `ask`/`suggest` item instead of a tool row.
+ * tool_use ids that became a `suggest` item instead of a tool row.
  *
  * Registered at `content_block_start`, BEFORE anything can call `upsertTool`
- * with them: the start event carries the name, and an ask that reaches
- * `upsertTool` once lands in the activity bubble as "1 step · Ask user" and
- * stays there. Their `tool_result` is then consumed in silence.
+ * with them: the start event carries the name, and one that reaches
+ * `upsertTool` once lands in the activity bubble as a step and stays there.
+ * Their `tool_result` is then consumed in silence.
  */
 let promptTools = new Set<string>()
 
@@ -234,41 +210,19 @@ function upsertTool(
 }
 
 /**
- * Build the `ask`/`suggest` item from a `tool_use` input, or nothing.
+ * Build the `suggest` item from a `tool_use` input, or nothing.
  *
  * The server validated the shape, but this reads a model's output over a
  * channel the server's refusal does not gate (a denied call still streams its
  * start event), so every field is checked again and a call that carries
  * nothing renderable is dropped rather than drawn empty.
  */
-function upsertPrompt(key: string, name: string, input: unknown): void {
+function upsertPrompt(key: string, input: unknown): void {
   const turn = currentTurn()
   if (!turn) return
   const record = asRecord(input)
   if (!record) return
   if (turn.items.some((item) => item.key === key)) return
-
-  if (name === 'ask_user') {
-    const questions: AgentAskQuestion[] = []
-    for (const raw of asList(record.questions)) {
-      const q = asRecord(raw)
-      const id = asString(q?.id)?.trim()
-      const question = asString(q?.question)?.trim()
-      if (!id || !question) continue
-      const options: AgentAskOption[] = []
-      for (const rawOption of asList(q?.options)) {
-        const option = asRecord(rawOption)
-        const label = asString(option?.label)?.trim()
-        if (!label) continue
-        options.push({ label, hint: asString(option?.hint)?.trim() || null })
-      }
-      if (options.length < 2) continue
-      questions.push({ id, question, options, freeText: q?.freeText === true })
-    }
-    if (!questions.length) return
-    turn.items.push({ kind: 'ask', key, questions, picks: {} })
-    return
-  }
 
   const suggestions: AgentSuggestion[] = []
   for (const raw of asList(record.suggestions)) {
@@ -282,7 +236,7 @@ function upsertPrompt(key: string, name: string, input: unknown): void {
   turn.items.push({ kind: 'suggest', key, suggestions, picked: null })
 }
 
-/** a denied ask is a denied tool row like any other — a denial is never hidden */
+/** a denied suggestion is a denied tool row — a denial is never hidden */
 function unhidePrompt(key: string): void {
   if (!promptTools.delete(key)) return
   const turn = turns.value[turns.value.length - 1]
@@ -455,7 +409,7 @@ function ingestAssistant(event: Record<string, unknown>): void {
         // for these two is the whole of the call: the questions, or the offers
         if (PROMPT_TOOLS.has(name)) {
           promptTools.add(id)
-          upsertPrompt(id, name, block?.input)
+          upsertPrompt(id, block?.input)
           continue
         }
         if (HARNESS_TOOLS.has(name)) {
@@ -644,23 +598,12 @@ function restart(): void {
 }
 
 export function useAgentChat() {
-  /**
-   * @param answers one pick per `ask_user` question, which the composer sends
-   * as `Q: <question> → <label>` lines in ONE message beside any typed text.
-   * Composed here rather than in the drawer so the person's bubble and the
-   * line on the wire are the same string — there is only ever one send button
-   * and one thing it sent.
-   */
   function send(
     text: string,
     context?: AgentContext | null,
     attachments: AgentAttachment[] = [],
-    answers: AgentAnswer[] = [],
   ): void {
-    const typed = text.trim()
-    const body = [...answers.map((a) => `Q: ${a.question} → ${a.label}`), typed]
-      .filter(Boolean)
-      .join('\n')
+    const body = text.trim()
     if ((!body && !attachments.length) || !available.value) return
     openTurn(
       body || `${attachments.length} image${attachments.length === 1 ? '' : 's'}`,

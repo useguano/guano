@@ -97,8 +97,8 @@ test('a titled dialog is named by its own header, with a named close', async ({ 
 
 // Every chip the AI panel offers is a real button with its label as its
 // accessible name — not a styled div, and not an icon whose meaning lives in a
-// tooltip. A chip is the only way to answer the agent without typing, so one
-// with no name takes the feature away rather than making it awkward.
+// tooltip. A chip is how a person redirects a build they did not ask questions
+// for, so one with no name takes that away rather than making it awkward.
 test('every chip the AI panel offers is a named button', async ({ page }) => {
   await page.addInitScript(() => {
     const posts: unknown[] = []
@@ -109,7 +109,7 @@ test('every chip the AI panel offers is a named button', async ({ page }) => {
   })
   await openEditor(page)
 
-  const { AGENT_ASK_TURN, AGENT_INIT, AGENT_READY, agentReplay } = await import(
+  const { AGENT_SUGGEST_TURN, AGENT_INIT, AGENT_READY, agentReplay } = await import(
     './fixtures/agentStream'
   )
   const feed = (lines: unknown[]) =>
@@ -121,64 +121,13 @@ test('every chip the AI panel offers is a named button', async ({ page }) => {
 
   await feed([AGENT_READY, AGENT_INIT])
   await page.locator('[data-agent-button]').click()
-  await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
+  await page.locator('[data-agent-input]').fill('build it')
   await page.locator('[data-agent-send]').click()
-  await feed([agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
+  await feed([agentReplay('build it'), ...AGENT_SUGGEST_TURN])
 
-  const chips = page.locator('[data-agent-ask] [data-agent-chip]')
-  await expect(chips).toHaveCount(4)
-  for (const label of [
-    'Stark editorial',
-    'Warm and rounded',
-    'Hero + contact',
-    'Hero + work + contact',
-  ]) {
-    await expect(page.getByRole('button', { name: new RegExp(label.replace(/\+/g, '\\+')) })).toBeVisible()
-  }
-})
-
-// The brief is a stepper of fourteen screens in a 16rem column, driven by
-// chips and three sliders. A slider with no name is a range input announced as
-// nothing at all, which is the one control here a person cannot guess at.
-test('the brief is a named region, and every control in it has a name', async ({ page }) => {
-  await page.addInitScript(() => {
-    const posts: unknown[] = []
-    Object.defineProperty(window, '__hostPosts', { value: posts })
-    Object.defineProperty(window, 'webkit', {
-      value: { messageHandlers: { guano: { postMessage: (m: unknown) => posts.push(m) } } },
-    })
-  })
-  await openEditor(page)
-  await page.route('**/api/agent-policy', (route) =>
-    route.fulfill({ json: { allowMainWrites: true, allowPublish: false } }),
-  )
-
-  const { AGENT_INIT, AGENT_READY } = await import('./fixtures/agentStream')
-  await page.evaluate(
-    (batch) => {
-      const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } })
-        .__guanoHost
-      for (const line of batch) host.agentEvent(line)
-    },
-    [AGENT_READY, AGENT_INIT],
-  )
-  await page.locator('[data-agent-button]').click()
-  await page.locator('[data-brief-new]').click()
-
-  await expect(page.getByRole('region', { name: 'Build a brief' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Close the brief' })).toBeVisible()
-
-  // screen 2's chips are real buttons with their label as the name
-  await page.locator('[data-brief-subject]').fill('A site')
-  await page.locator('[data-brief-next]').click()
-  await expect(page.getByRole('button', { name: 'sign up', exact: true })).toBeVisible()
-
-  // the three sliders, each named — they are the only controls in the brief
-  // whose meaning is not written beside them. Screens 6, 7 and 8, so four more
-  // Nexts from screen 2.
-  for (let i = 0; i < 4; i++) await page.locator('[data-brief-next]').click()
-  for (const name of ['Shape', 'Grid', 'Motion']) {
-    await expect(page.getByRole('slider', { name })).toBeVisible()
-    await page.locator('[data-brief-next]').click()
+  const chips = page.locator('[data-agent-suggest] [data-agent-chip]')
+  await expect(chips).toHaveCount(3)
+  for (const label of ['Animate it in', 'Add French', 'Write the SEO']) {
+    await expect(page.getByRole('button', { name: new RegExp(label) })).toBeVisible()
   }
 })

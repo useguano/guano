@@ -1704,59 +1704,26 @@ test.describe('the editor AI panel profile', () => {
     await expect(panel.call('get_page', { pageId: '/' })).rejects.not.toThrow(/set_target/)
   })
 
-  // `ask_user` and `suggest_next` are the other half of the profile: the panel
-  // ONLY. They are conversation, not work — the panel renders the call's input
-  // as clickable options and the answer is the next user message — and a tool
-  // whose contract is "end your turn" is wrong in a client that is already a
-  // chat. Both are inert on the server by design: the whole effect is in the
-  // panel, so the handler's only job is to refuse a shape it cannot render.
-  test('the two conversation tools exist here and nowhere else', async () => {
+  // `suggest_next` is the other half of the profile: the panel ONLY. It is
+  // conversation, not work — the panel renders the call's input as clickable
+  // options and a pick is the next user message — and a tool whose contract is
+  // "end your turn" is wrong in a client that is already a chat. It is inert on
+  // the server by design: the whole effect is in the panel, so the handler's
+  // only job is to refuse a shape the drawer cannot draw.
+  //
+  // There was an `ask_user` beside it for one day. It went because asking is
+  // not what this panel is for — the person is looking at a canvas, and a page
+  // they can react to beats a form they have to fill in. The agent makes the
+  // choices and `suggest_next` is how a choice they dislike is corrected.
+  test('the panel gets suggest_next, nobody gets ask_user', async () => {
     const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
-    expect(panel.toolNames()).toContain('ask_user')
     expect(panel.toolNames()).toContain('suggest_next')
+    expect(panel.toolNames()).not.toContain('ask_user')
 
     const external = await mcpSession()
-    expect(external.toolNames()).not.toContain('ask_user')
     expect(external.toolNames()).not.toContain('suggest_next')
-    await expect(external.call('ask_user', { questions: [] })).rejects.toThrow(/unknown tool/)
-  })
-
-  test('an ask echoes back with the end-the-turn note, and refuses a shape the panel cannot render', async () => {
-    const panel = await mcpSession('T', { routes: 1, bytes: 1 }, { embedded: true })
-    const asked = await panel.call('ask_user', {
-      questions: [
-        { id: 'mood', question: 'Which direction?', options: [{ label: 'Stark' }, { label: 'Warm' }] },
-        { id: 'copy', question: 'Which sections?', options: [{ label: 'Hero only' }, { label: 'Hero + about' }] },
-      ],
-    })
-    expect(asked.asked).toBe(2)
-    // the contract, in the result as well as the description: there is no way
-    // to block on a person in print mode, so the model has to stop talking
-    expect(asked.note).toMatch(/End your turn now/)
-
-    // one option is not a choice
-    await expect(
-      panel.call('ask_user', { questions: [{ id: 'a', question: 'Which?', options: [{ label: 'Only' }] }] }),
-    ).rejects.toThrow(/2 to 5 options/)
-    // and a fifth question is a conversation, not one batch
-    await expect(
-      panel.call('ask_user', {
-        questions: ['a', 'b', 'c', 'd', 'e'].map((id) => ({
-          id,
-          question: 'Which?',
-          options: [{ label: 'This' }, { label: 'That' }],
-        })),
-      }),
-    ).rejects.toThrow(/1 to 4 questions/)
-    // the picks come back addressed by id, so two questions may not share one
-    await expect(
-      panel.call('ask_user', {
-        questions: [
-          { id: 'same', question: 'A?', options: [{ label: 'x' }, { label: 'y' }] },
-          { id: 'same', question: 'B?', options: [{ label: 'x' }, { label: 'y' }] },
-        ],
-      }),
-    ).rejects.toThrow(/share the id "same"/)
+    expect(external.toolNames()).not.toContain('ask_user')
+    await expect(external.call('suggest_next', { suggestions: [] })).rejects.toThrow(/unknown tool/)
   })
 
   test('a suggestion needs a prompt, because the prompt is what a click sends', async () => {

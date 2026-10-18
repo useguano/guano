@@ -90,8 +90,6 @@ opening the chat closes Pages by the type rather than by two components
 agreeing to. `visibleColumn` lets it through in **both surfaces** (like Pages,
 unlike Components) — a chat is not a Build-only surface.
 
-**`BriefStepper` is the one thing the drawer mounts in place of the transcript.** Fourteen intake screens on an empty project, reached from two cards or from the composer toolbar's **New brief** (→ `docs/agent-panel.md`, The brief). It is **not a modal**: a persistent column never closes on Escape, so Escape closes the stepper inside it and leaves the column open. `StepperUI` is a value stepper rather than a wizard, so the screens are one component with a `step` ref and `ButtonUI` for Back / Next / Skip.
-
 **The drawer owns no state.** The transcript lives in the `useAgentChat`
 singleton, so closing the column and reopening it brings the conversation back;
 there is deliberately no second `open` ref beside `column`. It does not use

@@ -164,185 +164,90 @@ live. It mounts in `BuildView` over the canvas region now, `absolute inset-0`,
 and lets keystrokes through to any editable element — the point was to keep
 the person's hands off the tree mid-write, not off the keyboard.
 
-## Asking and suggesting
+## Suggesting the next move
 
-Decided 2026-10-18, from the second real session. Asked for *"a simple coming-soon
-page for a tech startup named Acme"*, the agent invented the palette, the copy, the
-CTA and two placeholder email addresses, told the person what it had decided for
-them, and stopped — no interactions, no second language, no SEO, and no way to reach
-any of those except by knowing to type it. Both halves of that are design, not bugs:
-nothing told it to **ask** rather than guess, and nothing told it to **end on the next
-move**.
+Decided 2026-10-18, revised the same day after watching it. Asked for *"a simple
+coming-soon page for Acme"*, the first agent invented the palette, the copy, the CTA
+and two placeholder addresses, told the person what it had decided, and stopped — no
+interactions, no second language, no SEO, and no way to reach any of them except by
+knowing to type it. The second half of that is the bug; **the first half is the
+feature.**
 
-So two MCP tools, **embedded profile only** (`PANEL_ONLY` in `tools.mjs`; the schemas
-and the refusals are `docs/mcp.md` → Embedded mode):
+The fix shipped as two tools, `ask_user` and `suggest_next`. One of them lasted a day.
+
+### Why there is no `ask_user`
+
+It was built, and the first real session with it showed why it should not exist. With
+the tool unavailable in that session the model fell back to prose and asked three
+open questions in a numbered list — *what does Atelier actually do? who is it for?
+dark and editorial, or light and airy?* — before writing a single element. Even with
+the chips rendering correctly, that is a form in front of a canvas.
+
+**A page they can react to beats a form they have to fill in.** The person is looking
+at the thing being built. A choice they dislike costs one click to undo and they can
+SEE what they are undoing, which is not true of a question about a palette they have
+not seen yet. So the agent makes the choices a request leaves open, builds, and says
+in one sentence what it chose.
+
+**The exception is facts, not taste.** Invent a palette, a layout, section headings,
+placeholder copy — all one edit from right. Never invent a phone number, an email
+address, a postal address, a price, a statistic, a person's name, or a legal or
+medical claim: those are wrong in a way an edit does not fix, and they reach a real
+visitor. An obvious placeholder, named as one, is the answer.
+
+The rule lives in `GUIDE.md` → **Build first. Do not ask.** and in
+`AgentLaunch.systemPrompt`. Twice, because it has to hold on the first message of a
+session, before any `get_guide` call.
+
+### `suggest_next` is the correction channel
 
 ```
-ask_user      {questions: [{id, question, options: [{label, hint?}] (2–5), freeText?}] (1–4)}
-suggest_next  {suggestions: [{label, prompt}] (1–4)}
+suggest_next {suggestions: [{label, prompt}] (1–4)}
 ```
 
-**Both are inert on the server.** They validate, echo a count and return. The whole
-effect is here: the panel reads the `tool_use` input the `assistant` event carries and
-renders clickable options. **`claude -p` cannot block on a person**, so the contract is
-a sentence in the description and in the result alike — call it, say nothing more, end
-the turn — and the answer is simply the next user message. If a session shows the model
-calling `ask_user` and then carrying on building, **the handbook sentence is not strong
-enough: fix the words, not the tool.**
+**Inert on the server** (`PANEL_ONLY` in `tools.mjs`; the refusals are `docs/mcp.md` →
+Embedded mode). It validates, echoes a count and returns. The whole effect is here: the
+panel reads the `tool_use` input the `assistant` event carries and renders clickable
+options. **`claude -p` cannot block on a person**, so the contract is a sentence in the
+description and in the result alike — call it, say nothing more, end the turn — and a
+pick is the next user message, the suggestion's `prompt` verbatim.
 
-They are not in the external profile. Claude Desktop and a Claude Code terminal are
-already a chat, and a tool whose contract is "stop talking and wait" is wrong in the one
-place talking is all there is.
+**This is what lets the agent build without asking**, so after a first build one or two
+suggestions should UNDO a choice it made — a different palette, a different tone — and
+the rest move forward. An agent that only ever offers "add animations" has made its
+decisions unchallengeable.
 
-### One batch, then build
+### A suggestion is not a step
 
-The rule the model is given is *ask ONCE, with two to four questions, then work* — not a
-dialogue. A 16rem column beside a canvas is not a place to hold a conversation about a
-page that could already exist, and every round is a round the person is watching
-nothing happen. A second round is allowed only when an answer made a genuinely new
-choice appear.
-
-The questions that are worth asking are the ones a person can answer: **named moods, not
-adjectives** (*stark editorial* over *warm and rounded*, never "modern" versus "clean"),
-what sections, which pages, and what must not be invented. Both rules and a worked
-example of each tool live in `GUIDE.md` → **Inside the editor**, which
-`guideInstructions(embedded)` injects whole, and in `AgentLaunch.systemPrompt`, which
-the launcher appends whatever the client did with the MCP instructions. Twice, because
-the behaviour has to be right on the first message of a session.
-
-### An ask is not a step
-
-`ask_user` and `suggest_next` become **item kinds of their own** —
-`{kind:'ask', key, questions, picks}` and `{kind:'suggest', key, suggestions, picked}` —
-and `segment()` gives each a segment of its own. They are conversation, not work: neither
-joins the activity bubble, neither counts towards `3 steps · …`.
+It becomes an **item kind of its own** — `{kind:'suggest', key, suggestions, picked}` —
+and `segment()` gives it a segment of its own. It is conversation, not work: it does not
+join the activity bubble and does not count towards `3 steps · …`.
 
 **The trap is the ordering.** The id is registered as a prompt tool in
 `content_block_start`, BEFORE anything can reach `upsertTool` with it — that event
-already names the tool, and an ask opened as a tool row once reads *1 step · Ask user*
-for the rest of the turn. The item itself is built in `ingestAssistant`, which is the
-authority for a `tool_use`'s input and for these two carries the whole of the call. The
-`tool_result` is consumed in silence, like a harness tool's.
+already names the tool, and one opened as a tool row once stays a step for the rest of
+the turn. The item itself is built in `ingestAssistant`, the authority for a
+`tool_use`'s input. The `tool_result` is consumed in silence, like a harness tool's.
 
 **A denied one is un-hidden back into a denied tool row**, by `permission_denied` and by
 the result's `permission_denials[]` alike. A denial is never hidden, whatever the tool.
 
 ### What the chips do
 
-- **One question sends on the click.** There is nothing to collect, so the message is
-  the label.
-- **Several go through the one composer.** Clicks mark picks, the placeholder becomes
-  *Pick above, or type an answer*, and the send arrow enables once every question has a
-  pick **or** there is typed text. It then sends `Q: <question> → <label>` lines plus any
-  typed text as ONE message — composed in `send()`, not in the drawer, so the person's
-  bubble and the line on the wire are the same string. **There is no second send button**
-  (`docs/ui.md`).
-- **A suggestion sends its own `prompt`, verbatim.** Never applied unasked.
-- **A typed message is always a valid answer.** The composer stays live, and a
-  half-picked batch sends no `Q` lines at all: a typed answer replaces the chips rather
-  than arriving beside them.
+- **A click sends the suggestion's own `prompt`, verbatim.** Never applied unasked.
 - **Chips are kept once spent** — dimmed, the picked one highlighted — so the transcript
-  still reads as what was asked and what was answered. They go inert as soon as a later
+  still reads as what was offered and what was taken. They go inert as soon as a later
   turn exists or a turn is running, which is also what stops a second click landing a
   second message.
 - **Every chip is a real `ButtonUI` with its label as its accessible name.** There is no
   chip primitive in `src/components/ui/`; `variant="outline"`, picked becomes `default`.
-  A chip is the only way to answer without typing, so one with no name takes the feature
-  away rather than making it awkward (`e2e/ui-a11y.spec.ts`).
+  A chip is how a person redirects a build they were never asked about, so one with no
+  name takes that away rather than making it awkward (`e2e/ui-a11y.spec.ts`).
 
-Coverage: `e2e/ui-agent-panel.spec.ts` cases (a)–(e), over `AGENT_ASK_TURN`,
-`AGENT_ASK_ONE`, `AGENT_SUGGEST_TURN` and `AGENT_ASK_DENIAL` in
-`e2e/fixtures/agentStream.ts` — built with `agentToolCall` like every other call,
-because the panel has to pick these two names out of the same stream everything else
-arrives on.
-
-## The brief
-
-Decided 2026-10-18, from the same session. The person who typed *"a simple
-coming-soon page for Acme"* did not have less to say — **they had no place to say
-it.** The brief is that place: a stepper in the drawer, one decision per screen,
-that ends by sending one well-formed prompt and by setting the things that are a
-fact rather than an interpretation.
-
-`BriefStepper.vue`, mounted by `AgentDrawer` in place of the transcript while
-`briefOpen`. The presets, the tables and the template are `src/lib/agentBrief.ts` —
-pure data and pure functions, so a brief compiles headlessly.
-
-### Two cards on an empty project
-
-`isEmptyProject` (`useProject`) is the seed and nothing more: one page whose body
-has no children, no components, no collections (`createProject`,
-`src/lib/factories.ts`). When it is true and the transcript is empty, the list
-area shows **Build a brief** and **Just chat** instead of the placeholder
-sentence. Once the site has content the cards go, and a **New brief** item stays
-in the composer toolbar — a brief then restyles rather than starts over.
-
-**Empty means empty, and it is derived, never cached.** It has to go false the
-moment the agent writes one element, or a reload mid-build would offer the cards
-over a live transcript.
-
-**The Main-writes notice and the cards are the same slot, and the notice wins.**
-Offering a brief to an agent that cannot write Main is a dead end.
-
-### The intake
-
-| # | screen | goes to |
-|---|---|---|
-| 1 | What is it, and who is it for? — **required** | prompt |
-| 2 | What should a visitor do? (sign up · buy · contact · book · read · download · just look) | prompt — it decides the hero and the CTA, which is the thing the Acme run guessed |
-| 3 | Pages or sections | prompt |
-| 4 | Palette — eight mood presets, then optional primary / accent / background pickers | **tokens** (light + `dark`); a picked colour overrides its token. The mood name is also in the prompt |
-| 5 | Light or dark? | **token** `theme.colorMode` |
-| 6 | Shape — 4 stops: not rounded · rounded · very rounded · bubbly | **token** `theme.radius`; the stop name in the prompt |
-| 7 | Grid — 4 stops: structured · loose · playful · wild | prompt, one fixed sentence per stop |
-| 8 | Motion — 4 stops: still · subtle · lively · showy | prompt; *still* also turns off the offer afterwards |
-| 9 | Tone & type | prompt; the font direction picks a fixed Google Fonts pairing → `fonts.googleFontsUrl` + the family tokens |
-| 10 | Imagery | prompt |
-| 11 | Languages | **project** `locales` + `defaultLocale`, set BEFORE the build so content is written translatable from the first page |
-| 12 | Logo & brand | **media** — the asset lands in the library and its path goes in the prompt |
-| 13 | References — up to 3 screenshots, an optional URL each | the images ride on the `agent-send`; the URLs are named in the prompt |
-| 14 | Anything I must use, or must not invent | prompt, under a heading the rules tell the model is law |
-
-**Skip is on every screen but the first.** Fourteen is the ceiling, not the floor —
-a brief answered on two screens is a valid brief, and a skipped screen is simply
-absent from the prompt.
-
-**Finish sends, so Finish is unmistakable**: one primary button, *Build it*, dead
-until screen 1 is answered. Next on the last screen is not Finish.
-
-**The stepper is not a modal.** It replaces the transcript inside the column, and
-`docs/ui.md`'s rule is that a persistent column never closes on Escape — so here
-Escape closes the stepper, not the column. The answers survive it: they live in a
-plain `<script>` block rather than in `<script setup>`, whose consts are
-per-instance and so forgot fourteen screens the moment Escape unmounted the
-stepper. The first version did exactly that, and the spec caught it.
-
-### A token is a fact, a sentence is a wish
-
-This is the whole shape of the thing. The palette, the radius scale, the colour
-mode, the fonts and the locales are **written into the project** by the stepper,
-through the same `useSettings` / `useLocale` path Settings → Design uses — so
-`useThemeTokens` restyles the canvas live and undo covers them
-(`docs/theming.md`). The prompt then says they are already set and closes with
-*build on them, do not replace them.*
-
-Grid and motion are **sentences**, from a fixed table, because nothing in
-`ProjectSettings` holds "playful" — the model gets a word and a line saying what
-it means, so two briefs on the same stop ask for the same thing.
-
-**The writes land before the send.** If a run shows the agent "setting the theme"
-after a brief, either the closing line is not strong enough or the settings write
-did not resolve first — check that ordering in `build()` before anything else.
-
-### No WebFetch, and the URL is text
-
-A reference carries a **screenshot**, and the URL beside it is a note in the
-prompt. The spawn allows `mcp__guano__*` only, and opening `WebFetch` would hand
-a prompt-injected agent an outbound channel — the fence is `docs/mcp.md`,
-**Untrusted content**, and the allowlist is per spawn, not per message. Do not
-"just allow it for the brief".
-
-Coverage: `e2e/ui-agent-panel.spec.ts` cases (f)–(j) and `e2e/ui-a11y.spec.ts`.
+Coverage: `e2e/ui-agent-panel.spec.ts`, over `AGENT_SUGGEST_TURN` and
+`AGENT_SUGGEST_DENIAL` in `e2e/fixtures/agentStream.ts` — built with `agentToolCall`
+like every other call, because the panel has to pick this name out of the same stream
+everything else arrives on.
 
 ## There is no permission prompt channel
 
