@@ -6,6 +6,7 @@ import { hydrateStore, storeGet } from '@/lib/store'
 import { hydratePublishState, PUBLISHED_BASELINE_KEY, PUBLISHED_INFO_KEY } from './usePublish'
 import { useMedia } from './useMedia'
 import { useLiveSync } from './useLiveSync'
+import { useHostBridge } from './useHostBridge'
 
 const ready = ref(false)
 const bootError = ref<string | null>(null)
@@ -31,6 +32,7 @@ export function useEditorBoot() {
       localStorage.removeItem('guano-setup-name')
 
       usePersistence().init()
+      useHostBridge().start()
       startEditTracking()
       useLiveSync().start()
       ready.value = true

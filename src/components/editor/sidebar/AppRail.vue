@@ -16,7 +16,7 @@ const SettingsPanel = defineAsyncComponent(() => import('@/components/shared/Set
 
 const { openLibrary } = useMediaLibrary()
 const { openModal } = useModal()
-const { canBuild, logout } = useAuth()
+const { canBuild, logout, showsAppHome, showsAccountControls } = useAuth()
 const { hasEnabledForm } = useProject()
 const { hasNew, newCount, refresh: refreshFormAlerts, openSubmissions } = useFormAlerts()
 const {
@@ -36,20 +36,24 @@ watch(
 <template>
   <aside class="relative z-[60] flex h-full w-12 flex-col items-center gap-1 py-4 bg-background">
 
-    <ButtonUI
-      v-if="canBuild"
-      variant="ghost"
-      aria-label="App"
-      class="w-7"
-      :class="isBuild && canvas === 'page' && !column ? 'text-accent-foreground' : 'text-foreground'"
-      @click="showApp"
-    >
-      <MainLogo class="size-4" />
-    </ButtonUI>
-    <div v-else class="flex py-2 w-7 items-center justify-center text-foreground">
-      <MainLogo class="size-4" />
-    </div>
-    <div class="my-1 h-px w-full bg-input" />
+    <template v-if="showsAppHome">
+      <ButtonUI
+        v-if="canBuild"
+        variant="ghost"
+        aria-label="App"
+        class="w-7"
+        :class="
+          isBuild && canvas === 'page' && !column ? 'text-accent-foreground' : 'text-foreground'
+        "
+        @click="showApp"
+      >
+        <MainLogo class="size-4" />
+      </ButtonUI>
+      <div v-else class="flex py-2 w-7 items-center justify-center text-foreground">
+        <MainLogo class="size-4" />
+      </div>
+      <div class="my-1 h-px w-full bg-input" />
+    </template>
 
     <ButtonUI
       variant="ghost"
@@ -94,22 +98,25 @@ watch(
       :icon="Settings"
       aria-label="Project settings"
       class="w-7 text-muted-foreground"
+      :class="!showsAccountControls && 'mt-auto'"
       @click="openModal(SettingsPanel)"
     />
 
-    <ButtonUI
-      variant="ghost"
-      :icon="UserRound"
-      aria-label="My account"
-      class="mt-auto w-7 text-muted-foreground"
-      @click="openModal(SettingsPanel, { initialSection: 'account' })"
-    />
-    <ButtonUI
-      variant="ghost"
-      :icon="LogOut"
-      aria-label="Logout"
-      class="w-7 text-muted-foreground"
-      @click="logout"
-    />
+    <template v-if="showsAccountControls">
+      <ButtonUI
+        variant="ghost"
+        :icon="UserRound"
+        aria-label="My account"
+        class="mt-auto w-7 text-muted-foreground"
+        @click="openModal(SettingsPanel, { initialSection: 'account' })"
+      />
+      <ButtonUI
+        variant="ghost"
+        :icon="LogOut"
+        aria-label="Logout"
+        class="w-7 text-muted-foreground"
+        @click="logout"
+      />
+    </template>
   </aside>
 </template>

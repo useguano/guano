@@ -10,6 +10,7 @@ const role = ref<Role | null>(null)
 const userId = ref<string | null>(null)
 const needsSetup = ref(false)
 const setupProjectName = ref('')
+const host = ref<'browser' | 'launcher'>('browser')
 
 const presetAgentPolicy = ref<{ allowMainWrites: boolean; allowPublish: boolean } | null>(null)
 
@@ -24,9 +25,15 @@ interface Profile {
   role?: Role
   commentsSeenAt?: number
   formsSeenAt?: number
+  host?: 'browser' | 'launcher'
 }
 
 export function useAuth() {
+  async function recheck(): Promise<void> {
+    checked = false
+    await check()
+  }
+
   async function check(): Promise<void> {
     if (checked) return
     checked = true
@@ -67,6 +74,7 @@ export function useAuth() {
     userId.value = profile.id ?? null
     commentsSeenAt.value = profile.commentsSeenAt ?? 0
     formsSeenAt.value = profile.formsSeenAt ?? 0
+    if (profile.host) host.value = profile.host
     needsSetup.value = false
   }
 
@@ -129,6 +137,10 @@ export function useAuth() {
   const canEditContent = computed(() => role.value !== null && role.value !== 'reviewer')
   const isReviewer = computed(() => role.value === 'reviewer')
 
+  const showsAppHome = computed(() => host.value !== 'launcher')
+  const showsAccountControls = computed(() => host.value !== 'launcher')
+  const showsPublishControl = computed(() => host.value !== 'launcher')
+
   return {
     email,
     name,
@@ -138,6 +150,9 @@ export function useAuth() {
     canBuild,
     canEditContent,
     isReviewer,
+    showsAppHome,
+    showsAccountControls,
+    showsPublishControl,
     needsSetup,
     setupProjectName,
     presetAgentPolicy,
@@ -146,6 +161,7 @@ export function useAuth() {
     formsSeenAt,
     markFormsSeen,
     check,
+    recheck,
     login,
     setup,
     updateAccount,

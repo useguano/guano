@@ -133,6 +133,7 @@ import {
   listUsers,
   loginAllowed,
   needsSetup,
+  oldestAdmin,
   pendingTokenCount,
   recordInviteAttempt,
   recordLoginFailure,
@@ -142,6 +143,7 @@ import {
   parseCookies,
   sessionTokenOf,
   sessionUser,
+  sessionVia,
   setUserRole,
   updateUser,
   SEEN_FIELDS,
@@ -593,6 +595,11 @@ async function handleAuth(req, res, path) {
         ...userProfile(user),
         serverVersion: APP_VERSION,
         instance: { id: instance?.id ?? null, name: instance?.name ?? '' },
+        // Which chrome the editor should draw: a session minted by the
+        // desktop launcher hides what the app's own window already provides.
+        // It rides on the SESSION, so a browser pointed at the same server
+        // over the LAN is unaffected.
+        host: sessionVia(req) === 'launcher' ? 'launcher' : 'browser',
         ...policy,
       }),
     )
@@ -632,6 +639,54 @@ async function handleAuth(req, res, path) {
     await writeAgentPolicy(onboardingPolicy(agentPolicy))
     return send(res, 200, JSON.stringify(userProfile(user)), 'application/json', {
       'set-cookie': sessionCookieHeader(createSession(user.id)),
+    })
+  }
+  if (path === '/api/auth/launcher-session' && req.method === 'POST') {
+    // The desktop launcher spawned this process and holds the data dir, which
+    // is the same ownership `/api/auth/connect` below already trusts — so it
+    // may mint a session for the instance's owner without a password. The
+    // secret arrives in the ENV at spawn rather than a file: the launcher is
+    // the parent process, so it never touches disk and dies with the server.
+    //
+    // Unlike connect's nonce it is reusable, because the app re-mints on every
+    // 401 (expiry, a password change elsewhere). Loopback-gated with a 256-bit
+    // secret, so no rate limiter buys anything here.
+    //
+    // Absent env = no route at all, which is what keeps every ordinary deploy
+    // exactly as it was.
+    const LAUNCHER_SECRET = process.env.GUANO_LAUNCHER_SECRET
+    if (!LAUNCHER_SECRET || LAUNCHER_SECRET.length < 32) return fail(res, 404, 'not found')
+    // `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours
+    // X-Forwarded-For under TRUST_PROXY, so a header could claim loopback.
+    const ip = req.socket.remoteAddress
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+      return fail(res, 403, 'launcher session is local-only')
+    }
+    const body = await readBody(req, MAX_AUTH_BODY)
+    if (body === null) return fail(res, 400, 'invalid request')
+    let secret
+    try {
+      ;({ secret } = JSON.parse(body ?? ''))
+    } catch {
+      return fail(res, 400, 'invalid request')
+    }
+    if (typeof secret !== 'string' || !timingSafeEqualStr(LAUNCHER_SECRET, secret)) {
+      return fail(res, 403, 'invalid launcher secret')
+    }
+    // 409 rather than an error: the launcher shows the webview, the person
+    // completes setup, and the app mints on the navigation that follows.
+    if (needsSetup()) {
+      return send(res, 409, JSON.stringify({ error: 'no account yet', needsSetup: true }))
+    }
+    const owner = oldestAdmin()
+    if (!owner) return fail(res, 409, 'this instance has no admin')
+    return send(res, 200, JSON.stringify(userProfile(owner)), 'application/json', {
+      // Not Secure: loopback-only by construction, and the app writes this
+      // into WebKit's cookie store itself rather than taking it off a
+      // response — one less thing that can silently fail to be sent.
+      'set-cookie': sessionCookieHeader(createSession(owner.id, { via: 'launcher' }), {
+        secure: false,
+      }),
     })
   }
   if (path === '/api/auth/connect' && req.method === 'POST') {
@@ -803,6 +858,10 @@ async function handleAuth(req, res, path) {
   if (path === '/api/auth/update' && req.method === 'POST') {
     const user = sessionUser(req)
     if (!user) return fail(res, 401, 'unauthorized')
+    // Read BEFORE the password branch below revokes every session: the
+    // re-issued cookie has to stay the kind of session it replaced, or a
+    // password change would silently hand a launcher window browser chrome.
+    const via = sessionVia(req)
     const body = await readBody(req)
     let name, email, password, currentPassword
     try {
@@ -844,7 +903,9 @@ async function handleAuth(req, res, path) {
       // re-issues one for THIS request so the caller stays signed in here (S8)
       destroyUserSessions(user.id)
       return send(res, 200, JSON.stringify(userProfile(updated)), 'application/json', {
-        'set-cookie': sessionCookieHeader(createSession(user.id)),
+        'set-cookie': sessionCookieHeader(createSession(user.id, { via }), {
+          secure: via === 'launcher' ? false : undefined,
+        }),
       })
     }
     return send(res, 200, JSON.stringify(userProfile(updated)))

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { beginDeliberateNavigation } from '@/composables/navigationIntent'
+import { hostBridge } from '@/lib/hostBridge'
 
 const cache = new Map<string, string>()
 const hydratedKeys = new Set<string>()
@@ -77,6 +78,16 @@ function enqueue(key: string, op: Op): number {
 const isRetryable = (status: number | null) =>
   status === null || status >= 500 || status === 429 || status === 412
 
+async function reauthorized(): Promise<boolean> {
+  if (!hostBridge.available) return false
+  try {
+    await hostBridge.requestReauth()
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function flush(key: string) {
   const q = queues.get(key)!
   q.inflight = true
@@ -90,6 +101,21 @@ async function flush(key: string) {
         body: op.value,
       })
       if (res.status === 401) {
+        // Under a host that can re-mint (the desktop launcher), a dead cookie
+        // is a pause, not the end: keep `inflight` true so no second flush
+        // starts for this key, leave storeError clean so the status pill stays
+        // "Saving…" rather than flashing a failure, and re-queue the op. The
+        // `??=` is the same last-write-wins rule the retryable catch uses — an
+        // edit made while we waited must win over the one being replayed.
+        if (hostBridge.available) {
+          try {
+            await hostBridge.requestReauth()
+            q.next ??= op
+            continue
+          } catch {
+            /* fall through to the ordinary bounce */
+          }
+        }
         q.next = null
         q.inflight = false
         countPending()
@@ -127,6 +153,7 @@ export async function hydrateStore(keys: string[]): Promise<void> {
   if (!missing.length) return
   const res = await fetch(`/api/store?keys=${missing.map(encodeURIComponent).join(',')}`)
   if (res.status === 401) {
+    if (await reauthorized()) return hydrateStore(keys)
     onUnauthorized()
     await new Promise(() => {})
   }
@@ -144,6 +171,7 @@ export async function hydrateStore(keys: string[]): Promise<void> {
 export async function storeGetFresh(key: string): Promise<string | null> {
   const res = await fetch(`/api/store?keys=${encodeURIComponent(key)}`)
   if (res.status === 401) {
+    if (await reauthorized()) return storeGetFresh(key)
     onUnauthorized()
     await new Promise(() => {})
   }

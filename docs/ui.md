@@ -71,6 +71,10 @@ The sidebar panel (`SettingsEditor` → `PanelPopoverBody`) opts out of host Esc
 
 There is no header: the two rails own the chrome.
 
+**Under the desktop launcher the rails give four things up**, because the app's own window already provides them: the **App** item (with its non-interactive `v-else` twin and the divider after it — hide the button alone and a contributor stares at a dead logo), **My account**, **Logout**, and the right rail's **save-status/publish button**. The decision is `host` on `/api/auth/me` (→ `docs/server.md`), exposed by `useAuth` as three computeds named for the CONCERN — `showsAppHome`, `showsAccountControls` (account and logout are one concern: identity chrome), `showsPublishControl`. `host` itself is never exported and there is no `isLauncher`: this file already records two bugs from gating on the cause rather than the intent (Layers on `isBuild`, `ContextMenu` mounted per mode). `mt-auto` pins the bottom group, so it moves to Project settings when the account buttons go. **Project settings stays** — it is the project's, not the person's.
+
+Two consequences worth knowing before changing any of it. The status button is **also the only save-status surface** (`SAVE_ICONS`/`SAVE_COLORS`, `aria-live`), so hiding it obliges the host to show save state: `src/lib/hostBridge.ts` posts `usePersistence().status` out over a `WKScriptMessageHandler` named `guano`, and the host calls back through `window.__guanoHost` (`openPublish`, `sessionRestored`, `sessionLost`). And the **Account section is NAVLESS** (`NAVLESS_SECTIONS`, reachable only from the My account button), so hiding that button removes password changes in launcher mode — accepted knowingly; they happen in a browser. Coverage: `e2e/auth-launcher-session.spec.ts`.
+
 ## The right sidebar's panels
 
 `SettingsEditor` + `usePanel`, one panel open at a time: **data · style · interactions · branches** (branches is labelled "Drafts" in the UI).

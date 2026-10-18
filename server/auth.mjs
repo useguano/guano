@@ -359,9 +359,21 @@ const sessions = new Map() // sha256(token) → { userId, createdAt, expiresAt }
 const persistSessions = () =>
   persist(SESSIONS_FILE, JSON.stringify(Object.fromEntries(sessions)), 'sessions')
 
-export function createSession(userId) {
+/**
+ * Mint a session. `via` records HOW it was minted — 'launcher' for a session
+ * the desktop app obtained through the loopback-only launcher route, absent
+ * for an ordinary password login. It rides on the session record rather than
+ * a second cookie so there is nothing a page could forge, and so the tag
+ * lives exactly as long as the session it describes.
+ */
+export function createSession(userId, { via } = {}) {
   const token = randomBytes(32).toString('hex')
-  sessions.set(sha256(token), { userId, createdAt: Date.now(), expiresAt: Date.now() + SESSION_TTL })
+  sessions.set(sha256(token), {
+    userId,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + SESSION_TTL,
+    ...(via ? { via } : {}),
+  })
   void persistSessions().catch(() => {})
   return token // raw token goes to the cookie; only its hash is stored
 }
@@ -414,8 +426,15 @@ export function parseCookies(req) {
 const cookieSecure = process.env.COOKIE_SECURE !== '0'
 const secure = cookieSecure ? '; Secure' : ''
 
-export const sessionCookieHeader = (token) =>
-  `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL / 1000}${secure}`
+/**
+ * `secure` is an option because ONE caller opts out: the launcher-session
+ * route, which is loopback-only by construction and whose cookie is written
+ * into WebKit's store by the desktop app rather than accepted from a
+ * response. Every other caller takes the COOKIE_SECURE default.
+ */
+export const sessionCookieHeader = (token, { secure: wantSecure = cookieSecure } = {}) =>
+  `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL / 1000}` +
+  (wantSecure ? '; Secure' : '')
 export const clearCookieHeader = () =>
   `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`
 export const sessionTokenOf = (req) => parseCookies(req)[COOKIE] ?? null
@@ -430,6 +449,25 @@ export function sessionUser(req) {
   const session = getSession(sessionTokenOf(req))
   const user = session ? findUserById(session.userId) : null
   return hasValidRole(user) ? user : null
+}
+
+/** How this request's session was minted: 'launcher', or null for a password
+ * login (and for no session at all). Read it BEFORE anything that could
+ * revoke the session — a password change destroys the record first. */
+export function sessionVia(req) {
+  const session = getSession(sessionTokenOf(req))
+  return session?.via === 'launcher' ? 'launcher' : null
+}
+
+/** The account a launcher session is minted for: one instance has one owner,
+ * and that is the admin who set it up. Oldest wins so a second admin added
+ * later never takes the desktop app's seat. */
+export function oldestAdmin() {
+  return (
+    loadUsers()
+      .filter((u) => u.role === 'admin')
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))[0] ?? null
+  )
 }
 
 // ---------- invites ----------

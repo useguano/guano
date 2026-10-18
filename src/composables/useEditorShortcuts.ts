@@ -1,15 +1,12 @@
-import { defineAsyncComponent } from 'vue'
 import { useKeymap } from './useShortcut'
 import { useContextMenu } from './useContextMenu'
 import { usePersistence } from './usePersistence'
 import { useStructure } from './useStructure'
 import { togglePalette } from './useCommandPalette'
 import { useEffectsDrawer } from './useEffectsDrawer'
-import { useModal } from './useModal'
+import { usePublishDialog } from './usePublishDialog'
 import { useViewMode } from './useViewMode'
 import { useAuth } from './useAuth'
-
-const PublishDialog = defineAsyncComponent(() => import('@/components/shared/PublishDialog.vue'))
 
 export function useEditorShortcuts() {
   const {
@@ -22,7 +19,7 @@ export function useEditorShortcuts() {
   } = useContextMenu()
   const { backend } = useStructure()
   const { undo, redo, saveNow } = usePersistence()
-  const { openModal, stack } = useModal()
+  const { openPublish } = usePublishDialog()
   const { isBuild } = useViewMode()
   const { toggleDrawer } = useEffectsDrawer()
   const { canBuild } = useAuth()
@@ -33,11 +30,6 @@ export function useEditorShortcuts() {
 
   const structural = (fn: () => void) => () => {
     if (canBuild.value) fn()
-  }
-
-  function openPublish() {
-    if (stack.value.some((m) => m.component === PublishDialog)) return
-    void openModal(PublishDialog)
   }
 
   useKeymap([

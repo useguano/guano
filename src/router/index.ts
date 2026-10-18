@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { hostBridge } from '@/lib/hostBridge'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -40,7 +41,12 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuth()
   await auth.check()
-  const authed = !!auth.email.value
+  let authed = !!auth.email.value
+  if (!authed && !auth.needsSetup.value && hostBridge.available) {
+    await hostBridge.requestReauth().catch(() => {})
+    await auth.recheck()
+    authed = !!auth.email.value
+  }
   if ((to.name === 'build' || to.name === 'authorize') && !authed) {
     return auth.needsSetup.value ? '/setup' : '/login'
   }

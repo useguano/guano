@@ -36,7 +36,7 @@ const ALL_PANELS: Panel[] = [
   { id: 'branches', label: 'Drafts', icon: GitBranch, divider: true },
 ]
 
-const { canBuild, canEditContent } = useAuth()
+const { canBuild, canEditContent, showsPublishControl } = useAuth()
 
 const panels = computed<Panel[]>(() =>
   canBuild.value
@@ -174,18 +174,21 @@ watch(activePanel, (panel) => {
 <template>
   <aside ref="railEl" class="relative flex h-full w-12 flex-col items-center gap-1 py-4">
 
-    <ButtonUI
-      v-if="canEditContent"
-      ref="statusBtn"
-      variant="ghost"
-      :icon="SAVE_ICONS[status]"
-      :aria-label="status === 'error' ? 'Save failed' : SAVE_STATES[status].label"
-      aria-live="polite"
-      class="w-7"
-      :class="currentId === 'publish-status' ? '!bg-accent/30 text-accent-foreground' : SAVE_COLORS[status]"
-      @click="togglePublish"
-    />
-    <div class="my-1 h-px w-full bg-input" />
+    <template v-if="canEditContent && showsPublishControl">
+      <ButtonUI
+        ref="statusBtn"
+        variant="ghost"
+        :icon="SAVE_ICONS[status]"
+        :aria-label="status === 'error' ? 'Save failed' : SAVE_STATES[status].label"
+        aria-live="polite"
+        class="w-7"
+        :class="
+          currentId === 'publish-status' ? '!bg-accent/30 text-accent-foreground' : SAVE_COLORS[status]
+        "
+        @click="togglePublish"
+      />
+      <div class="my-1 h-px w-full bg-input" />
+    </template>
 
     <template v-for="panel in panels" :key="panel.id">
       <div v-if="panel.divider" class="my-1 h-px w-full bg-input" />
