@@ -5,12 +5,16 @@ import {
   AGENT_DENIAL,
   AGENT_HARNESS_DENIAL,
   AGENT_HARNESS_TURN,
+  AGENT_ASK_DENIAL,
+  AGENT_ASK_ONE,
+  AGENT_ASK_TURN,
   AGENT_INIT,
   AGENT_INIT_SONNET,
   AGENT_INTERRUPT_RESULT,
   AGENT_RATE_LIMITED,
   AGENT_READY,
   AGENT_STEP_IN_FLIGHT,
+  AGENT_SUGGEST_TURN,
   AGENT_TURN,
   agentReplay,
 } from './fixtures/agentStream'
@@ -284,6 +288,52 @@ test.describe('the AI panel', () => {
     await page.locator('[data-agent-send]').click()
     await feed(page, [agentReplay('read my notes'), ...AGENT_HARNESS_DENIAL])
 
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveAttribute('data-agent-activity-state', 'error')
+    await activity.getByRole('button').click()
+    const tool = page.locator('[data-agent-tool]')
+    await expect(tool).toHaveAttribute('data-agent-tool-state', 'denied')
+    await expect(tool).toContainText('not allowed in this panel')
+  })
+
+  // (e) An ask is CONVERSATION, not work. If it lands in the activity bubble as
+  // "1 step · Ask user", the reducer opened it as a tool from
+  // `content_block_start` — which is why the id is registered there, before
+  // anything can reach `upsertTool` with it.
+  test('an ask is not a step, and its result is consumed in silence', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('a coming soon page for Acme')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('a coming soon page for Acme'), ...AGENT_ASK_TURN])
+
+    await expect(page.locator('[data-agent-ask]')).toHaveCount(1)
+    // no bubble at all: the ask was the only tool call in the turn
+    await expect(page.locator('[data-agent-activity]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-panel]')).not.toContainText('ask_user')
+    await expect(page.locator('[data-agent-text]')).toHaveText('Two things before I start.')
+  })
+
+  test('a suggestion is not a step either — the build beside it is', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('build it')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('build it'), ...AGENT_SUGGEST_TURN])
+
+    // the page write counts; the offer does not
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveCount(1)
+    await expect(activity).toHaveAttribute('data-agent-activity-count', '1')
+    await expect(activity).toContainText('1 step')
+    await expect(page.locator('[data-agent-suggest]')).toHaveCount(1)
+  })
+
+  test('a DENIED ask is a denied tool row — a denial is never hidden', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('ask me something')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('ask me something'), ...AGENT_ASK_DENIAL])
+
+    await expect(page.locator('[data-agent-ask]')).toHaveCount(0)
     const activity = page.locator('[data-agent-activity]')
     await expect(activity).toHaveAttribute('data-agent-activity-state', 'error')
     await activity.getByRole('button').click()

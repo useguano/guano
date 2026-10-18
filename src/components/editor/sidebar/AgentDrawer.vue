@@ -18,8 +18,10 @@ import MenuUI from '@/components/ui/MenuUI.vue'
 import TextareaUI from '@/components/ui/TextareaUI.vue'
 import {
   useAgentChat,
+  type AgentAskItem,
   type AgentAttachment,
   type AgentItem,
+  type AgentSuggestItem,
   type AgentToolItem,
   type AgentToolState,
 } from '@/composables/useAgentChat'
@@ -78,12 +80,29 @@ const TOOL_TONES: Record<AgentToolState, string> = {
 type Segment =
   | { kind: 'text'; key: string; blocks: Block[] }
   | { kind: 'activity'; key: string; tools: AgentToolItem[] }
+  | { kind: 'ask'; key: string; item: AgentAskItem }
+  | { kind: 'suggest'; key: string; item: AgentSuggestItem }
 
+/**
+ * An ask is NOT a step. It gets a segment of its own rather than joining the
+ * run of tool rows beside it, so it neither lands in the activity bubble nor
+ * counts towards "3 steps · …" — it is something the agent said, not something
+ * it did. Ending the activity run is deliberate too: the sentences and the
+ * chips keep their order in the column.
+ */
 function segment(items: AgentItem[]): Segment[] {
   const out: Segment[] = []
   for (const item of items) {
     if (item.kind === 'text') {
       if (item.text.trim()) out.push({ kind: 'text', key: item.key, blocks: blocks(item.text) })
+      continue
+    }
+    if (item.kind === 'ask' || item.kind === 'suggest') {
+      out.push(
+        item.kind === 'ask'
+          ? { kind: 'ask', key: item.key, item }
+          : { kind: 'suggest', key: item.key, item },
+      )
       continue
     }
     const last = out[out.length - 1]
@@ -439,7 +458,7 @@ nextTick(() => input.value?.focus())
           </div>
 
           <div
-            v-else
+            v-else-if="seg.kind === 'activity'"
             data-agent-activity
             :data-agent-activity-count="seg.tools.length"
             :data-agent-activity-state="activityState(seg.tools)"
