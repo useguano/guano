@@ -37,6 +37,42 @@ test.describe('get_guide', () => {
     expect('goldenRules' in toc).toBe(false)
   })
 
+  // Step 2 of the startup-cost work (docs/agent-panel.md): a measured first
+  // turn spent SIX get_guide round-trips before it wrote anything, each one a
+  // full model turn the person watched. The job form is the fix, so the thing
+  // under test is that every job answers in ONE response, with its sections in
+  // the order the handbook has them.
+  test('a job returns its sections in one response, in order', async () => {
+    const s = await mcpSession()
+    const jobs: Record<string, string[]> = {
+      'build-page': ['Page HTML', 'Styling', 'Design standards', 'Components', 'Forms'],
+      'edit-page': ['Page HTML'],
+      style: ['Styling', 'Design standards'],
+      components: ['Components', 'Nesting', 'Slots', 'Variants'],
+      content: ['Content', 'Media', 'Data'],
+      motion: ['Interactions', 'Animations', 'Class interactions'],
+    }
+    for (const [job, headings] of Object.entries(jobs)) {
+      const got = await s.call('get_guide', { for: job })
+      expect(got.for, job).toBe(job)
+      expect(got.sections, job).toHaveLength(headings.length)
+      // in the handbook's own order, so a read is a read and not a shuffle
+      const at = headings.map((h) => got.guide.indexOf(`## ${h}`))
+      expect(at.some((i) => i === -1), `${job} is missing a section`).toBe(false)
+      expect([...at].sort((a, b) => a - b), job).toEqual(at)
+      // one response a client will actually return
+      expect(got.guide.length, job).toBeLessThan(60_000)
+    }
+  })
+
+  test('an unknown job answers with the list, not the handbook', async () => {
+    const s = await mcpSession()
+    const miss = await s.call('get_guide', { for: 'everything' })
+    expect(miss.error).toContain('everything')
+    expect(miss.jobs).toContain('build-page')
+    expect(miss.guide).toBeUndefined()
+  })
+
   test('the described size is computed, not a stale number in prose', async () => {
     const s = await mcpSession()
     const claimed = Number(/(\d+) KB/.exec(s.tool('get_guide').description)![1])

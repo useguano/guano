@@ -6,13 +6,17 @@ same document, so everything here describes the real system — you never need t
 guess, or reverse-engineer anything. If a capability is not in this handbook or the tool
 list, it does not exist yet: **report it as a limitation instead of working around it.**
 
-**Read this handbook a section at a time.** `get_guide` with no argument returns these
-golden rules plus the section list; fetch the sections the job needs
-(`get_guide {section: "page-html"}`) before your first write. `section: "all"` returns
-the whole thing, which some clients will not return in one result.
+**Take the handbook by the JOB, in ONE call.** `get_guide {for: "build-page"}` returns
+everything a page build needs — the HTML format, styling, the design standards,
+components, forms — in one response. The jobs are `build-page`, `edit-page`, `style`,
+`components`, `content`, `motion`. Read it that way and orientation costs one round
+trip; read it a section at a time and it costs one per section, which the person waits
+through with nothing on screen.
 
-`get_guide {section}` takes a PARTIAL slug — `"page"` and `"html"` both reach Page HTML —
-and a miss returns the slug list, so a wrong guess costs one small response.
+`get_guide {section}` is still there for a single topic, and takes a PARTIAL slug —
+`"page"` and `"html"` both reach Page HTML — so a wrong guess costs one small response.
+`section: "toc"` is the section list alone; `section: "all"` is the whole thing, which
+some clients will not return in one result.
 
 ## The golden rules
 
@@ -202,7 +206,11 @@ suggest_next {suggestions: [
 
 ## Workflow recipe
 
+**One `get_guide {for}` for the job, then work.** Not a section, then another section.
+
 ```
+get_guide {for: "build-page"}  → the HTML format, styling, the design standards,
+                                 components and forms, in ONE response
 get_status                    → who you are, whether a target is set, which drafts exist,
                                  and WHAT MAIN HOLDS (mainIsEmpty + page/element/entry counts)
 set_target                    → the HUMAN picks Main or a draft — a dialog on elicitation-capable

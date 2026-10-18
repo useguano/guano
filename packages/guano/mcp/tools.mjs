@@ -183,12 +183,39 @@ export function guideInstructions(embedded = false) {
   ].join('\n\n')
 }
 
+/**
+ * `get_guide {for}` — the handbook by JOB rather than by section.
+ *
+ * A measured first turn on *"create an email capture landing page"* spent SIX
+ * `get_guide` round-trips before it wrote anything: the bare call for the
+ * section list, then page-html, styling, design-standards, forms and
+ * components. Every one was a full model turn the person watched with nothing
+ * on screen, and the handbook had asked for all of them
+ * (`builder/docs/agent-panel.md`, Startup cost).
+ *
+ * The bundles are what the measured run actually reached for, not a tidy
+ * taxonomy: `build-page` carries components and forms because building a page
+ * here means making the components first and a landing page has a form in it.
+ * It runs ~52 KB, which is one response well under the per-result ceiling that
+ * made `section: "all"` fail — and bytes in one call are not the cost being
+ * paid here. Round trips are.
+ */
+const GUIDE_JOBS = {
+  'build-page': ['page-html', 'styling', 'design-standards', 'components', 'forms'],
+  'edit-page': ['page-html'],
+  style: ['styling', 'design-standards'],
+  components: ['components', 'nesting', 'slots', 'variants'],
+  content: ['content', 'media', 'data'],
+  motion: ['interactions', 'animations', 'class-interactions'],
+}
+
 const REST_OF_HANDBOOK =
   'Everything else — the HTML format, the element registry, styling, content and data,' +
   ' components, variants, nesting, icons, class interactions, project settings,' +
-  ' interactions, animations, sliders, publishing — is in the handbook, a section at a' +
-  ' time. Call `get_guide` with no argument for the section list, then fetch what the job' +
-  ' needs. Do it BEFORE your first write.'
+  ' interactions, animations, sliders, publishing — is in the handbook. Take it by the' +
+  ' JOB, in ONE call: `get_guide {for: "build-page"}`, or ' +
+  Object.keys(GUIDE_JOBS).filter((j) => j !== 'build-page').join(', ') +
+  '. A section at a time is a round trip each, and the person waits through every one.'
 
 /** the EXTERNAL client's instructions — kept as a constant so nothing else moves */
 export const GUIDE_INSTRUCTIONS = guideInstructions(false)
@@ -5841,23 +5868,30 @@ const tools = [
   {
     name: 'get_guide',
     description:
-      'The Guano handbook: the page HTML format, the full element registry, how styling/' +
-      'content/interactions attach to elements, the class-validation rules, and the intended ' +
-      'workflow. READ THIS BEFORE YOUR FIRST WRITE — it answers every "how do I express X" ' +
-      'question; nothing needs to be discovered by trial and error. Call it with NO argument ' +
-      'first: that returns the golden rules plus the section list (a few KB), and you then ' +
-      `fetch the sections the job needs (\`section: "animations"\`). The whole handbook is ` +
-      `${Math.round(GUIDE.length / 1024)} KB — more than some clients will return in one ` +
-      'result — and is available as `section: "all"` when you want all of it.',
+      'The Guano handbook: the page HTML format, the element registry, how styling, content ' +
+      'and interactions attach to elements, the class-validation rules and the intended ' +
+      'workflow. It answers every "how do I express X" question. ' +
+      '**`for: "build-page"` returns everything a page build needs in ONE call** — read it ' +
+      `that way: one \`for\` per job (${Object.keys(GUIDE_JOBS).join(', ')}), then work. ` +
+      'A section at a time is a round trip each. `section` stays for a single topic; the ' +
+      `whole ${Math.round(GUIDE.length / 1024)} KB handbook is \`section: "all"\`, which some ` +
+      'clients will not return in one result.',
     inputSchema: {
       type: 'object',
       properties: {
+        for: {
+          type: 'string',
+          enum: Object.keys(GUIDE_JOBS),
+          description:
+            'the JOB you are about to do — its sections in ONE response. Prefer it over ' +
+            '`section`: one round trip instead of five.',
+        },
         section: {
           type: 'string',
           description:
-            'one "## " section by slug ("page-html", "styling", "animations", …), "toc" for the ' +
-            'section list alone, or "all" for the whole handbook. Omitting it returns the ' +
-            'golden rules plus the section list, which is where to start.',
+            'one "## " section by slug ("page-html", "styling", "animations", …), "toc" for ' +
+            'the list alone, or "all" for the lot. With neither this nor `for`: the golden ' +
+            'rules plus the section list.',
         },
       },
       additionalProperties: false,
@@ -5878,6 +5912,36 @@ const tools = [
       // (the Cocoapp session's first call came back "exceeds maximum allowed
       // tokens" and cost four calls to recover before any work started), so a
       // bare call hands back the rules and the map instead of all of it.
+      // a PARTIAL slug works ("page" reaches page-html) — shared by `for` and
+      // `section`, so a job's section list is resolved the same forgiving way
+      const ALIASES = { 'content-media-data': 'content' }
+      const resolve = (raw) => {
+        const key = ALIASES[raw] ?? raw
+        return sections.find((x) => x.slug === key) ?? sections.find((x) => x.slug.includes(key))
+      }
+
+      // One call per JOB, which is the whole point of this tool having a shape
+      // at all: a measured first turn spent SIX get_guide round-trips on an
+      // "email capture landing page" before it wrote anything, each one a full
+      // model turn the person watched (docs/agent-panel.md, Startup cost).
+      if (args.for !== undefined) {
+        const job = String(args.for).toLowerCase().trim()
+        const slugs = GUIDE_JOBS[job]
+        if (!slugs) {
+          return {
+            error: `no job named "${args.for}"`,
+            jobs: Object.keys(GUIDE_JOBS),
+            sections: sections.map((x) => x.slug),
+          }
+        }
+        const hits = slugs.map(resolve).filter(Boolean)
+        return {
+          guide: [header, ...hits.map((x) => x.body)].join('\n'),
+          for: job,
+          sections: hits.map((x) => x.slug),
+        }
+      }
+
       const q = args.section ? slugOf(String(args.section)) : 'toc'
       if (q === 'all') return { guide: `${header}\n${GUIDE}` }
       if (q === 'toc') {
@@ -5891,19 +5955,16 @@ const tools = [
             ? {}
             : {
                 next:
-                  'Fetch the sections this job needs, e.g. get_guide {section: "page-html"}. ' +
-                  'get_guide {section: "all"} returns the whole handbook.',
+                  'Prefer one call for the whole job: get_guide {for: "build-page"} — ' +
+                  `one of ${Object.keys(GUIDE_JOBS).join(', ')}. A single topic is ` +
+                  'get_guide {section: "page-html"}, and {section: "all"} is the lot.',
+                jobs: Object.fromEntries(Object.entries(GUIDE_JOBS)),
               }),
         }
       }
-      // a PARTIAL slug works ("page" reaches page-html), which is both the
-      // forgiving thing and what keeps a slug that was split still resolving:
-      // "content-media-data" became Content / Media / Data, so it is aliased
-      // rather than left to 404 for anything that remembers it.
-      const ALIASES = { 'content-media-data': 'content' }
-      const key = ALIASES[q] ?? q
-      const hit =
-        sections.find((s) => s.slug === key) ?? sections.find((s) => s.slug.includes(key))
+      // "content-media-data" became Content / Media / Data, so it is aliased in
+      // `resolve` rather than left to 404 for anything that remembers it.
+      const hit = resolve(q)
       if (!hit) {
         return {
           error: `no section matching "${args.section}"`,

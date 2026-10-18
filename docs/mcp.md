@@ -52,7 +52,13 @@ An `edit_structure` batch is applied to a COPY, so one op that cannot land refus
 
 `diagnose()` is the one funnel for the diagnostics an agent sees, so a diagnostic reaches every one of the four reporting paths.
 
-`mcp/GUIDE.md` is served **a section at a time**: a bare `get_guide` returns the golden rules plus the section list, `section: "<slug>"` one section, `section: "all"` the whole ~110 KB — which exceeds what some clients will return in one result (the first call of the Cocoapp review session failed on exactly that). The MCP `instructions` at initialize carry only the intro, the golden rules and the workflow recipe (`GUIDE_INSTRUCTIONS` in `tools.mjs`, ~13.6 KB), because a client that injects instructions pays for them on every turn.
+`mcp/GUIDE.md` is served **by the JOB**: `get_guide {for: "build-page"}` returns the HTML format, styling, the design standards, components and forms in ONE response (~52 KB). `GUIDE_JOBS` in `tools.mjs` is the table — `build-page`, `edit-page`, `style`, `components`, `content`, `motion` — and an unknown job answers with the list, never the handbook.
+
+**It exists because a section at a time was a round trip each.** A measured first turn on *"create an email capture landing page"* spent SIX `get_guide` calls before it wrote anything (the bare call, then page-html, styling, design-standards, forms, components), and each was a full model turn the person watched with nothing on screen — the dominant half of the panel's startup cost (`docs/agent-panel.md`, Startup cost). The bundles are what that run actually reached for rather than a tidy taxonomy, which is why `build-page` carries components and forms: building a page here means making the components first, and a landing page has a form in it. **Bytes in one call are not the cost being paid; round trips are**, so a 52 KB response that replaces five is the cheaper answer — it stays well under the per-result ceiling that made `section: "all"` fail.
+
+`section: "<slug>"` remains for a single topic and for a client with no job in mind, a bare `get_guide` returns the golden rules plus the section list, and `section: "all"` is the whole ~180 KB — which exceeds what some clients will return in one result (the first call of the Cocoapp review session failed on exactly that). The MCP `instructions` at initialize carry only the intro, the golden rules and the workflow recipe (`GUIDE_INSTRUCTIONS` in `tools.mjs`, ~18 KB), because a client that injects instructions pays for them on every turn.
+
+**The `tools/list` budget is unchanged and was not raised for this.** The `for` parameter and its enum cost ~155 B of schema; the `get_guide` description was trimmed to pay for it, which left the external profile at 79,510 B against the same 80,000 B budget. That is the rule (`docs/gates.md`): the budget is trimmed to, never raised to fit.
 
 ## Components are the agent's unit of work too
 
