@@ -39,6 +39,10 @@ export function createApi({ base, token, instance = '' }) {
     let res
     try {
       res = await fetch(BASE + path, {
+        // A server that accepts the connection and then never answers would
+        // otherwise hang the tool call for as long as the client allows, which
+        // reads to the human as the agent having stopped.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         method,
         headers: {
           authorization: `Bearer ${TOKEN}`,
@@ -62,7 +66,9 @@ export function createApi({ base, token, instance = '' }) {
    *  older instance has no `instance` field and must still be usable */
   async function health() {
     try {
-      const res = await fetch(`${BASE}/api/health`)
+      const res = await fetch(`${BASE}/api/health`, {
+        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+      })
       return await res.json()
     } catch {
       return null
@@ -166,6 +172,8 @@ export function createApi({ base, token, instance = '' }) {
     let res
     try {
       res = await fetch(`${BASE}/api/media?${params}`, {
+        // generous: this one carries the bytes
+        signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
         method: 'POST',
         headers: { authorization: `Bearer ${TOKEN}`, 'content-type': mime },
         body: bytes,
@@ -212,6 +220,12 @@ const TOKEN = process.env.GUANO_TOKEN || ''
 // and the 401 it returns is indistinguishable from a revoked token. Comparing
 // this against /api/health turns that into a message naming both projects.
 const INSTANCE = process.env.GUANO_INSTANCE || ''
+
+/** Every outbound request is bounded. `health` is a probe the router runs
+ *  against several addresses, so it gets the short one. */
+const REQUEST_TIMEOUT_MS = 30_000
+const HEALTH_TIMEOUT_MS = 5_000
+const UPLOAD_TIMEOUT_MS = 120_000
 
 const envApi = createApi({ base: BASE, token: TOKEN, instance: INSTANCE })
 

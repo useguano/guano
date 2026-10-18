@@ -213,6 +213,21 @@ export async function identifyEntry(p, api = createApi({ base: addressOf(p), tok
           instance: got,
         }
   }
+  // An instance that answers health with NO id is either very old or not us
+  // at all — and `tokenAccepted` is what presents the bearer token to find
+  // out. A local process that squats the port while the real server is down
+  // can answer health, so the probe itself is the leak: it hands this
+  // project's token to whoever picked up. An id costs the server nothing and
+  // every version that can be connected emits one.
+  if (!got) {
+    return {
+      ok: false,
+      answered: true,
+      why: `the server at ${address} did not identify itself (no instance id on /api/health) — ` +
+        "update it, or point this entry at its data dir with 'dir'",
+      instance: '',
+    }
+  }
   if (await tokenAccepted(api)) return { ok: true, answered: true, why: '', instance: got }
   return {
     ok: false,

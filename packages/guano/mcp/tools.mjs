@@ -11631,6 +11631,47 @@ const tools = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
       const { project } = await loadTargetProject()
+      // Publishing is the one action that cannot be walked back: it puts bytes
+      // on the live origin. The server-side `allowPublish` is the boundary and
+      // stays so — but when an admin has turned it on, an injected agent could
+      // ship with nothing in front of the human at all. Where the client can
+      // show a dialog, it gets one, exactly as use_project does. Where it
+      // cannot, the policy alone governs, as before: refusing instead would
+      // take publishing away from every client without elicitation, which is
+      // not a security win, it is a lost feature.
+      if (elicit) {
+        const origin = (api.base ?? '').replace(/\/+$/, '')
+        let res
+        try {
+          res = await elicit({
+            message:
+              `The AI agent wants to PUBLISH "${project.name || 'this site'}" to ${origin || 'the live origin'}. ` +
+              'This replaces the live site visitors see.',
+            requestedSchema: {
+              type: 'object',
+              properties: {
+                confirm: { type: 'boolean', title: 'Publish the live site now' },
+              },
+              required: ['confirm'],
+            },
+          })
+        } catch (e) {
+          throw new Error(
+            `the publish dialog failed or timed out (${e?.message ?? e}) — nothing was ` +
+              'published. Ask the human to publish from the editor, or try again.',
+          )
+        }
+        const answered = res !== null && res !== undefined
+        if (!answered || res.action !== 'accept' || res.content?.confirm !== true) {
+          return {
+            published: false,
+            message:
+              'the human did not confirm the publish — nothing was shipped. Say so, and ask ' +
+              'them in chat whether they want it live.',
+            next: 'use `preview` to show them the work instead',
+          }
+        }
+      }
       const warnings = collectPublishWarnings(project)
       const stats = await publish(project)
       // Weight, which only the export knows. A backstop above `heavy-repeat`,

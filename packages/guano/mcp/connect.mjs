@@ -445,7 +445,7 @@ async function remotePolicy(base, token) {
       process.exit(1)
     }
     const me = await res.json()
-    console.log(`✓ token accepted by ${base} as ${me.email} (${me.role})`)
+    console.log(`✓ token accepted by ${base} as ${plain(me.email)} (${plain(me.role)})`)
     if (me.instance?.name) console.log(`✓ project: ${me.instance.name}`)
     return { ...(me.agentPolicy ?? {}), __name: me.instance?.name ?? '' }
   } catch (e) {
@@ -481,7 +481,16 @@ async function authorizeDevice(base) {
     )
     process.exit(1)
   }
-  const verifyUrl = `${base}${started.verifyPath}`
+  // `verifyPath` comes from the host we are connecting to, and it is
+  // concatenated onto the base and handed to `open`. A value that does not
+  // start with a single `/` is not a path on that host: "\\evil.tld/x" and
+  // "@evil.tld/x" both make a different origin out of it. The flow's own path
+  // is the fallback, so a hostile or old instance cannot redirect the browser.
+  const verifyPath =
+    typeof started.verifyPath === 'string' && /^\/[^/\\]/.test(started.verifyPath)
+      ? started.verifyPath
+      : `/admin/authorize?code=${encodeURIComponent(started.userCode ?? '')}`
+  const verifyUrl = `${base}${verifyPath}`
   console.log('')
   console.log(`  Approve this connection at:  ${verifyUrl}`)
   console.log(`  Your code:                   ${started.userCode}`)
@@ -522,10 +531,16 @@ async function authorizeDevice(base) {
 
 /** best effort: the flow prints the url too, so a failure here costs nothing */
 function openBrowser(url) {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  // `start` is a cmd builtin, not an executable, so execFileSync could never
+  // find it and Windows silently never opened the browser.
+  const [cmd, args] =
+    process.platform === 'darwin'
+      ? ['open', [url]]
+      : process.platform === 'win32'
+        ? ['cmd', ['/c', 'start', '', url]]
+        : ['xdg-open', [url]]
   try {
-    execFileSync(cmd, [url], { stdio: 'ignore', timeout: 4000 })
+    execFileSync(cmd, args, { stdio: 'ignore', timeout: 4000 })
   } catch {
     /* no browser, headless box, or a platform without the helper */
   }
@@ -560,6 +575,12 @@ function fenceRoot(dataDir, remoteUrl) {
   }
   return root
 }
+
+/** A string from the remote end, safe to print: a terminal reads escape
+ *  sequences, and these values are chosen by the host we just met. */
+const plain = (value) =>
+  // eslint-disable-next-line no-control-regex
+  String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)
 
 /** a slug for a remote project with no local folder to name it after */
 function hostSlug(base) {

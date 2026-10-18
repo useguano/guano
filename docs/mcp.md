@@ -78,7 +78,7 @@ A part can never carry a `#ref` of its own, since a ref inside a component block
 
 **Both collapse an instance's own structure but keep walking its SLOTS** (`slotsIn`), because slot content is the page's own nodes. Returning on the instance row listed a ref'd instance inside a `Section`'s slot in NO mode — while the `html` half of the same response printed it in full, editable by ref and undiscoverable — and a body that is one `<Shell><slot>…` came back as a single row for the whole page.
 
-## `publish` returns design warnings
+## `publish` asks first, and returns design warnings
 
 `designWarnings` in `tools.mjs`. Warnings, never refusals — a landing page may want the body transition.
 
@@ -94,6 +94,14 @@ A part can never carry a `#ref` of its own, since a ref inside a component block
 - per-route export weight, and unbound effects.
 
 They came out of the Cocoapp prototype review, whose four complaints they reproduce one for one; `GUIDE.md`'s **Design standards** section states the same rules up front.
+
+**`publish` opens the same dialog `use_project` does, where the client can show one.**
+Publishing is the one action that cannot be walked back, and the server-side `allowPublish`
+is still the boundary — but with it turned on, an injected agent could ship to the live
+origin with nothing in front of the human at all. A decline ships nothing and says so. There
+is deliberately NO attestation fallback and no refusal on a client without elicitation:
+refusing there would take publishing away from every such client, which is a lost feature
+rather than a security win, and the policy already governs that case.
 
 ## Untrusted content is fenced
 
