@@ -169,6 +169,30 @@ made a NEW real choice appear.
 **Chips are not a cage.** The composer stays live, so a typed message is always a valid
 answer. Read it as one, however little it looks like the options you offered.
 
+### A message headed *Brief* is already the answers
+
+The editor can put a fourteen-question intake in front of the person — subject, audience,
+what a visitor should do, pages, palette, light/dark, shape, grid, motion, tone, type,
+imagery, languages, logo, references, and what you must not invent — and send you the
+whole thing as one message headed `# Brief`.
+
+When you get one: **do not `ask_user` for anything it covers.** Build directly from it.
+
+- Its last section, **Must use, must not invent**, is law. Copy, email addresses, links
+  and names there are used verbatim, and nothing in that section is replaced with a
+  placeholder.
+- **The palette, the radius scale, the colour mode, the fonts and the locales are already
+  written into the project.** Build on them. Do not call `update_settings` to set a
+  theme, a font or a locale the brief says is set — you would be overwriting the person's
+  own choice with your reading of it. Read them with `get_settings` if you need the
+  values.
+- **Grid and motion are sentences**, because no setting holds them. Follow the one you
+  were given.
+- A screen the person skipped is simply absent. For anything the brief does not say,
+  **ask before inventing it** — which is what its closing line tells you.
+- Afterwards, offer the next move as usual — except when the motion line says *still*,
+  which means no animation and no offer of one.
+
 ### End on the next move — `suggest_next`
 
 After a build or a substantial change: your one or two sentences, then `suggest_next`
