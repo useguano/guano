@@ -296,6 +296,60 @@ test('a hostile SVG uploaded through the agent API is defanged and served no-scr
   })
   expect(html.status()).toBe(415)
 
+  // The two things four literal-matching regexes could not see. XML lets a
+  // document bind any prefix to a namespace, and a browser honours the element
+  // when the file is navigated to directly — so <s:script> went through
+  // untouched. And an attribute value is entity-decoded by the parser AFTER a
+  // regex has looked at it. On the `server` method the CSP above covers both;
+  // a site published as a zip or to GitHub is served by a host that sends
+  // whatever it sends, and there this pass is the only layer there is.
+  const bypasses: [string, string][] = [
+    [
+      'namespaced script',
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:s="http://www.w3.org/2000/svg"><s:script>alert(1)</s:script><rect width="1" height="1"/></svg>',
+    ],
+    [
+      'prefixed foreignObject',
+      '<svg xmlns="http://www.w3.org/2000/svg"><x:foreignObject><rect width="1" height="1"/></x:foreignObject></svg>',
+    ],
+    [
+      'decimal entity scheme',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a href="&#106;avascript:alert(1)"><rect width="1" height="1"/></a></svg>',
+    ],
+    [
+      'hex entity scheme',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a href="&#x6a;avascript:alert(1)"><rect width="1" height="1"/></a></svg>',
+    ],
+    [
+      'tab inside the scheme',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a href="java&#9;script:alert(1)"><rect width="1" height="1"/></a></svg>',
+    ],
+    [
+      'xlink under another prefix',
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:l="http://www.w3.org/1999/xlink"><a l:href="javascript:alert(1)"><rect width="1" height="1"/></a></svg>',
+    ],
+    [
+      'animation writes href',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a><set attributeName="href" to="javascript:alert(1)"/><rect width="1" height="1"/></a></svg>',
+    ],
+    [
+      'nested svg data url',
+      '<svg xmlns="http://www.w3.org/2000/svg"><image href="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0Pjwvc2NyaXB0Pjwvc3ZnPg=="/></svg>',
+    ],
+  ]
+  for (const [label, svg] of bypasses) {
+    const res = await agent.post('/api/media?name=probe.svg', {
+      headers: { 'content-type': 'image/svg+xml' },
+      data: svg,
+    })
+    expect(res.ok(), label).toBeTruthy()
+    const { id: probeId } = await res.json()
+    const stored = await (await agent.get('/media/' + probeId)).text()
+    expect(stored.toLowerCase(), label).not.toMatch(
+      /script|javascript:|foreignobject|data:image\/svg|attributename/,
+    )
+  }
+
   await agent.dispose()
   await admin.dispose()
 })

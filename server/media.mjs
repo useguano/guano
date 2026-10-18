@@ -197,24 +197,253 @@ function isSvg(buf) {
   return /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*|<!DOCTYPE[^>]*>\s*)*<svg[\s>]/i.test(head)
 }
 
-/** strips script vectors from an SVG before it ever hits disk. Regex-based —
- *  imperfect against exotic XML tricks, which is why serving also sends a
- *  no-script CSP + nosniff; this is the first of two layers, not the only one. */
+/**
+ * Strip the script vectors from an SVG before it ever hits disk.
+ *
+ * This replaced four regexes that matched LITERAL names, and the two things
+ * they could not see are the two that matter. XML lets a document bind any
+ * prefix to a namespace, and a browser honours the element when the file is
+ * navigated to directly — so
+ * \`<svg xmlns:s="http://www.w3.org/2000/svg"><s:script>…</s:script></svg>\`
+ * passed through untouched. And an attribute value is entity-decoded by the
+ * parser AFTER we look at it, so \`href="&#106;avascript:…"\` passed too.
+ *
+ * So: match on an element's LOCAL name, whatever prefix carries it, and decode
+ * entities (and drop the whitespace and control characters a scheme check must
+ * not be fooled by) before judging any URL.
+ *
+ * A tag nothing was dropped from is re-emitted as the original bytes, so a
+ * legitimate SVG — icons with \`<use href="#id">\`, gradients with
+ * \`fill="url(#g)"\`, Inkscape's own namespaces — comes out byte-identical.
+ *
+ * Serving still sends a no-script CSP + nosniff, and that is what covers this
+ * on the \`server\` publish method. It is NOT what covers a site published as
+ * a zip or to GitHub: a static host sends whatever it sends, so on those this
+ * pass is the only layer there is.
+ */
 export function sanitizeSvg(text) {
-  return (
-    text
-      .replace(/<script[\s\S]*?(?:<\/script\s*>|$)/gi, '')
-      .replace(/<foreignObject[\s\S]*?(?:<\/foreignObject\s*>|$)/gi, '')
-      // on* event handler attributes (quoted or bare values)
-      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-      // script-scheme and non-image data: href/src targets; fragments,
-      // http(s) links and data:image refs stay (harmless in <img>, and
-      // direct navigation is covered by the serving CSP)
-      .replace(
-        /\s(href|xlink:href|src)\s*=\s*(["'])\s*(?:javascript:|vbscript:|data:(?!image\/))[^"']*\2/gi,
-        '',
-      )
-  )
+  const src = String(text)
+  let out = ''
+  let i = 0
+
+  while (i < src.length) {
+    const lt = src.indexOf('<', i)
+    if (lt === -1) {
+      out += src.slice(i)
+      break
+    }
+    out += src.slice(i, lt)
+
+    // comments, CDATA, doctype and processing instructions carry no element
+    // and no attribute, so they travel verbatim
+    const passthrough = [
+      ['<!--', '-->'],
+      ['<![CDATA[', ']]>'],
+    ]
+    let copied = false
+    for (const [open, close] of passthrough) {
+      if (!src.startsWith(open, lt)) continue
+      const end = src.indexOf(close, lt + open.length)
+      const stop = end === -1 ? src.length : end + close.length
+      out += src.slice(lt, stop)
+      i = stop
+      copied = true
+      break
+    }
+    if (copied) continue
+    if (src[lt + 1] === '!' || src[lt + 1] === '?') {
+      const end = src.indexOf('>', lt)
+      const stop = end === -1 ? src.length : end + 1
+      out += src.slice(lt, stop)
+      i = stop
+      continue
+    }
+
+    const tag = readTag(src, lt)
+    if (!tag) {
+      // a bare '<' that starts no tag — it is text, and escaping it is not
+      // this function's job
+      out += '<'
+      i = lt + 1
+      continue
+    }
+
+    if (FORBIDDEN_SVG_ELEMENTS.has(localName(tag.name))) {
+      // the whole element goes, subtree and all; a stray close tag just goes
+      if (tag.close || tag.selfClosing) {
+        i = tag.end
+        continue
+      }
+      i = skipElement(src, tag)
+      continue
+    }
+
+    out += tag.close ? src.slice(lt, tag.end) : emitTag(src, tag)
+    i = tag.end
+  }
+
+  return out
+}
+
+const FORBIDDEN_SVG_ELEMENTS = new Set([
+  'script',
+  'foreignobject',
+  'iframe',
+  'embed',
+  'object',
+  'handler',
+  'link',
+  'meta',
+  'audio',
+  'video',
+])
+
+/** attributes that name a URL — judged by scheme */
+const URL_ATTRS = new Set(['href', 'src'])
+/** SMIL animation values: a \`<set to="javascript:…">\` is a script vector */
+const ANIMATED_VALUE_ATTRS = new Set(['from', 'to', 'by', 'values'])
+
+/** the name without its namespace prefix, lowercased */
+function localName(name) {
+  const colon = name.indexOf(':')
+  return (colon === -1 ? name : name.slice(colon + 1)).toLowerCase()
+}
+
+/** Decode what a browser would decode, and drop what it ignores, so a scheme
+ *  check sees the string the parser will actually act on. */
+function decodeForCheck(value) {
+  let v = String(value)
+  for (let pass = 0; pass < 2; pass++) {
+    v = v
+      .replace(/&#x([0-9a-f]{1,6});?/gi, (m, hex) => codePoint(parseInt(hex, 16), m))
+      .replace(/&#(\d{1,7});?/g, (m, dec) => codePoint(Number(dec), m))
+      .replace(/&colon;?/gi, ':')
+      .replace(/&(?:tab|newline);?/gi, ' ')
+  }
+  // eslint-disable-next-line no-control-regex
+  return v.replace(/[\x00-\x20\x7f]/g, '').toLowerCase()
+}
+
+function codePoint(n, original) {
+  try {
+    return String.fromCodePoint(n)
+  } catch {
+    return original
+  }
+}
+
+/** a URL an SVG may point at: a fragment, http(s), a non-SVG data image, or a
+ *  path with no scheme at all. Anything that names a scheme we did not list —
+ *  javascript:, vbscript:, data:text/html, a nested data:image/svg+xml — goes. */
+function safeSvgUrl(raw) {
+  const v = decodeForCheck(raw)
+  if (!v || v.startsWith('#')) return true
+  if (v.startsWith('http://') || v.startsWith('https://')) return true
+  if (v.startsWith('data:image/') && !v.startsWith('data:image/svg')) return true
+  return !/^[a-z][a-z0-9+.\-]*:/.test(v)
+}
+
+const SCRIPTY = /(?:javascript|vbscript|livescript|mocha):|data:text|data:image\/svg|expression\(/
+
+/** Read one tag at \`lt\`. Returns its name, its attribute spans and where it
+ *  ends, or null when this is not a tag at all. */
+function readTag(src, lt) {
+  const close = src[lt + 1] === '/'
+  let p = lt + (close ? 2 : 1)
+  const nameStart = p
+  while (p < src.length && /[^\s/>]/.test(src[p])) p++
+  const name = src.slice(nameStart, p)
+  if (!name || !/^[A-Za-z_][\w.\-:]*$/.test(name)) return null
+
+  const attrs = []
+  for (;;) {
+    while (p < src.length && /\s/.test(src[p])) p++
+    if (p >= src.length) break
+    if (src[p] === '>' || (src[p] === '/' && src[p + 1] === '>')) break
+    const attrStart = p
+    while (p < src.length && /[^\s=/>]/.test(src[p])) p++
+    const attrName = src.slice(attrStart, p)
+    let value = ''
+    while (p < src.length && /\s/.test(src[p])) p++
+    if (src[p] === '=') {
+      p++
+      while (p < src.length && /\s/.test(src[p])) p++
+      const quote = src[p]
+      if (quote === '"' || quote === "'") {
+        const end = src.indexOf(quote, p + 1)
+        const stop = end === -1 ? src.length : end
+        value = src.slice(p + 1, stop)
+        p = stop === src.length ? stop : stop + 1
+      } else {
+        const vStart = p
+        while (p < src.length && /[^\s>]/.test(src[p])) p++
+        value = src.slice(vStart, p)
+      }
+    }
+    if (!attrName) {
+      p++
+      continue
+    }
+    attrs.push({ name: attrName, value, start: attrStart, end: p })
+  }
+
+  let selfClosing = false
+  if (src[p] === '/' && src[p + 1] === '>') {
+    selfClosing = true
+    p += 2
+  } else if (src[p] === '>') {
+    p += 1
+  } else {
+    p = src.length // unterminated
+  }
+  return { name, attrs, close, selfClosing, start: lt, end: p }
+}
+
+/** Should this attribute survive? */
+function keepAttr(tagName, attr) {
+  const name = localName(attr.name)
+  if (name.startsWith('on')) return false
+  if (URL_ATTRS.has(name)) return safeSvgUrl(attr.value)
+  if (ANIMATED_VALUE_ATTRS.has(name)) return !SCRIPTY.test(decodeForCheck(attr.value))
+  // an animation that writes href is the same vector one step removed
+  if (name === 'attributename') return !URL_ATTRS.has(decodeForCheck(attr.value))
+  // url(#gradient) is everywhere and harmless; a scheme in a style is not
+  if (name === 'style') return !SCRIPTY.test(decodeForCheck(attr.value))
+  return true
+}
+
+/** Re-emit a tag. Byte-identical when nothing was dropped, which is what keeps
+ *  every legitimate SVG in the corpus exporting as it did. */
+function emitTag(src, tag) {
+  const kept = tag.attrs.filter((a) => keepAttr(tag.name, a))
+  if (kept.length === tag.attrs.length) return src.slice(tag.start, tag.end)
+  let out = `<${tag.name}`
+  for (const a of kept) out += ` ${src.slice(a.start, a.end)}`
+  return out + (tag.selfClosing ? '/>' : '>')
+}
+
+/** Everything up to and including this element's own close tag. */
+function skipElement(src, tag) {
+  const want = localName(tag.name)
+  let p = tag.end
+  let depth = 1
+  while (p < src.length) {
+    const lt = src.indexOf('<', p)
+    if (lt === -1) return src.length
+    const next = readTag(src, lt)
+    if (!next) {
+      p = lt + 1
+      continue
+    }
+    if (localName(next.name) === want) {
+      if (next.close) {
+        depth--
+        if (depth === 0) return next.end
+      } else if (!next.selfClosing) depth++
+    }
+    p = next.end
+  }
+  return src.length
 }
 
 /** the download filename is echoed in a Content-Disposition header —
