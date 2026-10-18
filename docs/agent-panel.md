@@ -151,6 +151,30 @@ neither had an accessible name at all — the insert dock's `+` had been that wa
 since it was written (the same hole `e2e/ui-a11y.spec.ts` already records for a
 modal's Close).
 
+## Who may drive it
+
+**Builders today; contributors for content only, when it becomes possible.**
+Decided 2026-10-18 (ROADMAP §5): a contributor may ask for text, translations
+and new posts, and nothing structural.
+
+The enforcement for that already exists and is not the panel's: a contributor's
+project write goes through `server/contributor-merge.mjs`, whose allowlist IS
+that decision — node `content`/`src`/`background`/`locales`, page/entry `seo` +
+`status`, collection `entries`, `comments`. The gate is `user.role ===
+'contributor'`, and for a token request `user` is **the token's owner**. So an
+agent token owned by a contributor is scoped correctly with no new code, and an
+agent token owned by an admin — which is what `guano connect` mints — is not
+scoped at all. **One token per driving person is the whole implementation**, and
+until it exists a contributor-driven turn must not run on an admin's token.
+
+Two consequences for this file's own code, when that lands: the dock stops
+being Edit-only (contributors are pinned to Play), and the context chip has no
+selection to name there.
+
+Nothing is reachable for a contributor yet regardless: the panel needs a
+desktop host to spawn `claude`, and a contributor reaches the editor in a
+browser, where `available` is false.
+
 ## What the launcher still owes
 
 ROADMAP §5 step 2, with the traps that are waiting there: a GUI app's `PATH`

@@ -448,6 +448,76 @@ the person's site, and a hostile iframe there would otherwise be able to send
 - `requestReveal()` / `selectElement()` in `useElement` exist for a later
   "jump to what it just edited" affordance; not step 1.
 
+### Contributors may drive it, for content only — decided 2026-10-18
+
+**The decision.** A contributor can use the AI panel, and only for **text,
+translation and new posts**. Not structure, not style, not components, not
+publishing.
+
+**That is already a thing the server enforces, word for word.**
+`server/contributor-merge.mjs` exists and its first line names its allowlist:
+node `content`/`src`/`background`/`locales`, page/entry `seo` + `status`,
+collection `entries` (full CRUD), `comments` — text, translations, posts. A
+contributor's project write keeps ALL structure and `settings` from the stored
+blob and takes only that; a structural edit is silently dropped, and custom
+code or the publish target is a **named 403** because a silent drop reads as
+success. So this decision needs no new policy vocabulary. It needs the agent's
+write to arrive as the contributor.
+
+**And that is one line of existing code away.** The merge gate is
+`user.role === 'contributor' && isProjectBlobKey(key)`
+(`server/index.mjs:1685`), and for a token request `user` is **the token's
+owner**. So:
+
+- a token owned by an **admin** — which is what `guano connect` mints — gives a
+  contributor's turn the admin's full structural power, governed only by the
+  admin-set agent policy. **This is the hole, and it is open today** for any
+  client holding that token.
+- a token owned by a **contributor** goes through `mergeContributorProject`
+  automatically, with no new code at all.
+
+So the implementation is **one agent token per driving person**, not one per
+project. `docs/server.md` already states the principle this rests on: *a token
+is judged by how it authenticated, not by its owner's role* — here we want the
+owner to BE the driver, which is the same rule pointed the right way.
+
+**Three things it needs, none of them the panel's UI:**
+
+1. **A per-driver token.** `guano connect` mints one token for the connecting
+   user and writes one entry per project. A contributor's panel needs a
+   contributor-owned token — either a `--config` file per (project, person), or
+   a short-lived token the server mints for the session user when the panel
+   starts. The second is better: it binds the agent's identity to the browser
+   session that opened the chat, and it expires.
+2. **The panel in Play.** Contributors are pinned to Play (`useViewMode`), so
+   an Edit-only dock is invisible to exactly the people this decision is about.
+   That answers the question this section used to leave open: **yes, it exists
+   in Play** — and a contributor's Play surface has no Layers and no selection,
+   so the context chip is page-only there.
+3. **A mixed tool must refuse, not be merged away.** `edit_elements` writes
+   content AND classes/variants/bindings; the merge would silently drop the
+   structural half, which this repo has already decided reads as a lie. A
+   contributor-scoped toolset should refuse the structural keys **by name**,
+   the way the custom-code 403 does, so the agent is told and can say so.
+   The allowlist that fits the decision: `set_translations`,
+   `get_translation_worklist`, `upsert_entries`, `upload_media`, `set_page_seo`,
+   the reads — and `edit_elements` restricted to `content`/`locales`.
+
+**What gates all of it: a contributor has no host.** The panel spawns `claude`
+through the desktop launcher, and a contributor reaches the editor in a
+BROWSER, over the LAN or a remote URL. `available` is false there and there is
+no button — so contributor access does not arrive with step 2 at all. It
+arrives with **§4b**, when the studio runs on a server and the agent runs
+server-side, which is also the first moment whose Claude credentials pay for a
+contributor's turn becomes a real question. Until then this section is a
+decision on the record, not work in flight.
+
+The one piece worth doing BEFORE then, because it is a live hole rather than a
+future feature: an agent token's writes are governed by its owner's role, and
+`guano connect` hands out an admin's. Minting per driver — or at minimum
+refusing a contributor-driven turn on an admin token — is server work that
+stands on its own.
+
 ### Traps, numbered because the plan refers to them
 
 1. **A GUI app's PATH is not the terminal's.** `claude` lives in
@@ -584,6 +654,7 @@ away and `docs/agent-panel.md` carries all of it.
   real requirement? The answer changes the whole workstream.
 - **§3:** does the launcher's "a tab is its server's lifetime" rule survive
   collaboration? If not, that decision comes before any sync work.
-- **§5:** whether the panel exists in Play. Contributors are pinned there, and
-  an agent that edits for a contributor is a policy question before a UI one.
-  (The shortcut is settled: **⌘J**, free across all four registration sites.)
+- **§5:** nothing blocking. The shortcut is settled (**⌘J**), and contributors
+  are settled: content only, which `contributor-merge.mjs` already enforces —
+  see that section. What it waits on is §4b (a contributor has no desktop host)
+  and a per-driver agent token.
