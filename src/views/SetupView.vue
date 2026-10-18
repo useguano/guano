@@ -7,12 +7,13 @@ import ToggleUI from '@/components/ui/ToggleUI.vue'
 import MainLogo from '@/assets/MainLogo.vue'
 import { useAuth } from '@/composables/useAuth'
 
-const { setup, presetAgentPolicy, setupProjectName } = useAuth()
+const { setup, presetAgentPolicy, setupCodeRequired, setupProjectName } = useAuth()
 
 const projectName = ref(setupProjectName.value)
 const email = ref('')
 const password = ref('')
 const confirm = ref('')
+const setupCode = ref('')
 const allowMainWrites = ref(false)
 const allowPublish = ref(false)
 const error = ref<string | null>(null)
@@ -33,6 +34,10 @@ async function submit() {
     error.value = 'Passwords do not match'
     return
   }
+  if (setupCodeRequired.value && !setupCode.value.trim()) {
+    error.value = 'Enter the setup code printed where the server was started'
+    return
+  }
   busy.value = true
   try {
     await setup(
@@ -42,6 +47,7 @@ async function submit() {
       presetAgentPolicy.value
         ? null
         : { allowMainWrites: allowMainWrites.value, allowPublish: allowPublish.value },
+      setupCode.value.trim(),
     )
     localStorage.setItem('guano-setup-name', projectName.value.trim())
     window.location.assign('/admin')
@@ -69,6 +75,15 @@ async function submit() {
       <InputUI size="lg" v-model="email" placeholder="Email" type="email" />
       <InputUI size="lg" v-model="password" placeholder="Password (min. 8 characters)" type="password" />
       <InputUI size="lg" v-model="confirm" placeholder="Confirm password" type="password" />
+
+      <div v-if="setupCodeRequired" class="mt-4 flex flex-col gap-1.5" data-testid="setup-code">
+        <p class="section-label">Setup code</p>
+        <InputUI size="lg" v-model="setupCode" placeholder="Setup code" />
+        <p class="text-[9px] text-muted-foreground">
+          You are not on the machine running this server, so the first account needs the code
+          printed where it was started (also in <code>data/setup-code</code>).
+        </p>
+      </div>
 
       <div v-if="presetAgentPolicy" class="mt-4 flex flex-col gap-1.5" data-testid="agent-policy-preset">
         <p class="section-label">AI agents</p>

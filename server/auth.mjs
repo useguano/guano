@@ -16,6 +16,7 @@
 import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { readFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DATA_DIR, timingSafeEqualStr, writeAtomic } from './util.mjs'
 import { log } from './log.mjs'
@@ -255,7 +256,61 @@ export async function createFirstAdmin(email, password, name = '') {
   // scaffolder) was waiting for exactly this person — bind it here, in the auth
   // module, so a headless setup binds it too
   await bindPendingTokens(user.id)
+  // the window this code exists for is closed; leaving the file behind would
+  // leave a live-looking secret in the data dir and in the next boot banner
+  await clearSetupCode()
   return user
+}
+
+// ---------- the first-run setup code ----------
+//
+// `POST /api/auth/setup` is gated on "no users exist" and nothing else, and
+// **the server binds every interface** — so on café wifi, or on a VPS in the
+// minutes before its owner opens /admin, the first stranger to reach it became
+// the instance's admin. `bindPendingTokens` above makes that worse than it
+// sounds: they also inherit every token `guano connect --offline` minted. And
+// a data-dir wipe reopens the window on a machine that was already set up.
+//
+// Loopback stays free, because that is the launcher, `npm run dev` and anyone
+// at the machine's own keyboard — the people who already own the data dir. From
+// anywhere else the request must carry a code that was printed where the server
+// was STARTED, which is a place only the operator can read. 128 bits, so it is
+// the sort of thing you paste, and single-use by construction: the account it
+// guards can only be created once.
+const SETUP_CODE_FILE = join(DATA_DIR, 'setup-code')
+
+let setupCode = null
+
+/** Mint the code (or adopt the one already on disk) — called from boot(). */
+export async function ensureSetupCode() {
+  if (!needsSetup()) return null
+  try {
+    const held = readFileSync(SETUP_CODE_FILE, 'utf8').trim()
+    if (held) {
+      setupCode = held
+      return setupCode
+    }
+  } catch {
+    /* not minted yet */
+  }
+  setupCode = randomBytes(16).toString('hex')
+  // 0600 through writeAtomic: the code IS the credential until the admin exists
+  await writeAtomic(SETUP_CODE_FILE, `${setupCode}\n`)
+  return setupCode
+}
+
+/** the minted code, for the boot banner — null once an admin exists */
+export const currentSetupCode = () => (needsSetup() ? setupCode : null)
+
+/** constant-time check of what a non-loopback caller sent */
+export function setupCodeMatches(given) {
+  if (!setupCode) return false
+  return typeof given === 'string' && timingSafeEqualStr(setupCode, given.trim())
+}
+
+async function clearSetupCode() {
+  setupCode = null
+  await rm(SETUP_CODE_FILE, { force: true }).catch(() => {})
 }
 
 /** constant-time-ish login: returns the user on success, null otherwise.

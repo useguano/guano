@@ -9,6 +9,7 @@ const name = ref('')
 const role = ref<Role | null>(null)
 const userId = ref<string | null>(null)
 const needsSetup = ref(false)
+const setupCodeRequired = ref(false)
 const setupProjectName = ref('')
 const host = ref<'browser' | 'launcher'>('browser')
 
@@ -44,6 +45,7 @@ export function useAuth() {
       } else {
         const detail = await res.json().catch(() => null)
         needsSetup.value = !!detail?.needsSetup
+        setupCodeRequired.value = !!detail?.setupCodeRequired
         setupProjectName.value =
           typeof detail?.projectName === 'string' ? detail.projectName : ''
         const preset = detail?.agentPolicy
@@ -104,6 +106,7 @@ export function useAuth() {
       allowMainWrites: false,
       allowPublish: false,
     },
+    setupCode = '',
   ) {
     applyProfile(
       await post('/api/auth/setup', {
@@ -111,6 +114,7 @@ export function useAuth() {
         password,
         projectName,
         ...(agentPolicy ? { agentPolicy } : {}),
+        ...(setupCode ? { setupCode } : {}),
       }),
     )
   }
@@ -154,6 +158,7 @@ export function useAuth() {
     showsAccountControls,
     showsPublishControl,
     needsSetup,
+    setupCodeRequired,
     setupProjectName,
     presetAgentPolicy,
     commentsSeenAt,

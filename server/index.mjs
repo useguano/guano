@@ -114,6 +114,8 @@ import {
   clearCookieHeader,
   createApiToken,
   createFirstAdmin,
+  currentSetupCode,
+  ensureSetupCode,
   createInvite,
   createSession,
   deleteUser,
@@ -143,6 +145,7 @@ import {
   parseCookies,
   sessionTokenOf,
   sessionUser,
+  setupCodeMatches,
   sessionVia,
   setUserRole,
   updateUser,
@@ -540,6 +543,20 @@ const previewAllowed = slidingLimiter(30, 60_000)
 const deviceStartAllowed = slidingLimiter(6, 60_000)
 const deviceLookupAllowed = slidingLimiter(20, 60_000)
 
+/**
+ * Is this request from the machine the server runs on?
+ *
+ * `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours
+ * X-Forwarded-For under TRUST_PROXY, so a header could claim loopback. Three
+ * routes trust this and nothing else — launcher-session, connect and setup —
+ * and they trust it because holding the machine is holding the data dir.
+ */
+const isLoopbackSocket = (req) =>
+  ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)
+
+// a code typed by a human, so the limit is per address and generous
+const setupAllowed = slidingLimiter(10, 15 * 60_000)
+
 const tooManyRequests = (res, retryAfterSeconds, what) =>
   send(
     res,
@@ -568,6 +585,9 @@ async function handleAuth(req, res, path) {
         401,
         JSON.stringify({
           needsSetup: true,
+          // ...so the form asks for the code only where it is required, which
+          // is every caller that is not on this machine
+          ...(isLoopbackSocket(req) ? {} : { setupCodeRequired: true }),
           ...(scaffolded ? { projectName: scaffolded } : {}),
           ...(preset
             ? { agentPolicy: { allowMainWrites: preset.allowMainWrites, allowPublish: preset.allowPublish } }
@@ -607,12 +627,28 @@ async function handleAuth(req, res, path) {
   if (path === '/api/auth/setup' && req.method === 'POST') {
     // bootstrap the first admin — only when no users exist yet
     if (!needsSetup()) return fail(res, 403, 'account already exists')
-    const body = await readBody(req)
-    let email, password, name, projectName, agentPolicy
+    const body = await readBody(req, MAX_AUTH_BODY)
+    if (body === null) return fail(res, 400, 'invalid request')
+    let email, password, name, projectName, agentPolicy, setupCode
     try {
-      ;({ email, password, name, projectName, agentPolicy } = JSON.parse(body ?? ''))
+      ;({ email, password, name, projectName, agentPolicy, setupCode } = JSON.parse(body ?? ''))
     } catch {
       return fail(res, 400, 'invalid request')
+    }
+    // Off the machine, the code printed at startup is what stands in for
+    // holding the data dir (→ server/auth.mjs). Loopback is free: that is the
+    // launcher, the dev server and the keyboard in front of the machine.
+    if (!isLoopbackSocket(req)) {
+      const limit = setupAllowed(req.socket.remoteAddress ?? '?')
+      if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'attempts')
+      if (!setupCodeMatches(setupCode)) {
+        return fail(
+          res,
+          403,
+          'this instance needs its setup code — it is printed where the server was started, ' +
+            'and kept in <data>/setup-code until the first account exists',
+        )
+      }
     }
     if (!isEmail(email)) return fail(res, 400, 'invalid email')
     if (typeof password !== 'string' || password.length < 8) {
@@ -658,8 +694,7 @@ async function handleAuth(req, res, path) {
     if (!LAUNCHER_SECRET || LAUNCHER_SECRET.length < 32) return fail(res, 404, 'not found')
     // `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours
     // X-Forwarded-For under TRUST_PROXY, so a header could claim loopback.
-    const ip = req.socket.remoteAddress
-    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+    if (!isLoopbackSocket(req)) {
       return fail(res, 403, 'launcher session is local-only')
     }
     const body = await readBody(req, MAX_AUTH_BODY)
@@ -694,8 +729,7 @@ async function handleAuth(req, res, path) {
     // into DATA_DIR and sends it here — being able to write the data dir IS
     // ownership of the instance, so no session/token is needed. Loopback only,
     // single-use nonce (deleted on every attempt, match or not).
-    const ip = req.socket.remoteAddress
-    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+    if (!isLoopbackSocket(req)) {
       return fail(res, 403, 'connect bootstrap is local-only')
     }
     const body = await readBody(req)
@@ -3471,7 +3505,10 @@ async function sweepDataDir() {
   try {
     const dirs = await sweepStaleDirs(DATA_DIR, ['site', 'preview', 'import', 'store', 'media'])
     const files = await sweepOrphanTmpFiles([DATA_DIR, STORE_DIR, BACKUPS_DIR, FORMS_DIR])
-    if (dirs) log.info(`boot: swept ${dirs} stale temp dir(s)`)
+    // before the socket opens, so the banner can print it and the first
+  // request can be checked against it
+  await ensureSetupCode()
+  if (dirs) log.info(`boot: swept ${dirs} stale temp dir(s)`)
     if (files) log.info(`boot: swept ${files} orphan temp file(s)`)
   } catch (err) {
     log.warn(`boot: sweep failed: ${err.message}`)
@@ -3657,7 +3694,11 @@ ${
   needsSetup()
     ? `\n  first run — open ${base}/admin to create your admin account${
         pendingTokenCount() > 0 ? ' — the Claude Desktop token you created is bound to it' : ''
-      }\n`
+      }\n${
+        currentSetupCode()
+          ? `  from another machine, the form asks for this code:  ${currentSetupCode()}\n`
+          : ''
+      }`
     : ''
 }`)
   // Last thing printed, because it is the thing that will waste your day.
