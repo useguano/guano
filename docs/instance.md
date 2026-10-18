@@ -47,6 +47,19 @@ Now one entry, `mcpServers.guano`, whose env carries **`GUANO_PROJECTS`**: `{"<s
 
 **`target` is per project.** It was one `GUANO_MCP_TARGET` for the whole entry; with several projects behind one entry, pinning Main for a landing page would have pinned it for a client's live site too.
 
+### The editor's own config file
+
+The AI panel gets a file of its own: `~/Library/Application Support/Guano Launcher/mcp/<slug>-<hash>.json`, one per project, named by the FOLDER path because a project has to have a config name before its first boot has minted it an id. **Swift never writes it** — `guano connect --config <file>` does, which is the launcher's standing rule, and is also why the branch switch is a CLI flag rather than a JSON patch.
+
+Two flags are its alone:
+
+- **`--embedded`** writes `env.GUANO_MCP_EMBEDDED = "1"`. That string is the ONE signal `guano mcp` reads to become the editor's agent instead of an outside client — a smaller tool list, no `use_project`, no `set_target` (`docs/mcp.md`, Embedded mode). It is **refused without `--config`**: the shared Claude Code and Claude Desktop configs belong to a client that has no editor to ask which project and which branch it is looking at, and marking one embedded would leave it unable to answer either.
+- **`--target <main|draftId>`** writes the project's `target` field **unconditionally**. Everywhere else that field is written only when the agent policy allows Main, because it is a consent decision the agent must not make. Here it is the editor stating which branch is loaded, which is a fact, not a permission — the policy still refuses the write server-side. `new:<Name>` is not accepted: the editor makes drafts, the agent does not.
+
+Neither flag touches the agent policy, and `--yes` means what it always did. `--print` names the mode and the target it would write.
+
+`AgentMCPConfig.isCurrent` in the launcher is what decides the file is stale and the CLI must run again. It compares the target — unlike the port, which `guano mcp` re-reads from `instance.json` — and requires `GUANO_MCP_EMBEDDED`, so a perfectly good external entry for the same project never passes for the panel's.
+
 What is lost: the project no longer appears in the tool name (`mcp__guano__get_page`, not `mcp__guano-landing__get_page`). `get_status` and the startup log name the live project instead.
 
 ## Which project is live

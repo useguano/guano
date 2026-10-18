@@ -220,11 +220,11 @@ the README.
 launcher. The person types next to the page they are looking at; the agent's
 edits land on that page as it works.
 
-**Status.** Built; realignment in progress. Direction decided (option 1
-below) on 2026-10-18, wire format probed on a real machine, both halves
-shipped. The realignment below is what is left.
+**Status.** Built, both halves, and realigned around being the main AI
+integration — all on 2026-10-18. `docs/agent-panel.md` carries it; what
+survives here is why the three alternatives lost.
 
-### Realignment, 2026-10-18
+### Realignment, 2026-10-18 — DONE
 
 **The embedded AI panel is Guano's main AI integration.** The external client
 path (`guano connect` into Claude Desktop or a Claude Code terminal) stays
@@ -232,12 +232,19 @@ supported, but it is secondary: it pushes people into another app, and
 everything it needs — `use_project`, `set_target` dialogs, the pin file, the
 attestation fallback — exists only because an outside client knows nothing
 about what the person is looking at. The panel knows the project, the branch,
-the page and the selected element, and must never ask for any of them.
+the page and the selected element, and never asks for any of them.
 
-The executable plan is `PLAN-ai-panel.md` at the repo root: one signal
+Shipped the same day, in nine commits. One signal
 (`GUANO_MCP_EMBEDDED=1`, written only by `guano connect --config … --embedded`),
 a target that follows the branch the editor has loaded, and a smaller tool
-profile. It is deleted when its last step lands and the docs carry it.
+profile. What set it off was one screenshot of a first turn on a fresh
+project: the agent called `set_target` and picked Main *itself* (print mode
+has no dialog, so the attestation fallback let it), then failed twice on
+`get_page {pageId: "/"}` because the context chip names a path and `findPage`
+took only a uuid, and three of its seven visible steps were Claude Code's own
+`ToolSearch` bookkeeping. Each is now closed, and each is written up where
+the code is: `docs/agent-panel.md`, `docs/mcp.md`, `docs/instance.md`, and
+`../launcher/PLAN.md` Phase 4.8.
 
 ### The decision: drive the person's own `claude` CLI, headless
 

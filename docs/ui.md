@@ -65,7 +65,7 @@ The sidebar panel (`SettingsEditor` → `PanelPopoverBody`) opts out of host Esc
 
 ## The two rails
 
-**The left rail (`AppRail`)**: **App** (the logo — the bare page canvas, in Edit, no column), the **AI drawer** (first of the buttons, and only when a desktop host offers one), **Pages**, **Components**, then the media library, project settings + account (`SettingsPanel`, which contains `UsersSettings`) and logout. **The surface switch is not in the rail** — it is the canvas's Edit / Play toggle, because it is a mode of the page you are on rather than a place to go.
+**The left rail (`AppRail`)**: **App** (the logo — the bare page canvas, in Edit, no column), the **AI drawer** (first of the buttons, and only once a desktop host has answered the bridge), **Pages**, **Components**, then the media library, project settings + account (`SettingsPanel`, which contains `UsersSettings`) and logout. **The surface switch is not in the rail** — it is the canvas's Edit / Play toggle, because it is a mode of the page you are on rather than a place to go.
 
 **The right rail (`SettingsEditor`)**: the save-status button that opens the publish popover (`PublishPopover`), the comments popover (`CommentsEditor`), and the panel buttons. ⌘P opens `PublishDialog`, which auto-runs the publish on mount. Semantic status colour tokens are `text-success` / `text-pending` / `text-danger`.
 
@@ -106,10 +106,17 @@ froze the chat that was driving the agent.
 and the chat has no layer to peel. Same rule as the Layers view: only the rail
 button closes it.
 
-The button is `v-if`'d on `useAgentChat().available`, which is false until a
-desktop host says it found a `claude` binary — so in a browser the rail looks
-exactly as it always did. Not `host === 'launcher'`: that is the cause rather
-than the concern. → `docs/agent-panel.md`
+The button is `v-if`'d on `useAgentChat().answered` — whether the desktop host
+has replied AT ALL, `ready` or `unavailable` — so in a browser, where nothing
+replies, the rail looks exactly as it always did. Not `host === 'launcher'`:
+that is the cause rather than the concern.
+
+It was gated on `available`, i.e. on the answer being yes, so a machine with
+no `claude` install had no button. Once the panel became the MAIN AI
+integration that stopped being tidy and became a hole: the one person who
+needs the install instructions could not reach the surface that holds them.
+The drawer now distinguishes *not installed* (the install guide and a Retry)
+from *stopped* (the reason and a Restart). → `docs/agent-panel.md`
 
 Both canvas dock buttons carry an `aria-label` for the same reason: they are
 raw icon buttons, and `v-tooltip` only sets `aria-describedby` while the tooltip
@@ -185,7 +192,7 @@ They are programmed in **four** places, by scope:
 
 **Escape is deliberately in none of them.** Each layer owns its own listener, so the peel order falls out of who is mounted: `ModalStackHost`, `useEffectsDrawer`, `PopoverHost`, `useDrawerEscape`, and `InteractionsEditor` for a pending target pick.
 
-In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces, and so does ⌘J (the AI drawer — it toggles `column`, and no-ops while the agent is unavailable).
+In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces, and so does ⌘J (the AI drawer — it toggles `column`, and no-ops until the desktop host has answered at all).
 
 ## The two surfaces
 

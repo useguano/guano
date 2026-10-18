@@ -1,8 +1,9 @@
 # The AI panel: a Claude Code session inside the canvas
 
-<!-- Read this before touching src/composables/useAgentChat.ts, AgentDock.vue
-     or the agent half of src/lib/hostBridge.ts. The forward-looking plan,
-     the options weighed and the launcher's half are ROADMAP.md §5. -->
+<!-- Read this before touching src/composables/useAgentChat.ts,
+     AgentDrawer.vue, useHostBridge.ts or the agent half of
+     src/lib/hostBridge.ts. The options weighed are ROADMAP.md §5; the
+     launcher's half is ../launcher/PLAN.md Phases 4.6 and 4.8. -->
 
 **The panel is Guano's main AI integration** (decided 2026-10-18). The
 external client path — `guano connect` into Claude Desktop or a Claude Code
@@ -31,11 +32,12 @@ the harness, the authentication and the bill are all theirs. Nothing in this
 repo talks to a model, and no API key is ever collected. The three alternatives
 (the Agent SDK, our own loop) and why they lost are in ROADMAP §5.
 
-**Shipped: the builder half.** The bridge protocol, the reducer and the panel,
-tested against a recorded transcript through a faked host. **Not shipped: the
-launcher half** — nothing spawns `claude` yet, so in a browser, and under
-today's launcher, `available` stays false and *there is no button*. That is the
-designed state, not a missing feature.
+**Both halves are shipped.** The bridge protocol, the reducer and the panel
+here, tested against a recorded transcript through a faked host; the spawn,
+the MCP config and the stream in the launcher (`AgentSession.swift`,
+`EditorSession.swift`). In a BROWSER nothing answers the bridge, so there is
+still no button — see **Onboarding** below for what a launcher with no Claude
+Code install shows instead.
 
 ## The bridge is one contract with the launcher
 
@@ -48,6 +50,7 @@ reauth round-trip (→ `docs/ui.md`, The two rails).
 | `{type:'agent-start'}` | spawn or resume, then answer `ready` or `unavailable` |
 | `{type:'agent-send', text, images?}` | one `user` line on stdin — a plain string, or with images a content array of image blocks then the text (verified with a real screenshot) |
 | `{type:'agent-model', model}` | a `set_model` control request; the CLI answers it and then emits a fresh `system/init` naming the new model, which is how the page learns it took |
+| `{type:'agent-target', target}` | `main` or a draft id — the branch the editor has loaded. The host waits for it before it spawns, and re-runs `guano connect --target` and respawns when it changes |
 | `{type:'agent-interrupt'}` | the interrupt control request (below) |
 | `{type:'agent-stop'}` | SIGTERM; keep the session id for a resume |
 
@@ -55,6 +58,11 @@ reauth round-trip (→ `docs/ui.md`, The two rails).
 |---|---|
 | `__guanoHost.agentEvent(obj)` | one parsed JSONL line, or a synthetic `ready` / `unavailable` |
 | `__guanoHost.agentExit({code, reason})` | the process is gone |
+
+The host also sends one synthetic event of its own beside `ready` and
+`unavailable`: `{type:'switching', target}`, emitted before a respawn onto
+another branch. The reducer makes it `status: 'switching'` and the composer
+waits for the `ready` that follows.
 
 `{type:'ready', sessionId, replay?: []}` may carry every line the host has
 streamed so far; `{type:'unavailable', reason}` is how "Claude Code is not
@@ -202,12 +210,103 @@ an `is_error` result it did not ask for is a real failure and shows its text. A
 process *exit* is a third thing and arrives through `agentExit`, which also
 raises a notice, because by then the panel may not be open.
 
+## Embedded mode is the server's contract too
+
+The panel is Guano's **main** AI integration, and the MCP side knows it. One
+signal — **`GUANO_MCP_EMBEDDED=1`** in the entry's `env`, written only by
+`guano connect --config <file> --embedded` — and `guano mcp` becomes the
+editor's agent rather than an outside client:
+
+| | external client | the panel |
+|---|---|---|
+| which site | the `GUANO_PROJECTS` map, the pin file, a `use_project` dialog | the one project in the file; `use_project` is not listed |
+| write target | `set_target`'s dialog, the chat attestation, or a policy-gated `target` | the per-project `target` field, **always written**; `set_target` is not listed, and a write with no target is a hard refusal naming the editor |
+| tool list | all of them | the panel profile (below) |
+| `initialize` instructions | the golden rules + the workflow recipe | the same, with rules 5 and 6 replaced by the handbook's **Inside the editor** |
+| `get_status` | as before | adds `embedded: true` |
+
+The full write-up, with `PANEL_DROPPED` and `guideInstructions(embedded)`, is
+`docs/mcp.md` → **Embedded mode**. `check:mcp` measures both profiles against
+one budget.
+
+**Never let the agent pick a target in embedded mode, even as a fallback.** A
+missing target is the launcher/page handshake having failed and must surface
+as that. `main` as a default would write to the live site because a message
+was lost.
+
+### The panel profile
+
+Dropped: `use_project`, `set_target`, `publish`, `list_integrations`,
+`list_form_submissions`. Kept: everything else, `get_settings` /
+`update_settings` included — tokens and fonts are design work — and `preview`,
+which is not just a link: it renders the target and returns the same
+`warnings` publish does, the only review the panel can run.
+
+## The target follows the branch
+
+`useHostBridge` watches `usePersistence().activeBranchId` with `immediate` and
+posts `agent-target` right after `agent-start`. The launcher holds the spawn
+until it arrives, re-runs `connect --config … --embedded --target X` when the
+file's target differs, and respawns `claude` with `--resume`.
+
+A branch switch mid-session therefore **interrupts first**, then stops keeping
+the session id, then starts again. Without the interrupt, a write the model
+built against the branch the person just left lands after the switch.
+
+`AgentMCPConfig.isCurrent` compares the target for the same reason it does not
+compare the port: the port is a cached guess that `guano mcp` re-reads from
+`instance.json`, while the target is read from the config file and nowhere
+else. It also requires `GUANO_MCP_EMBEDDED`, so an external entry for the same
+project never passes for the panel's.
+
+The page re-posts the target on any `ready` that has not seen one, because a
+reload replays `agent-start` and the host cleared what it knew with the page
+that told it.
+
+## Harness bookkeeping is hidden
+
+Claude Code hands the model tool NAMES and makes it fetch each schema on
+demand, so the first real turn carried three `ToolSearch` rows reading *Looked
+up its tools* — three of the seven steps the person was shown, none of them
+something the agent did. `HARNESS_TOOLS` in `lib/agentLabels.ts` is the list;
+a `tool_use` naming one is kept out of the activity bubble and the step count,
+and its `tool_result` is consumed in silence.
+
+**A denied harness tool still renders.** `permission_denied` and the result's
+`permission_denials[]` both un-hide the row they name — a denial is never
+hidden, whatever the tool.
+
+The flag that would turn deferred loading off is Claude Code's, not ours, and
+eager loading puts the whole tool list in every turn. Hiding the rows is the
+cheaper answer.
+
+## Onboarding
+
+The drawer's unavailable state distinguishes two things, because they need
+different sentences. *Not installed* gets the install guide — `npm install -g
+@anthropic-ai/claude-code`, sign in once in a terminal, then **Retry** —
+inside the transcript. *Stopped* keeps the terse strip with the reason and the
+restart button.
+
+The **Main policy notice** sits at the top of the transcript when the loaded
+branch is Main and the server's `allowMainWrites` is off: *The AI can't edit
+Main yet*, with an **Allow** button for admins that sends the same
+`PUT /api/agent-policy` Settings → MCP → Agent permissions sends. It is the
+same setting, reachable where the refusal is seen, not a second endpoint.
+
 ## Gated on the concern, never on the host
 
-The button renders on `useAgentChat().available` — not on `host === 'launcher'`
-and not on `hostBridge.available`. A launcher on a machine with no Claude Code
-is a launcher with no AI button, and `docs/ui.md` already records two bugs from
-gating on the cause rather than the intent.
+The button renders on `useAgentChat().answered` — whether the host has replied
+AT ALL, `ready` or `unavailable`. Not on `host === 'launcher'` and not on
+`hostBridge.available`: `docs/ui.md` records two bugs from gating on the cause
+rather than the intent.
+
+It used to be gated on `available`, i.e. on the answer being yes, so a
+launcher on a machine with no Claude Code was a launcher with no AI button.
+Panel-first turned that from a tidy rule into a hole: the one person who needs
+the install instructions could not reach the surface that holds them. The
+answer is still the concern — in a browser nothing answers, so there is no
+button, which is what the rule was protecting.
 
 Both dock buttons carry an `aria-label`: they are raw icon buttons, and the
 `v-tooltip` directive only sets `aria-describedby` while the tooltip shows, so
@@ -240,16 +339,18 @@ Nothing is reachable for a contributor yet regardless: the panel needs a
 desktop host to spawn `claude`, and a contributor reaches the editor in a
 browser, where `available` is false.
 
-## What the launcher still owes
+## What the launcher owns
 
-ROADMAP §5 step 2, with the traps that are waiting there: a GUI app's `PATH`
-does not contain `claude`; `ChildProcess` wires stdin to `/dev/null`; the MCP
-config must be written by `guano connect --config`, never from Swift; SIGTERM
-before SIGKILL; and the transcript has to be replayed after a reload, because
-the web view reloads on reauth and the process outlives the DOM.
+`AgentSession.swift` and `EditorSession.swift`, with the traps that shaped
+them: a GUI app's `PATH` does not contain `claude` (`ClaudeCLILocator`);
+`ChildProcess` wires stdin to `/dev/null`; **the MCP config is written by
+`guano connect --config`, never from Swift** — adding `--target` to `connect`
+is the whole mechanism behind the branch switch; SIGTERM before SIGKILL; and
+the transcript is replayed after a reload, because the web view reloads on
+reauth and the process outlives the DOM.
 
 ## Coverage
 
-`e2e/ui-agent-panel.spec.ts` — nine cases through a faked host, over
+`e2e/ui-agent-panel.spec.ts` — through a faked host, over
 `e2e/fixtures/agentStream.ts`. There is no unit-test runner here (→
 `docs/gates.md`), so the reducer is tested through the DOM it drives.

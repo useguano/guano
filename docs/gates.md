@@ -56,6 +56,8 @@ The files on disk cost an agent nothing, but the tool list is injected into the 
 
 **Trim the prose rather than raising the budget.** It was raised once, to 80,000 B for the V10–V13 work, after weighing lazy tool loading — no client capability says a client honours `tools/list_changed`, so that was set aside.
 
+**It measures TWO profiles against that one number**: the external client's list and the editor AI panel's (`docs/mcp.md`, Embedded mode). The panel's is smaller by construction, so measuring only it would let the external one grow unwatched; either going over fails the gate, and the budget is not raised for either.
+
 ## `check:cli` — the shipped CLI, the way a user meets it
 
 `scripts/check-cli.mjs`: every module under `packages/`, `server/` and `scripts/` parses, each package's `bin` entry exists and carries a shebang, and `packages/guano/bin/guano.js` is actually INVOKED for `--version` (compared against `package.json`), `--help` (which must still name every subcommand, and must not leak a backtick) and an unknown command (exit 1). `prepack` runs it before any build work, so a tarball whose entry point cannot run is never built.
@@ -75,7 +77,7 @@ Rebuilding a runtime moves the `check:corpus` baseline by exactly that asset.
 
 ## `test:e2e` — the Playwright suite
 
-`e2e/`, 545 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
+`e2e/`, 565 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
 
 What is in it, by group:
 

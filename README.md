@@ -37,8 +37,9 @@ Or from a clone of this repo: `npm install && npm run build && npm run serve`.
 Open `http://localhost:4174/admin`, create the first (admin) account, build,
 publish. The published site is served at `http://localhost:4174/`.
 
-The scaffolder also asks whether to connect **Claude Desktop** over MCP and the
-two permissions a connected agent needs answered — may it edit the live
+The scaffolder also asks whether to connect **Claude Desktop** over MCP — the
+secondary path; the editor's own AI drawer needs no setup — and the two
+permissions a connected agent needs answered — may it edit the live
 project, may it publish (both default no). It does the connect right there,
 so after `npm run dev` and the admin account there is nothing else to set up:
 open Claude and the agent is working. See [Working with an AI
@@ -235,7 +236,7 @@ Both surfaces (Edit and Play):
 | `⌘Z` / `⌘⇧Z` | Undo / redo |
 | `⌘S` | Save now |
 | `⌘P` | Publish |
-| `⌘J` | AI drawer (desktop launcher only) |
+| `⌘J` | AI drawer (desktop Launcher only) |
 | `C` | Comment mode — then click where the comment goes |
 
 Edit only:
@@ -276,10 +277,21 @@ On Windows and Linux, `⌘` is `Ctrl`.
 
 ## Working with an AI agent
 
-Guano ships an MCP server (`guano mcp`) that lets an agent read and write the
-same project the editor does — pages as a strict HTML subset, components,
-collections, interactions, animations, translations — through the authed HTTP
-API with a `guano_` token. The agent handbook it serves is
+**The AI drawer in the editor is how you use AI in Guano** (`⌘J`, the left
+rail's first button, under the desktop Launcher). You type beside the page you
+are looking at and the edits land on the canvas as the agent works. It runs
+your own Claude Code install — the harness, the sign-in and the bill are
+yours, and Guano never collects an API key. It already knows the project, the
+branch, the page and whatever you have selected, so it never asks you which.
+
+**Claude Desktop and Claude Code also connect**, over `guano connect`. That
+path is supported and secondary: it is another app, and it has to be told
+which site and which branch before it can do anything.
+
+Both drive the same MCP server (`guano mcp`), which lets an agent read and
+write the same project the editor does — pages as a strict HTML subset,
+components, collections, interactions, animations, translations — through the
+authed HTTP API with a `guano_` token. The agent handbook it serves is
 `packages/guano/mcp/GUIDE.md`.
 
 `npm create @useguano` connects Claude Desktop for you: it mints the token into

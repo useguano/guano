@@ -41,7 +41,7 @@ Vue `3.5`, vue-router `5`, Vite `8`, TypeScript `6`, Tailwind `4` (CSS-first, no
 | `npm run build` | `vue-tsc` type-check + production build, in parallel. **Required before `test:e2e`.** |
 | `npm run type-check` | `vue-tsc --build` only. |
 | `npm run preview` | Serve the production build. |
-| `npm run test:e2e` | Playwright: 545 tests in 74 files, on its own server (:4188) and data dir. |
+| `npm run test:e2e` | Playwright: 565 tests in 74 files, on its own server (:4188) and data dir. |
 | `npm run check:corpus` | Render referee: re-export every corpus project, fail on one byte or one moved node id. |
 | `npm run check:html` | The agent HTML layer (`src/lib/html/`) — round-trip properties + the refusals. |
 | `npm run check:migrate` | The v2 schema migration (`src/lib/migrate.ts`). |
@@ -139,8 +139,8 @@ Two rules that cost a release each: **binding scope is decided by the TARGET, no
 
 **Agents, chrome, checks**
 
-- **`docs/mcp.md`** — the agent toolset (`packages/guano/mcp/`): the write target and its consent channel, `serializeHandler`'s per-call baseline and lock, the HTML page tools, component and instance-part addressing, design warnings, and the untrusted-content fence. Read it with `mcp/GUIDE.md`, which is the agent-facing half and must stay in sync.
+- **`docs/mcp.md`** — the agent toolset (`packages/guano/mcp/`): the write target and its consent channel, **embedded mode** (the editor's AI panel is the main client and gets a smaller profile), `serializeHandler`'s per-call baseline and lock, the HTML page tools, component and instance-part addressing, design warnings, and the untrusted-content fence. Read it with `mcp/GUIDE.md`, which is the agent-facing half and must stay in sync.
 - **`docs/ui.md`** — the primitives, the app-level floating hosts, where a component file goes, the two rails, the drawers and the Layers view, the class validator, and the four places shortcuts are registered. Read it before building or reshaping editor chrome.
-- **`docs/agent-panel.md`** — the ⌘J AI panel: the host-bridge protocol with the desktop launcher, the recorded `claude -p` stream and the four ways a transcript goes visibly wrong, why there is no permission prompt channel, and why a stopped turn is not a failed one. Read it before touching `useAgentChat`, `AgentDock` or the agent half of `hostBridge.ts`.
+- **`docs/agent-panel.md`** — the ⌘J AI panel, which is Guano's MAIN AI integration: the host-bridge protocol with the desktop launcher, embedded mode and the target that follows the branch, the recorded `claude -p` stream and the four ways a transcript goes visibly wrong, why there is no permission prompt channel, and why a stopped turn is not a failed one. Read it before touching `useAgentChat`, `AgentDrawer` or the agent half of `hostBridge.ts`.
 - **`docs/design-style.md`** — the visual language itself: the oklch token block, the type scale, control geometry, the one hover/focus/disabled pattern, each primitive's classes as written, and the four named animations. It is a snapshot for building chrome OUTSIDE this repo (the desktop launcher); inside it, the primitives are the source of truth and this file follows them.
 - **`docs/gates.md`** — what each `check:*` refuses and why, the committed `build:*` artifacts, the e2e suite's shape and its ordering rule, and the dev-server port walk. Read it before running or changing a gate.

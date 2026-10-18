@@ -6,7 +6,9 @@
 
 ## What it is
 
-`guano mcp` (a CLI subcommand) exposes a **running** instance to AI agents over MCP (stdio). It talks to the instance through the authed HTTP API — never the data dir — using a per-user API token (`guano_…` bearer; Phase 1).
+`guano mcp` (a CLI subcommand) exposes a **running** instance to AI agents over MCP (stdio).
+
+**Its main client is the editor's own AI panel** (`docs/agent-panel.md`), which runs this same server with `GUANO_MCP_EMBEDDED=1` and a smaller tool profile — see **Embedded mode** below. An outside client (Claude Desktop, a Claude Code terminal) is supported and secondary, and gets the full protocol: everything about picking a project and a target exists for it, because it is the one that cannot see what the person is looking at. It talks to the instance through the authed HTTP API — never the data dir — using a per-user API token (`guano_…` bearer; Phase 1).
 
 It reuses the editor's own tree/HTML/style logic via a bundled runtime: `src/lib/mcp-runtime.ts` re-exports the needed functions, and `vite.mcp.config.ts` (`npm run build:mcp-runtime`) bundles them DOM-free into `packages/guano/runtime/mcp-runtime.mjs`, staged by `prepack`. `server/index.mjs` imports it too, for first-run project seeding, resolving both the repo and the packed layout.
 
@@ -19,6 +21,8 @@ Agent writes go to a process-local **target** — Main or a draft — that the h
 **Declared is not the same as working.** A client can declare the capability and answer the request without displaying anything — the Claude desktop Code tab does — which left the agent with no path to a target and so no possible write at all. An instant or choice-less answer is `dialog-unavailable`: it falls through to the attestation with `dialogUnavailable` on the result and flips `get_status.elicitationWorks` to false. Only a slower dismissal is a human's refusal.
 
 **`GUANO_MCP_TARGET`** (`main` | a draft id | `new:<Name>`, reused by name across restarts) settles it in the client's own config, which is the one consent channel a prompt-injected agent cannot reach. `main` and a draft id are the target from the toolset's first call — so `get_status` reports `targetSet: true` and no `set_target` round is needed, and a stale draft id is named by `loadTargetProject` on first use. `new:<Name>` stays lazy, because finding or creating the draft needs the server.
+
+**Embedded, none of the above applies.** The editor has a branch loaded; it says which, and `connect --target` writes it into the per-project `target` field unconditionally — the agent policy gates the WRITE, not the editor's statement of what is open. `set_target` is not in the tool list, there is no dialog and no attestation, and a write with no target refuses outright: *"the editor has not told the agent which branch is open — reopen the AI panel"*. **A missing target is never papered over with `main`.** It means the launcher/page handshake failed, and defaulting would put a write on the live site because a message was lost.
 
 ## `serializeHandler`: one baseline per call, and a lock
 
@@ -35,6 +39,8 @@ The lock is what keeps the guide's promise that writes to different pages parall
 Over `src/lib/html/`. `get_page` returns `html`; `set_page_html` replaces a body; **`edit_structure {pageId|componentId, ops[]}`** changes PART of one (insert/replace/move/remove/wrap) — the cheap path, and the one to reach for by default. `create_component {html}` / `update_component {html}` do the same for a master through `applyComponentHtml`, which is now ONE `applyHtml` call where the DSL path needed six passes: the cycle check, the nested-instance rule, the class and media validation, the identity carry and the diagnostics are all the writer's, because a master is just another tree.
 
 **Addressing is `ref` or `id` and nothing positional.** Every `line` parameter is gone — from `edit_elements`, `detach_instance`, `bind_interaction` and `unbind_interaction` alike — because a position is invalidated by the edit before it, which is exactly how the Cocoapp session's ~110 line-arithmetic edits went wrong. Element rows carry `path` (the child-index path from the body) for orientation only.
+
+**A `pageId` is the page's id OR its path** (`"/"`, `"/about"`). `findPage` is the one lookup and every tool goes through it, `applySeo` and `set_translations`' per-item failures included, so the refusal is one sentence and still names `list_pages`. The panel's context line names a page the way a person does — `"Home" (/)` — and the first embedded session spent two calls discovering that `/` was not an id. `create_components` dedupes its version check by the RESOLVED page, since two items can now name one page two ways.
 
 An `id` is resolved through `fullNodeId` → `nodesByShortId`, so **the short 8-hex `data-id` a read prints is a valid address everywhere a tool takes one**. It used to be accepted only by `applyHtml`, and every tool answered it with "is not an element in this page" — which is false, and sends an agent re-reading a whole page for a uuid it already had. `get_page {id|ref}` scopes the element summary to that subtree too, not just the HTML.
 
@@ -118,6 +124,22 @@ Local path arguments (`codePath`, `editsPath`, `manifestPath`, `upload_media.pat
 **A write never chooses its own directory.** `outputPath` was the same primitive pointed the other way, and the worst of the two: `get_translation_worklist {outputPath: "<project>/data/store/guano-project__main.json"}` wrote a worklist over the live project. The agent policy never saw it — that policy guards `PUT /api/store`, not the disk, and the server re-reads every blob per request, so the bad bytes were live at once. Only the BASENAME of what the caller asks for is honoured now, under `<root>/.guano-mcp` (the system temp dir when no root is set), written tmp+rename at 0600 and handed back as the authoritative path for `itemsPath`. Nothing legitimate wanted to pick the directory.
 
 **The data dir is refused by PREFIX, and a denylist sits in front of that.** The fence alone is not enough twice over: a hand-written entry sets no root at all, and the root `connect` writes is the PROJECT FOLDER, which contains `data/` — so the fence would happily allow `<project>/data/api-tokens.json`: every token on the instance, read by a tool whose job is reading a payload file. A basename list was the first answer and it could only name what someone thought of; what nobody thought of was the STORE, which is how `<project>/data/store/guano-project__main.json` stayed readable and (above) writable. So `GUANO_DATA_DIR`, `<root>/data` and `<root>/server/data` — `connect`'s own resolution order — are refused as prefixes, and `NEVER_READ` still refuses `api-tokens.json`, `users.json`, `sessions.json`, `invites.json`, `publish.json`, `integrations.json`, `agent-policy.json`, `instance.json`, `.env`, `.connect-nonce` and `claude_desktop_config.json` by basename, before the fence and again after symlink resolution. The last one is the same hole one level up: it holds every token for every project connected on that machine, which is what turns one injected agent into access to all of them. The MCP server is designed never to touch the data dir — it goes through the authed HTTP API precisely so that it cannot — so refusing these costs nothing legitimate. It is defence in depth, not a substitute for the root: a denylist can only name what someone thought of. Coverage: `e2e/mcp-tools-security.spec.ts`.
+
+## Embedded mode
+
+**One signal: `GUANO_MCP_EMBEDDED=1`** in the entry's `env`, written only by `guano connect --config <file> --embedded`. `server.mjs` reads it into `createToolSet({embedded})`; `connect` refuses the flag without `--config`, because the shared Claude configs belong to a client with no editor to ask.
+
+Three things change, all at toolset creation:
+
+- **`PANEL_DROPPED`** is filtered out of `tools` and `toolMap`, so a call to one is `unknown tool` — which is already the right answer. It holds `use_project` and `set_target` (the panel knows the project and the branch), `publish` (the person's button), and `list_integrations` / `list_form_submissions` (a connected instance's operations surface, not design work beside a canvas). **`preview` stays**: it renders the target and returns the same `warnings` publish does, which is the only review the panel can run.
+- **`guideInstructions(embedded)`** replaces golden rules 5 and 6 — which site, which target — with the handbook's `## Inside the editor`, renumbering what is left, and drops the workflow recipe's `set_target` and `publish` steps. `GUIDE_INSTRUCTIONS` stays as the external value so nothing else moves.
+- **`get_status`** answers `embedded: true`, and its Main-vs-draft advice is trimmed from the tool description: in the panel the editor already chose, so "propose a DRAFT" is an instruction to do something there is no tool for.
+
+**Nothing about the hardening changes.** The untrusted-content fence, `GUANO_MCP_FILE_ROOT`, the credential-file refusals and the server's agent policy are all identical — the panel runs the person's own `claude` over content the site's users wrote, which is the same attacker (`e2e/mcp-tools-security.spec.ts`).
+
+`check:mcp` measures **both** profiles against one `BUDGET`. The embedded list is smaller by construction, so measuring only it would let the external one grow unwatched; the budget is never raised to fit either.
+
+`GUIDE.md`'s `## Inside the editor` section is the agent-facing half of this and must stay in sync with it (CLAUDE.md).
 
 ## Switching sites: `use_project`
 
