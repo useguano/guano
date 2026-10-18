@@ -96,6 +96,11 @@ there is deliberately no second `open` ref beside `column`. It does not use
 `DrawerShell` either — that shell always renders a search field above its list,
 and a chat has nothing to search.
 
+**The agent-lock scrim is the canvas's, not the app's.** `AgentLockHost` mounts
+in `BuildView` over the canvas region, so the drawer — and every input — stays
+usable while the agent writes; it used to be `fixed inset-0` in `App.vue` and
+froze the chat that was driving the agent.
+
 **No Escape, no outside-click.** A persistent column never closes on Escape
 (`useDrawerEscape` peels a layer *inside* a column, never the column itself),
 and the chat has no layer to peel. Same rule as the Layers view: only the rail

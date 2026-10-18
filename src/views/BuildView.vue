@@ -4,6 +4,7 @@ import AppRail from '@/components/editor/sidebar/AppRail.vue'
 import PagesDrawer from '@/components/editor/sidebar/PagesDrawer.vue'
 import ComponentsDrawer from '@/components/editor/sidebar/ComponentsDrawer.vue'
 import AgentDrawer from '@/components/editor/sidebar/AgentDrawer.vue'
+import AgentLockHost from '@/components/host/AgentLockHost.vue'
 import CanvasEditor from '@/components/editor/canvas/CanvasEditor.vue'
 import SettingsEditor from '@/components/editor/sidebar/SettingsEditor.vue'
 import ContextMenu from '@/components/editor/canvas/ContextMenu.vue'
@@ -67,6 +68,8 @@ const { isBuild, visibleColumn, showComponents } = useViewMode()
             <CanvasEditor v-else />
           </template>
           <SitePreview v-else />
+
+          <AgentLockHost />
 
           <ModeToggle
             v-if="canBuild && !showComponents"
