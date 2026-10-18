@@ -51,7 +51,17 @@ function emit(level, args) {
   const first = parts[0]
   const rest = parts.slice(1).map((p) => (p instanceof Error ? p.message : String(p)))
   const head = first instanceof Error ? describe(first) : { msg: String(first ?? '') }
-  const msg = [head.msg, ...rest].filter(Boolean).join(' ')
+  // One line per call, whatever the message contains. A value that reached a
+  // log line from a request — a data-URL mime off a contributor's node, an
+  // X-Forwarded-For under TRUST_PROXY — could carry newlines, and in the text
+  // framing below that writes extra "lines" with a timestamp and a level of
+  // the caller's choosing. JSON_OUT was never affected; this makes the default
+  // framing as honest.
+  const msg = [head.msg, ...rest]
+    .filter(Boolean)
+    .join(' ')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\r\n\x00-\x1f]+/g, ' ')
 
   if (JSON_OUT) {
     const row = { ts, level, msg, ...(fields ?? {}) }

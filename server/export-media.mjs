@@ -55,6 +55,10 @@ const VARIANT_WIDTHS = [480, 768, 1200, 1600]
 // original is already named by its content hash, so the key is free.
 const VARIANTS_DIR = join(MEDIA_LIB, 'variants')
 
+/** a mime off a data: URL is contributor-written content; it reaches a log line
+ *  and a log line is one line */
+const safeMime = (v) => String(v ?? '?').replace(/[^a-zA-Z0-9/.+-]/g, '').slice(0, 40) || '?'
+
 export async function extractMedia(project) {
   const files = new Map() // relPath -> Buffer
   const paths = new Map() // dataUrl | '/media/<id>' -> '/media/<hash>.<ext>' | null (dropped)
@@ -141,7 +145,7 @@ export async function extractMedia(project) {
     const match = value.match(/^data:([^;,]+)(;base64)?,/)
     const ext = match && MIME_EXT[match[1]]
     if (!match || !ext) {
-      log.warn(`export: dropping media with unsupported mime ${match?.[1] ?? '?'}`)
+      log.warn(`export: dropping media with unsupported mime ${safeMime(match?.[1])}`)
       paths.set(value, null)
       return
     }

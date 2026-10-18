@@ -551,6 +551,21 @@ const deviceLookupAllowed = slidingLimiter(20, 60_000)
  * routes trust this and nothing else — launcher-session, connect and setup —
  * and they trust it because holding the machine is holding the data dir.
  */
+/**
+ * `decodeURIComponent`, minus the throw.
+ *
+ * An unauthenticated `GET /%E0` reached the global catch, which answered
+ * "internal error (ref …)" and logged a stack — a log-spam primitive, and a
+ * 500 for what is plainly a bad request. Every caller treats null as a 400.
+ */
+const safeDecode = (value) => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
 const isLoopbackSocket = (req) =>
   ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)
 
@@ -732,7 +747,7 @@ async function handleAuth(req, res, path) {
     if (!isLoopbackSocket(req)) {
       return fail(res, 403, 'connect bootstrap is local-only')
     }
-    const body = await readBody(req)
+    const body = await readBody(req, MAX_AUTH_BODY)
     let nonce, name, policy
     try {
       ;({ nonce, name, policy } = JSON.parse(body ?? ''))
@@ -785,7 +800,7 @@ async function handleAuth(req, res, path) {
     } catch {
       /* a name is a label; a bad body just means the default */
     }
-    const started = startDevice({ name })
+    const started = startDevice({ name, ip: clientIp(req) })
     if (started.error) return fail(res, 429, started.error)
     return send(
       res,
@@ -826,7 +841,8 @@ async function handleAuth(req, res, path) {
     if (user.role !== 'admin') return fail(res, 403, 'only an admin can authorize a client')
     const rest = path.slice('/api/auth/device/'.length)
     const [rawCode, action] = rest.split('/')
-    const code = decodeURIComponent(rawCode ?? '')
+    const code = safeDecode(rawCode ?? '')
+    if (code === null) return fail(res, 400, 'invalid code')
     if (req.method === 'GET' && !action) {
       const limit = deviceLookupAllowed(user.id)
       if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'lookups')
@@ -849,7 +865,15 @@ async function handleAuth(req, res, path) {
       const agentPolicy = Object.keys(patch).length
         ? await writeAgentPolicy(patch)
         : await readAgentPolicy()
-      const { token } = await createApiToken(user.id, describeDevice(code)?.name || 'guano connect')
+      // Check the code BEFORE minting. approveDevice can still answer
+      // "expired" or "already used", and the raw token was dropped on that
+      // path while a live hashed record stayed in api-tokens.json — counting
+      // against the 25-token cap and showing up in the admin's list as an
+      // entry nobody can explain.
+      const describing = describeDevice(code)
+      if (!describing) return fail(res, 409, 'that code has expired or was never issued')
+      if (describing.approved) return fail(res, 409, 'that code has already been used')
+      const { token } = await createApiToken(user.id, describing.name || 'guano connect')
       const granted = approveDevice(code, {
         token,
         email: user.email,
@@ -896,7 +920,7 @@ async function handleAuth(req, res, path) {
     // re-issued cookie has to stay the kind of session it replaced, or a
     // password change would silently hand a launcher window browser chrome.
     const via = sessionVia(req)
-    const body = await readBody(req)
+    const body = await readBody(req, MAX_AUTH_BODY)
     let name, email, password, currentPassword
     try {
       ;({ name, email, password, currentPassword } = JSON.parse(body ?? ''))
@@ -905,6 +929,20 @@ async function handleAuth(req, res, path) {
     }
     if (email !== undefined && !isEmail(email)) {
       return fail(res, 400, 'invalid email')
+    }
+    // The address is how this account is recovered and identified, so moving it
+    // is as sensitive as the password — and the password branch below already
+    // re-verifies. A hijacked session could otherwise walk the account away
+    // without ever knowing the password.
+    if (email !== undefined && email !== user.email) {
+      let proved = null
+      try {
+        proved = typeof currentPassword === 'string' ? await verifyLogin(user.email, currentPassword) : null
+      } catch (e) {
+        if (e instanceof VerifyBusyError) return fail(res, 429, 'busy — try again shortly')
+        throw e
+      }
+      if (!proved) return fail(res, 403, 'enter your current password to change your email')
     }
     if (password !== undefined && password !== '') {
       if (typeof password !== 'string' || password.length < 8) {
@@ -1004,7 +1042,8 @@ async function handleInvite(req, res, path) {
 
   const rest = path.slice('/api/invite/'.length)
   const accept = rest.endsWith('/accept')
-  const token = decodeURIComponent(accept ? rest.slice(0, -'/accept'.length) : rest)
+  const token = safeDecode(accept ? rest.slice(0, -'/accept'.length) : rest)
+  if (token === null) return fail(res, 400, 'invalid token')
 
   if (!accept && req.method === 'GET') {
     const invite = findInviteByToken(token)
@@ -1555,9 +1594,26 @@ async function handleStore(req, res, path, query) {
     return send(res, 200, JSON.stringify(out))
   }
 
-  const key = decodeURIComponent(path.slice('/api/store/'.length))
-  if (!STORE_KEY_RE.test(key)) return fail(res, 400, 'invalid key')
+  const key = safeDecode(path.slice('/api/store/'.length))
+  if (key === null || !STORE_KEY_RE.test(key)) return fail(res, 400, 'invalid key')
   if (!isKnownStoreKey(key)) return fail(res, 400, 'unknown key')
+  // The two publish-bookkeeping blobs are what the editor diffs "changed since
+  // publish" against. They are not project blobs, so neither the contributor
+  // merge nor the reviewer merge covers them, and they were writable verbatim
+  // by both — and by an agent token, with no policy switch in the way.
+  //
+  // A token is checked by HOW IT AUTHENTICATED, not by its owner's role: a
+  // token is minted by an admin, so `isBuildRole(user.role)` is exactly the
+  // wrong question and waves every agent straight through. Same precedence as
+  // `protectedWriteDenial`.
+  if (
+    req.method !== 'GET' &&
+    (key === 'guano-published-baseline' || key === 'guano-published-info') &&
+    (isAgentRequest(req) || !isBuildRole(user.role))
+  ) {
+    const who = isAgentRequest(req) ? 'agents' : `${user.role}s`
+    return fail(res, 403, `${who} cannot write ${key} — it records what a human published`)
+  }
 
   if (req.method === 'PUT') {
     const limit = storeWriteAllowed(user.id)
@@ -1808,6 +1864,11 @@ async function handlePreview(req, res) {
       // rather than per request: a preview is exported once and then browsed,
       // clicked through and screenshotted many times.
       await mountPreviewDir()
+      // The preview renders UNPUBLISHED work, gated over http behind a signed
+      // token — but the directory was made 0755 like the live site, so another
+      // local user could read every draft straight off disk. Best-effort: a
+      // filesystem that will not take the mode must not fail the preview.
+      await chmod(PREVIEW, 0o700).catch(() => {})
       return s
     })
     const link = await previewLink(req)
@@ -1936,12 +1997,23 @@ async function previewTokenValid(raw) {
   return timingSafeEqualStr(mac, sign(await previewSecret(), exp))
 }
 
-/** the cookie value — an HMAC of the secret, so rotating it signs everyone out */
-const previewCookie = (secret) => sign(secret, 'preview-cookie')
+/**
+ * The cookie value — `<exp>.<hmac>`, like the link token.
+ *
+ * It was a bare HMAC of the secret, so `Max-Age` was the only expiry and that
+ * is the BROWSER's to honour: anyone who had ever opened a preview link kept
+ * draft access until someone hand-deleted `preview.secret` from publish.json.
+ * Rotating the secret still signs everyone out; now so does time.
+ */
+const previewCookie = (secret, exp) => `${exp}.${sign(secret, `preview-cookie.${exp}`)}`
+
+const previewCookieExp = () => Date.now() + PREVIEW_COOKIE_TTL * 1000
 
 async function previewUnlocked(req) {
   const have = parseCookies(req)[PREVIEW_COOKIE] ?? ''
-  return !!have && timingSafeEqualStr(have, previewCookie(await previewSecret()))
+  const [exp, mac] = String(have).split('.')
+  if (!exp || !mac || !(Number(exp) > Date.now())) return false
+  return timingSafeEqualStr(mac, sign(await previewSecret(), `preview-cookie.${exp}`))
 }
 
 async function handlePost(req, res, params) {
@@ -2198,7 +2270,8 @@ async function handleIntegrations(req, res, path) {
     return answer(await createIntegration(patch.name))
   }
 
-  const segments = rest.split('/').map((s) => decodeURIComponent(s))
+  const segments = rest.split('/').map((s) => safeDecode(s))
+  if (segments.some((s) => s === null)) return fail(res, 400, 'invalid path')
   const id = segments[0] ?? ''
   if (!id) return fail(res, 404, 'not found')
 
@@ -2341,8 +2414,8 @@ async function handleForms(req, res, path, query) {
   }
 
   const segments = rest.split('/')
-  const id = decodeURIComponent(segments[0] ?? '')
-  if (!id || !/^[A-Za-z0-9-]{1,64}$/.test(id)) return fail(res, 404, 'not found')
+  const id = safeDecode(segments[0] ?? '')
+  if (id === null || !id || !/^[A-Za-z0-9-]{1,64}$/.test(id)) return fail(res, 404, 'not found')
   const entry = manifest.forms?.[id]
 
   // GET /api/forms/:id/submissions.csv
@@ -2380,7 +2453,8 @@ async function handleForms(req, res, path, query) {
       if (agent) {
         return fail(res, 403, 'an agent token cannot delete submissions')
       }
-      const recordId = segments.length === 3 ? decodeURIComponent(segments[2]) : null
+      const recordId = segments.length === 3 ? safeDecode(segments[2]) : null
+      if (segments.length === 3 && recordId === null) return fail(res, 400, 'invalid id')
       const r = await submissionStore.remove(id, recordId)
       if (r.error) return fail(res, 404, r.error)
       return send(res, 200, JSON.stringify({ ok: true, removed: r.removed }))
@@ -3109,7 +3183,9 @@ async function migrateSchema() {
 }
 
 async function handleStatic(req, res) {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname))
+  const decoded = safeDecode(new URL(req.url, 'http://x').pathname)
+  if (decoded === null) return send(res, 400, 'Bad request', 'text/plain')
+  const path = normalize(decoded)
   // content-type is authoritative (extension-mapped) — never sniffed
   const NOSNIFF = { 'x-content-type-options': 'nosniff' }
   // SVG is a document format: even a sanitized file must not be able to run
@@ -3228,7 +3304,9 @@ function redirectMapOf(manifest) {
 
 async function serveSiteDir(req, res, root, { private: isPrivate = false, mount = '' } = {}) {
   const url = new URL(req.url, 'http://x')
-  const full = normalize(decodeURIComponent(url.pathname))
+  const decoded = safeDecode(url.pathname)
+  if (decoded === null) return send(res, 400, 'Bad request', 'text/plain')
+  const full = normalize(decoded)
   // The site's own path, with the mount taken off: the directory on disk, the
   // redirect manifest's `from` values and the export's 404 page all address
   // routes as the site sees them, not as it happens to be served.
@@ -3328,7 +3406,9 @@ const server = createServer(async (req, res) => {
     // private site's visitor password has nothing to do with looking at your
     // own drafts.
     if (path === PREVIEW_MOUNT || path.startsWith(`${PREVIEW_MOUNT}/`)) {
-      return await handlePreviewMount(req, res, normalize(decodeURIComponent(path)))
+      const decoded = safeDecode(path)
+      if (decoded === null) return fail(res, 400, 'invalid path')
+      return await handlePreviewMount(req, res, normalize(decoded))
     }
     // Unauthenticated on purpose, and placed here so a probe at 1Hz costs one
     // string compare rather than a walk down the whole chain. After the public
@@ -3391,6 +3471,12 @@ const server = createServer(async (req, res) => {
     // static handler (exported media now lives under /assets/media/ —
     // the fall-through only still serves pre-move exports)
     if (path.startsWith('/media/')) {
+      // A private site's IMAGES were not private: this ran before
+      // handleStatic, which is where the gate lives, so /media/<id> answered
+      // the bytes to anyone. Ids are 16 hex, so this is about a shared link or
+      // a cache rather than a guess — but "the site needs a password" has to
+      // mean the pictures too.
+      if (await siteGateHandled(req, res, path)) return
       if (await handleMediaFile(req, res, path, url.searchParams)) return
     }
     return await handleStatic(req, res)
@@ -3438,8 +3524,12 @@ async function handlePreviewMount(req, res, path) {
     // here echoes a URL back).
     res.setHeader(
       'set-cookie',
-      `${PREVIEW_COOKIE}=${previewCookie(secret)}; Path=${PREVIEW_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
+      `${PREVIEW_COOKIE}=${previewCookie(secret, previewCookieExp())}; Path=${PREVIEW_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_TTL}`,
     )
+    // The ?t= token is in THIS url, so every third-party image, font or link in
+    // the draft would hand it to that host in a Referer. The draft is
+    // unpublished work, and the token is good for an hour.
+    res.setHeader('referrer-policy', 'no-referrer')
   } else if (!(await previewUnlocked(req))) {
     return send(
       res,

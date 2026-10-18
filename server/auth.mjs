@@ -237,7 +237,7 @@ export function makeCredentials(password) {
 async function createUser({ name, email, password, role }) {
   const user = {
     id: randomBytes(12).toString('hex'),
-    name: typeof name === 'string' ? name : '',
+    name: cleanName(name),
     email: String(email).toLowerCase(),
     role: ROLES.includes(role) ? role : 'contributor',
     ...makeCredentials(password),
@@ -247,6 +247,19 @@ async function createUser({ name, email, password, role }) {
   await persistUsers()
   return user
 }
+
+/**
+ * A display name is bounded, like every other stored string.
+ *
+ * `/api/auth/update` takes a name from ANY role, reviewers included, and it
+ * was persisted whole: a multi-megabyte name is rewritten by every
+ * `persistUsers()` from then on and handed to every reader of `/api/users`.
+ * Token names were already capped at 100 and snapshot names at 80; this is the
+ * same bound in the one place every writer passes through.
+ */
+const MAX_NAME = 100
+
+const cleanName = (value) => (typeof value === 'string' ? value.slice(0, MAX_NAME) : '')
 
 /** first-run bootstrap: only succeeds when no users exist yet */
 export async function createFirstAdmin(email, password, name = '') {
@@ -344,7 +357,7 @@ export async function verifyUserPassword(user, password) {
 export async function updateUser(id, { name, email, password }) {
   const user = findUserById(id)
   if (!user) return null
-  if (typeof name === 'string') user.name = name
+  if (typeof name === 'string') user.name = cleanName(name)
   if (typeof email === 'string') user.email = email.toLowerCase()
   if (typeof password === 'string' && password) Object.assign(user, makeCredentials(password))
   await persistUsers()
@@ -566,9 +579,9 @@ export async function createInvite({ name, email, role, invitedBy }) {
     id: randomBytes(12).toString('hex'),
     tokenHash: sha256(token), // raw token is returned once, never stored
     email: String(email).toLowerCase(),
-    name: typeof name === 'string' ? name : '',
+    name: cleanName(name),
     role: ROLES.includes(role) ? role : 'contributor',
-    invitedBy: typeof invitedBy === 'string' ? invitedBy : '',
+    invitedBy: cleanName(invitedBy),
     createdAt: Date.now(),
     expiresAt: Date.now() + INVITE_TTL,
     usedAt: null,

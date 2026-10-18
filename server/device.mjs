@@ -28,6 +28,14 @@ export const POLL_INTERVAL_S = 2
 /** A cap, so an unauthenticated endpoint cannot grow the map without bound.
  *  Small on purpose: these are minted one human at a time. */
 const MAX_PENDING = 12
+/**
+ * ...and a cap per ADDRESS, because the global one alone is a denial of
+ * service: the start endpoint is unauthenticated, so two hosts on the network
+ * (or one, over two minutes) could hold all twelve slots indefinitely and
+ * every real `guano connect --url` got a 429. One human starts one
+ * authorization at a time; two allows for a mistyped code.
+ */
+const MAX_PENDING_PER_IP = 2
 /** No 0/O/1/I/5/S — the code is read off one screen and typed into another. */
 const ALPHABET = 'ACDEFGHJKLMNPQRTUVWXYZ2346789'
 
@@ -61,10 +69,16 @@ function sameSecret(a, b) {
  * which is the whole point — so it is rate-limited by the caller and capped
  * here.
  */
-export function startDevice({ name } = {}) {
+export function startDevice({ name, ip } = {}) {
   sweep()
   if (pending.size >= MAX_PENDING) {
     return { error: 'too many pending authorizations — wait for them to expire and try again' }
+  }
+  const from = String(ip ?? '?')
+  let mine = 0
+  for (const rec of pending.values()) if (rec.ip === from) mine++
+  if (mine >= MAX_PENDING_PER_IP) {
+    return { error: 'too many pending authorizations from your address — wait for them to expire' }
   }
   const code = userCode()
   if (!code) return { error: 'could not allocate a code — try again' }
@@ -72,6 +86,10 @@ export function startDevice({ name } = {}) {
   pending.set(code, {
     deviceCode,
     name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 60) : 'guano connect',
+    // The name is the REQUESTER's to choose, so it is a label and never
+    // evidence. The address is ours, and it is what lets the admin tell their
+    // own terminal apart from somebody else's on the same network.
+    ip: from,
     createdAt: now(),
     expiresAt: now() + TTL_MS,
     lastPolledAt: 0,
@@ -89,6 +107,7 @@ export function describeDevice(code) {
   return {
     userCode: String(code).toUpperCase(),
     name: rec.name,
+    ip: rec.ip,
     createdAt: rec.createdAt,
     expiresAt: rec.expiresAt,
     approved: !!rec.granted,

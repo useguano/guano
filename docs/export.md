@@ -1,5 +1,7 @@
 # Publish & export: the exporter, the fx wire format, caching, methods, preview
 
+**`SAFE_HREF`/`SAFE_SRC` refuse a backslash anywhere** (`src/lib/shared/urls.js`, imported by both renderers, the exporter and the agent layer). Per the WHATWG URL parser a `\` is a `/` for every special scheme, so an author-written `/\evil.example` passed as "root-relative" and navigated to `https://evil.example`. That is not a privilege gain — the same author may write the absolute url — but it defeats everything downstream that reads `/…` as internal: the locale prefix, `aria-current`, the dead-link check, and a reviewer skimming the link. `isInternalRoute`, the redirects `PATH_RE` and the site-password `next` already refused it; this was the one allowlist that did not.
+
 <!-- Read this before touching server/export.mjs, a site runtime, or anything
      under server/ that ships bytes to a visitor. CLAUDE.md points here. -->
 

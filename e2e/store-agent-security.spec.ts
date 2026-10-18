@@ -317,6 +317,44 @@ test('contributors cannot ship the site out of the instance', async ({ baseURL }
   await contrib.dispose()
 })
 
+test('the publish bookkeeping blobs need a build role', async ({ baseURL }) => {
+  const admin = await adminContext(baseURL)
+  await seedMain(admin)
+  const contrib = await contributorContext(admin, baseURL)
+  const { ctx: agent } = await tokenContext(admin, baseURL, 'baseline-probe')
+
+  // These two are what the editor diffs "changed since publish" against. They
+  // are not project blobs, so neither the contributor merge nor the reviewer
+  // merge covered them — both wrote them verbatim, and so did an agent token
+  // with no policy switch in the way.
+  for (const key of ['guano-published-baseline', 'guano-published-info']) {
+    for (const who of [contrib, agent]) {
+      const res = await who.put(`/api/store/${key}`, { data: '{"pages":[]}' })
+      expect(res.status(), key).toBe(403)
+    }
+    expect((await admin.put(`/api/store/${key}`, { data: '{"pages":[]}' })).ok()).toBeTruthy()
+  }
+
+  await admin.dispose()
+  await contrib.dispose()
+  await agent.dispose()
+})
+
+test('a malformed percent-escape is a bad request, not an internal error', async ({ baseURL }) => {
+  // `decodeURIComponent` throws on a lone escape, which reached the global
+  // catch: an unauthenticated GET answered "internal error (ref …)" and logged
+  // a stack for it — a log-spam primitive, and a 500 for a plainly bad request.
+  // the routes a stranger can reach: an authed one answers 401 first, which
+  // is the right answer and not what this is about
+  const anon = await pwRequest.newContext({ baseURL })
+  for (const path of ['/%E0', '/media/%E0', '/api/invite/%E0']) {
+    const res = await anon.get(path)
+    expect(res.status(), path).toBe(400)
+    expect(await res.text(), path).not.toContain('internal error')
+  }
+  await anon.dispose()
+})
+
 test('an editor cannot aim the server GitHub token, nor fire it', async ({ baseURL }) => {
   const admin = await adminContext(baseURL)
   const mainBody = await seedMain(admin)

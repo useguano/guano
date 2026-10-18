@@ -63,6 +63,11 @@ test('a private site asks for its password, then serves', async ({ baseURL }) =>
   expect(await gated.text()).toContain('This site is private')
   expect(gated.headers()['x-robots-tag']).toContain('noindex')
   expect((await visitor.get('/assets/style.css')).status()).toBe(401)
+  // ...and the media library, which answered the bytes to anyone: /media/:id
+  // was dispatched BEFORE handleStatic, which is where the gate lives. Ids are
+  // 16 hex so this is about a shared link or a cache rather than a guess, but
+  // "this site needs a password" has to mean the pictures too.
+  expect((await visitor.get('/media/0123456789abcdef')).status()).toBe(401)
 
   // wrong password: the gate again, with the error
   res = await visitor.post('/_guano/unlock', { form: { password: 'nope', next: '/' } })
