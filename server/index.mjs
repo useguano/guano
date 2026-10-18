@@ -1699,12 +1699,20 @@ const AGENT_MAIN_DENIED =
 /**
  * Guard one project-blob write: the reason to refuse, or null to allow.
  *
- * Two callers, one rule. An MCP **agent** is checked against the agent policy —
+ * Three callers, one rule. An MCP **agent** is checked against the agent policy —
  * may this token touch Main at all, and may it write a field that ships raw
  * script to the live site? That is what breaks the injection chain the audit
  * found: a comment telling an agent to write `customCode.head` and publish now
  * fails here, at the server, whatever the agent believes it was authorized to
  * do. A **contributor** is never allowed either field, by role.
+ *
+ * An **editor** is refused the PUBLISH TARGET and nothing else. The comment on
+ * `handlePublishConfig` says an editor able to replace the GitHub token could
+ * point the operator's PAT at a repository they control — and so could an
+ * editor able to replace the `repo`, which is what this exemption let them do,
+ * since `settings.publishing` is read from stored Main at publish time and an
+ * editor writes Main freely. The push builds a tree with no `base_tree`, so it
+ * replaces that branch's root. Custom code stays an editor's call, as it was.
  *
  * Contributors previously had these fields silently dropped by the content
  * merge. Refusing out loud is better: a silent drop looks like success, so a
@@ -1714,7 +1722,8 @@ const AGENT_MAIN_DENIED =
 async function protectedWriteDenial(req, user, key, existingStr, bodyStr) {
   const agent = isAgentRequest(req)
   const contributor = !isBuildRole(user.role) // contributor or reviewer
-  if (!agent && !contributor) return null // admin/editor at a browser: their call
+  const editor = !agent && !contributor && user.role !== 'admin'
+  if (!agent && !contributor && !editor) return null // an admin at a browser: their call
 
   if (agent && (key === MAIN_PROJECT_KEY || key === 'guano-base:main')) {
     if (!(await readAgentPolicy()).allowMainWrites) return AGENT_MAIN_DENIED
@@ -1727,13 +1736,14 @@ async function protectedWriteDenial(req, user, key, existingStr, bodyStr) {
   const delta = protectedFieldDelta(baseline, parseJsonOrNull(bodyStr))
   if (!delta) return null
 
-  const who = contributor ? `${user.role}s` : 'agents'
+  const who = contributor ? `${user.role}s` : agent ? 'agents' : 'editors'
   if (delta.kind === 'publishing') {
     return (
       `${who} cannot change ${delta.field} — the publish target is set by an admin in ` +
       'Settings → Publish'
     )
   }
+  if (editor) return null // custom code is theirs to write
   if (contributor || !(await readAgentPolicy()).allowCustomCode) {
     return (
       `${who} cannot change ${delta.field} — custom code runs as raw script on every ` +
@@ -1958,6 +1968,12 @@ async function handlePost(req, res, params) {
     // said so, but the check was missing and contributors fell straight through.
     if (method !== 'server' && user.role === 'contributor') {
       return fail(res, 403, 'forbidden')
+    }
+    // The github push signs with the server's own PAT and replaces the branch
+    // root, so the METHOD is admin-only too — guarding the target alone would
+    // leave an editor able to publish whatever target an admin had set.
+    if (method === 'github' && user.role !== 'admin') {
+      return fail(res, 403, "only an admin can publish with the server's GitHub token")
     }
     // Publishing is the one action an agent cannot walk back: it puts bytes on
     // the live origin. Off unless a human turned it on (see agent-policy.mjs).

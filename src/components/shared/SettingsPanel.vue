@@ -663,11 +663,11 @@ async function onUnpublish() {
   }
 }
 
-const publishMethodOptions = [
+const publishMethodOptions = computed(() => [
   { label: 'Server', value: 'server' },
   { label: 'Download .zip', value: 'zip' },
-  { label: 'GitHub', value: 'github' },
-]
+  ...(isAdmin.value ? [{ label: 'GitHub', value: 'github' }] : []),
+])
 
 const ghTokenSet = ref(false)
 const ghToken = ref('')
@@ -1628,7 +1628,19 @@ async function onImportFile(e: Event) {
             </SettingsGroup>
 
             <SettingsGroup
-              v-if="settings.publishing.method === 'github'"
+              v-if="!isAdmin && settings.publishing.method === 'github'"
+              title="GitHub"
+              description="The repository branch the exported site is pushed to."
+            >
+              <p class="text-[9px] text-muted-foreground">
+                This site is pushed with the server's own GitHub token, so the repository, the
+                branch and the token are an admin's to set — and only an admin can publish this
+                way.
+              </p>
+            </SettingsGroup>
+
+            <SettingsGroup
+              v-if="isAdmin && settings.publishing.method === 'github'"
               title="GitHub"
               description="The repository branch the exported site is pushed to."
             >

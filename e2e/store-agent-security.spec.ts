@@ -12,6 +12,7 @@ import { test, expect, request as pwRequest, type APIRequestContext } from '@pla
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const CONTRIB = { email: 'contrib@example.com', password: 'contrib-pass-1' }
+const EDITOR = { email: 'editor@example.com', password: 'editor-pass-1' }
 const MAIN = 'guano-project:main'
 const DRAFT = 'guano-project:sec-spec-draft'
 const BASE = 'guano-base:sec-spec-draft'
@@ -36,6 +37,21 @@ async function contributorContext(admin: APIRequestContext, baseURL: string | un
     expect((await ctx.post(`/api/invite/${token}/accept`, { data: { password: CONTRIB.password } })).ok()).toBeTruthy()
   } else {
     expect((await ctx.post('/api/auth/login', { data: CONTRIB })).ok()).toBeTruthy()
+  }
+  return ctx
+}
+
+/** an editor session — a build role, so most guards let it straight through */
+async function editorContext(admin: APIRequestContext, baseURL: string | undefined) {
+  const ctx = await pwRequest.newContext({ baseURL })
+  const invite = await admin.post('/api/users/invite', {
+    data: { name: 'Ed', email: EDITOR.email, role: 'editor' },
+  })
+  if (invite.ok()) {
+    const { token } = await invite.json()
+    expect((await ctx.post(`/api/invite/${token}/accept`, { data: { password: EDITOR.password } })).ok()).toBeTruthy()
+  } else {
+    expect((await ctx.post('/api/auth/login', { data: EDITOR })).ok()).toBeTruthy()
   }
   return ctx
 }
@@ -299,4 +315,38 @@ test('contributors cannot ship the site out of the instance', async ({ baseURL }
 
   await admin.dispose()
   await contrib.dispose()
+})
+
+test('an editor cannot aim the server GitHub token, nor fire it', async ({ baseURL }) => {
+  const admin = await adminContext(baseURL)
+  const mainBody = await seedMain(admin)
+  const editor = await editorContext(admin, baseURL)
+
+  // `settings.publishing` is read from STORED Main at publish time, and an
+  // editor writes Main freely — so the publishing guard exempting build roles
+  // let an editor point the operator's PAT at any repo it could reach. The
+  // push builds a tree with no base_tree, which replaces that branch's root.
+  const retargeted = JSON.parse(mainBody)
+  retargeted.settings.publishing = { method: 'github', github: { repo: 'theirs/other', branch: 'main' } }
+  const aimed = await editor.put(`/api/store/${MAIN}`, { data: JSON.stringify(retargeted) })
+  expect(aimed.status()).toBe(403)
+  expect((await aimed.json()).error).toContain('settings.publishing')
+
+  // nothing landed
+  const stored = (await (await admin.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>
+  expect(JSON.parse(stored[MAIN]).settings.publishing).toBeUndefined()
+
+  // ...and the method itself is admin-only, so a target an admin DID set is
+  // still not an editor's to fire
+  const fired = await editor.post('/api/published?method=github', { data: JSON.parse(mainBody) })
+  expect(fired.status()).toBe(403)
+  expect((await fired.json()).error).toContain('admin')
+
+  // a zip is still theirs, and so is custom code
+  const withCode = JSON.parse(mainBody)
+  withCode.settings.customCode = { head: '<script>ok()</script>' }
+  expect((await editor.put(`/api/store/${MAIN}`, { data: JSON.stringify(withCode) })).status()).toBe(200)
+
+  await admin.dispose()
+  await editor.dispose()
 })
