@@ -42,8 +42,8 @@ async function signIn(page: Page, creds: { email: string; password: string }) {
   if (await projectName.isVisible()) {
     await projectName.fill('Smoke Co')
     await email.fill(creds.email)
-    await page.getByPlaceholder('Password (min. 8 characters)').fill(creds.password)
-    await page.getByPlaceholder('Confirm password').fill(creds.password)
+    await page.getByPlaceholder('Project password (min. 8 characters)').fill(creds.password)
+    await page.getByPlaceholder('Confirm project password').fill(creds.password)
     await page.getByRole('button', { name: 'Setup project' }).click()
   } else if (await email.isVisible()) {
     await email.fill(creds.email)

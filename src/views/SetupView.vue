@@ -73,8 +73,8 @@ async function submit() {
       </div>
       <InputUI size="lg" v-model="projectName" placeholder="Project name" />
       <InputUI size="lg" v-model="email" placeholder="Email" type="email" />
-      <InputUI size="lg" v-model="password" placeholder="Password (min. 8 characters)" type="password" />
-      <InputUI size="lg" v-model="confirm" placeholder="Confirm password" type="password" />
+      <InputUI size="lg" v-model="password" placeholder="Project password (min. 8 characters)" type="password" />
+      <InputUI size="lg" v-model="confirm" placeholder="Confirm project password" type="password" />
 
       <div v-if="setupCodeRequired" class="mt-4 flex flex-col gap-1.5" data-testid="setup-code">
         <p class="section-label">Setup code</p>

@@ -45,8 +45,8 @@ async function openEditor(page: Page) {
   if (await projectName.isVisible()) {
     await projectName.fill('Smoke Co')
     await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm password').fill(ADMIN.password)
+    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
+    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
     await page.getByRole('button', { name: 'Setup project' }).click()
   } else if (await email.isVisible()) {
     await email.fill(ADMIN.email)

@@ -17,8 +17,8 @@ test('setup, edit content, publish, view live, auth guard', async ({ page, conte
   // 2. create the first admin (this logs us in and hard-redirects to /admin)
   await page.getByPlaceholder('Project name').fill('Smoke Co')
   await page.getByPlaceholder('Email').fill('smoke@example.com')
-  await page.getByPlaceholder('Password (min. 8 characters)').fill('supersecret1')
-  await page.getByPlaceholder('Confirm password').fill('supersecret1')
+  await page.getByPlaceholder('Project password (min. 8 characters)').fill('supersecret1')
+  await page.getByPlaceholder('Confirm project password').fill('supersecret1')
   // the form asks the two agent questions (Main writes, publish); both are
   // off by default and the rest of the suite relies on the all-off policy,
   // so assert they are present and leave them alone
