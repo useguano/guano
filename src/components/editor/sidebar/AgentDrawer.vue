@@ -23,9 +23,12 @@ import {
   type AgentToolItem,
   type AgentToolState,
 } from '@/composables/useAgentChat'
+import { useAuth } from '@/composables/useAuth'
+import { useBranches } from '@/composables/useBranches'
 import { useElement } from '@/composables/useElement'
 import { useNotice } from '@/composables/useNotice'
 import { usePage } from '@/composables/usePage'
+import { apiJson } from '@/lib/api'
 import { MODEL_CHOICES, modelChoice, modelLabel } from '@/lib/agentLabels'
 import { blocks, type Block } from '@/lib/agentMarkdown'
 
@@ -33,6 +36,7 @@ const {
   status,
   busy,
   step,
+  switchingTo,
   unavailableReason,
   model,
   rateLimit,
@@ -45,6 +49,8 @@ const {
 const { activePage } = usePage()
 const { selectedElement, selectedElementIds } = useElement()
 const { notify } = useNotice()
+const { isAdmin } = useAuth()
+const { branches, onMain } = useBranches()
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
@@ -124,6 +130,76 @@ const context = computed(() => {
   return { label, prompt }
 })
 
+/**
+ * The branch the host is respawning onto, by the name the person gave it.
+ * `switchingTo` is an id, and "Switching the agent to b1f0c2d3…" is not a
+ * sentence anyone can act on.
+ */
+const switchingLabel = computed(() => {
+  const id = switchingTo.value
+  if (!id) return null
+  if (id === 'main') return 'Main'
+  return branches.value.find((b) => b.id === id)?.name ?? 'the draft'
+})
+
+/**
+ * Main writes are the SERVER's switch (`server/agent-policy.mjs`), and the
+ * refusal used to arrive as a 403 on the first save after a conversation's
+ * worth of work. The notice says it before the asking does, and puts the
+ * control where the refusal is seen — the same `PUT /api/agent-policy` that
+ * Settings → MCP → Agent permissions sends, not a second endpoint.
+ */
+const mainWritesAllowed = ref<boolean | null>(null)
+const allowBusy = ref(false)
+
+const mainBlocked = computed(() => onMain.value && mainWritesAllowed.value === false)
+
+watch(
+  [isAdmin, onMain],
+  () => {
+    if (mainWritesAllowed.value !== null) return
+    apiJson('/api/agent-policy')
+      .then((policy) => (mainWritesAllowed.value = policy?.allowMainWrites === true))
+      .catch(() => {
+        // an older server does not report it; silence here is the honest
+        // answer — the write itself still refuses, with its own sentence
+        mainWritesAllowed.value = null
+      })
+  },
+  { immediate: true },
+)
+
+async function allowMainWrites() {
+  allowBusy.value = true
+  try {
+    const policy = await apiJson('/api/agent-policy', {
+      method: 'PUT',
+      body: JSON.stringify({ allowMainWrites: true }),
+    })
+    mainWritesAllowed.value = policy?.allowMainWrites === true
+  } catch (e) {
+    notify({
+      kind: 'error',
+      title: 'Could not change the agent permission',
+      detail: e instanceof Error ? e.message : undefined,
+      key: 'agent-policy',
+    })
+  } finally {
+    allowBusy.value = false
+  }
+}
+
+/**
+ * Claude Code is not installed, versus it stopped.
+ *
+ * Panel-first means the button is there before the install is
+ * (`useAgentChat.answered`), so this is the first thing a new person reads
+ * about the feature and it has to say what to do.
+ */
+const notInstalled = computed(() =>
+  /not installed|not found|could not find/i.test(unavailableReason.value ?? ''),
+)
+
 const stepLabel = computed(() => {
   if (step.value) return `${step.value}…`
   if (status.value === 'streaming') return 'Writing…'
@@ -137,7 +213,8 @@ const canSend = computed(
   () =>
     (!!draft.value.trim() || attachments.value.length > 0) &&
     !busy.value &&
-    status.value !== 'unavailable',
+    status.value !== 'unavailable' &&
+    status.value !== 'switching',
 )
 
 function submit() {
@@ -219,7 +296,7 @@ nextTick(() => input.value?.focus())
 <template>
   <div data-agent-panel class="flex h-full flex-col bg-background">
     <div
-      v-if="status === 'unavailable'"
+      v-if="status === 'unavailable' && !notInstalled"
       class="flex items-center gap-1 border-b border-input px-2.5 py-2"
     >
       <span class="min-w-0 flex-1 truncate text-[10px] text-danger" data-agent-status>
@@ -241,7 +318,57 @@ nextTick(() => input.value?.focus())
       ref="listEl"
       class="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2.5 pt-3 pb-3"
     >
-      <p v-if="!turns.length" class="px-0.5 py-3 text-[11px] leading-relaxed text-muted-foreground">
+      <div
+        v-if="status === 'unavailable' && notInstalled"
+        data-agent-install
+        class="flex flex-col items-start gap-2 rounded-xl border border-input p-2.5 text-[11px] leading-relaxed"
+      >
+        <p class="text-muted-foreground">
+          This panel runs your own Claude Code install — the harness, the sign-in and the bill are
+          yours, and nothing here collects a key. To use it:
+        </p>
+        <ol class="flex list-decimal flex-col gap-1 pl-4 text-muted-foreground">
+          <li>
+            Install it:
+            <code class="rounded bg-input px-1 font-mono text-[10px]">npm install -g @anthropic-ai/claude-code</code>
+          </li>
+          <li>Run <code class="rounded bg-input px-1 font-mono text-[10px]">claude</code> once in a terminal and sign in.</li>
+          <li>Come back and retry.</li>
+        </ol>
+        <ButtonUI size="xs" :icon="RotateCw" data-agent-retry @click="restart">Retry</ButtonUI>
+      </div>
+
+      <div
+        v-else-if="mainBlocked"
+        data-agent-main-notice
+        class="flex flex-col items-start gap-2 rounded-xl border border-input p-2.5 text-[11px] leading-relaxed"
+      >
+        <p class="font-medium">The AI can't edit Main yet</p>
+        <p class="text-muted-foreground">
+          <template v-if="isAdmin">
+            Edits would land on the live project with no review step, so it is off until you turn
+            it on. You can also switch to a draft instead.
+          </template>
+          <template v-else>
+            An admin turns this on under Settings → MCP → Agent permissions. Until then, switch to
+            a draft and the agent can work there.
+          </template>
+        </p>
+        <ButtonUI
+          v-if="isAdmin"
+          size="xs"
+          :disabled="allowBusy"
+          data-agent-allow-main
+          @click="allowMainWrites"
+        >
+          Allow
+        </ButtonUI>
+      </div>
+
+      <p
+        v-else-if="!turns.length"
+        class="px-0.5 py-3 text-[11px] leading-relaxed text-muted-foreground"
+      >
         Ask for a change to this page. The agent edits the site through its own tools, and every
         write lands on the canvas as it works.
       </p>
@@ -370,7 +497,18 @@ nextTick(() => input.value?.focus())
     </div>
 
     <div
-      v-if="busy"
+      v-if="status === 'switching'"
+      data-agent-switching
+      class="flex shrink-0 items-center gap-2 border-t border-input px-2.5 py-1.5 text-[10px] text-muted-foreground"
+    >
+      <LoaderCircle class="size-3 shrink-0 animate-spin" />
+      <span class="min-w-0 flex-1 truncate">
+        Switching the agent to {{ switchingLabel }}…
+      </span>
+    </div>
+
+    <div
+      v-else-if="busy"
       data-agent-step
       class="flex shrink-0 items-center gap-2 border-t border-input px-2.5 py-1.5 text-[10px]"
     >
@@ -416,6 +554,7 @@ nextTick(() => input.value?.focus())
           v-model="draft"
           variant="bare"
           :rows="3"
+          :disabled="status === 'switching'"
           placeholder="Ask for a change…"
           data-agent-input
           @keydown.enter.exact.prevent="submit"

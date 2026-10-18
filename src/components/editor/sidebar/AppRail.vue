@@ -24,7 +24,7 @@ const {
   isBuild, canvas, column, showComponents, pagesOpen, agentOpen,
   togglePages, toggleComponents, toggleAgent, showApp,
 } = useViewMode()
-const { available: agentAvailable } = useAgentChat()
+const { answered: agentAnswered } = useAgentChat()
 
 watch(
   [canBuild, hasEnabledForm],
@@ -58,7 +58,7 @@ watch(
     </template>
 
     <ButtonUI
-      v-if="agentAvailable"
+      v-if="agentAnswered"
       variant="ghost"
       :icon="Sparkles"
       aria-label="Ask the AI agent"

@@ -6,8 +6,9 @@ withDefaults(
     placeholder?: string
     rows?: number
     variant?: 'default' | 'bare'
+    disabled?: boolean
   }>(),
-  { rows: 3, variant: 'default' },
+  { rows: 3, variant: 'default', disabled: false },
 )
 
 const model = defineModel<string>({ default: '' })
@@ -21,9 +22,10 @@ defineExpose({ focus: () => el.value?.focus() })
     ref="el"
     v-model="model"
     :rows="rows"
+    :disabled="disabled"
     spellcheck="false"
     :placeholder="placeholder"
-    class="w-full text-xs outline-none placeholder:text-muted-foreground"
+    class="w-full text-xs outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
     :class="
       variant === 'bare'
         ? 'resize-none bg-transparent px-0 py-0'

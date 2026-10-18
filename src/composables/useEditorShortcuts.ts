@@ -24,7 +24,7 @@ export function useEditorShortcuts() {
   const { isBuild, toggleAgent } = useViewMode()
   const { toggleDrawer } = useEffectsDrawer()
   const { canBuild } = useAuth()
-  const { available: agentAvailable } = useAgentChat()
+  const { answered: agentAnswered } = useAgentChat()
 
   const buildOnly = (fn: () => void) => () => {
     if (isBuild.value) fn()
@@ -55,7 +55,7 @@ export function useEditorShortcuts() {
       shift: false,
       allowInInput: true,
       handler: () => {
-        if (agentAvailable.value) toggleAgent()
+        if (agentAnswered.value) toggleAgent()
       },
     },
   ])

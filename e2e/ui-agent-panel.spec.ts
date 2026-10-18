@@ -115,9 +115,68 @@ test.describe('the AI panel', () => {
     ])
   })
 
-  test('an unavailable host leaves no button and no panel', async ({ page }) => {
-    await feed(page, [{ type: 'unavailable', reason: 'Claude Code was not found' }])
-    await expect(page.locator('[data-agent-button]')).toHaveCount(0)
+  // Panel-first: the button is gated on the host having ANSWERED, not on the
+  // answer being yes. Hiding it left the feature undiscoverable on exactly the
+  // machines that needed the install instructions. A browser, where nothing
+  // answers, still has no button — that is the first case above.
+  test('a host with no Claude Code still gets the button, and the install guide', async ({ page }) => {
+    await feed(page, [{ type: 'unavailable', reason: 'Claude Code is not installed' }])
+    await expect(page.locator('[data-agent-button]')).toBeVisible()
+    await page.locator('[data-agent-button]').click()
+    const guide = page.locator('[data-agent-install]')
+    await expect(guide).toBeVisible()
+    await expect(guide).toContainText('npm install -g @anthropic-ai/claude-code')
+    await expect(page.locator('[data-agent-retry]')).toBeVisible()
+    // "stopped" is a different sentence and keeps the terse restart strip
+    await feed(page, [{ type: 'unavailable', reason: 'the agent exited (code 1)' }])
+    await expect(page.locator('[data-agent-install]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-status]')).toContainText('exited')
+  })
+
+  test('the branch the editor has open is posted to the host, after agent-start', async ({ page }) => {
+    // The host WAITS for this rather than defaulting to Main: an agent in the
+    // panel never picks a target, so a lost message must look like the bug it
+    // is.
+    await expect
+      .poll(async () => {
+        const sent = (await posts(page)) as { type: string; target?: string }[]
+        const start = sent.findIndex((m) => m.type === 'agent-start')
+        const target = sent.findIndex((m) => m.type === 'agent-target')
+        return start !== -1 && target > start ? sent[target]!.target : null
+      })
+      .toBe('main')
+  })
+
+  test('switching the branch names it and holds the composer', async ({ page }) => {
+    await readyPanel(page)
+    await feed(page, [{ type: 'switching', target: 'main' }])
+    const strip = page.locator('[data-agent-switching]')
+    await expect(strip).toBeVisible()
+    await expect(strip).toContainText('Switching the agent to Main')
+    await expect(page.locator('[data-agent-input]')).toBeDisabled()
+
+    await feed(page, [AGENT_READY, AGENT_INIT])
+    await expect(page.locator('[data-agent-switching]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-input]')).toBeEnabled()
+  })
+
+  test('on Main with the policy off, an admin is offered the switch', async ({ page }) => {
+    await page.route('**/api/agent-policy', async (route) => {
+      if (route.request().method() === 'PUT') {
+        return route.fulfill({ json: { allowMainWrites: true, allowPublish: false } })
+      }
+      return route.fulfill({ json: { allowMainWrites: false, allowPublish: false } })
+    })
+    // no reload needed: the drawer asks for the policy when it MOUNTS, which
+    // is the first time the panel is opened
+    await readyPanel(page)
+
+    const notice = page.locator('[data-agent-main-notice]')
+    await expect(notice).toBeVisible()
+    await expect(notice).toContainText("The AI can't edit Main yet")
+    // the same setting Settings → MCP flips, reachable where the refusal is
+    await page.locator('[data-agent-allow-main]').click()
+    await expect(notice).toHaveCount(0)
   })
 
   test('a send posts the typed text with the page context, once', async ({ page }) => {
