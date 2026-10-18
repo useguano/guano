@@ -27,6 +27,10 @@
 // ownership the nonce already proves. When Main is allowed, GUANO_MCP_TARGET
 // is written into the client config too, so the agent never has to ask which
 // target to use.
+//
+// `--embedded` + `--target <main|draftId>` are the EDITOR's pair, valid only
+// with `--config <file>`: they mark one config file as the AI panel's and name
+// the branch the editor has loaded. → docs/instance.md
 import { randomBytes, createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -643,6 +647,39 @@ export async function main(args = [], opts = {}) {
     process.exit(1)
   }
 
+  /**
+   * The EMBEDDED pair, written only for the AI panel's own config file.
+   *
+   * `--embedded` puts `GUANO_MCP_EMBEDDED=1` on the entry, which is the one
+   * signal `guano mcp` reads to drop `use_project` / `set_target` and refuse a
+   * write with no target instead of asking for one. It is refused without
+   * `--config` because the shared Claude configs are an OUTSIDE client's: an
+   * embedded entry there would leave Claude Desktop unable to say which
+   * project it meant.
+   *
+   * `--target` writes the project's target unconditionally — the editor knows
+   * which branch is loaded, and that answer is not the agent policy's to
+   * gate. Without it the external rule stands: a target is written only when
+   * Main is allowed.
+   */
+  const embedded = flag('--embedded')
+  if (embedded && !opt('--config')) {
+    console.error(
+      '✗ --embedded needs --config <file>. It marks ONE config file as the editor\'s own AI\n' +
+        '  panel; the shared Claude Code and Claude Desktop configs belong to an outside\n' +
+        '  client, which has no editor to ask which project and branch it is looking at.',
+    )
+    process.exit(1)
+  }
+  const wantTarget = opt('--target')
+  if (wantTarget !== undefined && !/^(main|[0-9a-f-]{8,})$/i.test(wantTarget)) {
+    console.error(
+      `✗ --target must be "main" or a draft id (got "${wantTarget}"). ` +
+        'A draft is not created here — the editor makes it.',
+    )
+    process.exit(1)
+  }
+
   const dataDir = remote ? null : await resolveDataDir()
   const fileRoot = fenceRoot(dataDir, remoteUrl)
   // a remote project's payload directory is ours to make; a local project's
@@ -860,7 +897,10 @@ export async function main(args = [], opts = {}) {
         // one consent channel a prompt-injected agent cannot reach, and the agent
         // starts working instead of asking "Main or a draft?". Per PROJECT, so
         // pinning Main for a landing page does not pin it for a client's site.
-        ...(mainAllowed ? { target: 'main' } : {}),
+        // `--target` overrides that rule outright: it is the editor saying which
+        // branch is open, which the agent policy does not get a vote on — the
+        // policy still refuses the WRITE server-side if Main is off.
+        ...(wantTarget ? { target: wantTarget } : mainAllowed ? { target: 'main' } : {}),
         ...(projectName ? { name: projectName } : {}),
       },
     }
@@ -882,11 +922,17 @@ export async function main(args = [], opts = {}) {
         // A remote project has no local data dir, and the directory connect
         // was run from is NOT a safe answer for it — see fenceRoot.
         GUANO_MCP_FILE_ROOT: fileRoot,
+        // The one signal. → docs/instance.md, docs/mcp.md (Embedded mode)
+        ...(embedded ? { GUANO_MCP_EMBEDDED: '1' } : {}),
       },
     }
 
     // --print: emit the snippet for any MCP client, touch nothing
     if (flag('--print')) {
+      console.log(
+        `\nmode: ${embedded ? 'embedded (the editor\'s AI panel)' : 'external client'}` +
+          `  ·  target: ${projects[slug].target ?? '(none — the agent is asked)'}`,
+      )
       console.log('\nAdd this under "mcpServers" in your MCP client config:\n')
       console.log(JSON.stringify({ [ENTRY_KEY]: entry }, null, 2))
       return

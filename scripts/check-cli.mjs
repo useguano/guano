@@ -78,6 +78,10 @@ if (help) {
     'guano disconnect',
     '`npm create @useguano`',
     '`guano connect`',
+    // the AI panel's pair. Undocumented they look like launcher-private
+    // magic, and the launcher is not allowed to write a config itself
+    '--embedded',
+    '--target <main|draftId>',
   ]) {
     if (!help.includes(needle)) fail(`guano --help no longer mentions ${needle}`)
   }

@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { parseProjects } from '../packages/guano/mcp/projects.mjs'
 import { boot, bootUnpinned, exitOf, instances } from './fixtures/server'
 
 // Instance identity: which Guano project a port is answering for.
@@ -459,6 +460,70 @@ test('a malformed client config is refused, never rewritten', async () => {
     const back = JSON.parse(readFileSync(good, 'utf8'))
     expect(back.mcpServers.other).toBeTruthy()
     expect(back.mcpServers.guano).toBeTruthy()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The AI panel's own entry. `--embedded` is the ONE signal `guano mcp` reads
+// to stop asking which project and which branch, and `connect` is the only
+// thing allowed to write it — the launcher never writes an MCP config itself.
+test('the editor\u2019s entry carries GUANO_MCP_EMBEDDED and the branch it has open', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'guano-emb-'))
+  try {
+    const cfg = join(dir, 'panel.json')
+    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    const draft = 'b1f0c2d3-4e5f-4a6b-8c9d-0e1f2a3b4c5d'
+
+    // --yes leaves the policy alone, so Main is NOT allowed: the target is
+    // written anyway, because the editor said it, not the agent
+    const res = cli(
+      ['connect', '--yes', '--offline', '--config', cfg, '--embedded', '--target', draft],
+      env,
+    )
+    expect(res.code).toBe(0)
+
+    const entry = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.guano
+    expect(entry.env.GUANO_MCP_EMBEDDED).toBe('1')
+    const { projects } = parseProjects(entry.env.GUANO_PROJECTS)
+    const only = Object.values(projects)[0] as { target: string }
+    expect(only.target).toBe(draft)
+
+    // and a re-run on the other branch moves it, in place
+    const back = cli(
+      ['connect', '--yes', '--offline', '--config', cfg, '--embedded', '--target', 'main'],
+      env,
+    )
+    expect(back.code).toBe(0)
+    const after = parseProjects(
+      JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.guano.env.GUANO_PROJECTS,
+    ).projects
+    expect((Object.values(after)[0] as { target: string }).target).toBe('main')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('--embedded without --config is refused, and so is a target that is neither', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'guano-emb2-'))
+  try {
+    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    // the shared Claude configs belong to an outside client; marking one
+    // embedded would leave it unable to say which project it meant
+    const bare = cli(['connect', '--yes', '--offline', '--embedded'], env)
+    expect(bare.code).toBe(1)
+    expect(bare.out).toContain('--embedded needs --config')
+
+    const cfg = join(dir, 'panel.json')
+    const bad = cli(
+      ['connect', '--yes', '--offline', '--config', cfg, '--embedded', '--target', 'new:Draft'],
+      env,
+    )
+    expect(bad.code).toBe(1)
+    expect(bad.out).toContain('--target must be "main" or a draft id')
+
+    // neither refusal wrote a byte
+    expect(() => readFileSync(cfg, 'utf8')).toThrow()
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

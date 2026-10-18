@@ -65,6 +65,10 @@ Usage:
                          --url https://host --token guano_… connects a REMOTE
                          instance (a VPS): make the token in its editor under
                          My account → API tokens
+                         --embedded --target <main|draftId> write the editor's
+                         OWN entry (the AI panel): the agent is never asked
+                         which project or which branch. Both need --config and
+                         are the launcher's to pass, not yours
   guano use [slug]       pick which project the agent works on when more
                          than one is running. No argument lists them,
                          \`.\` means this folder, --none unpins. Takes effect
