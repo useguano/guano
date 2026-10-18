@@ -256,6 +256,94 @@ Coverage: `e2e/ui-agent-panel.spec.ts` cases (a)–(e), over `AGENT_ASK_TURN`,
 because the panel has to pick these two names out of the same stream everything else
 arrives on.
 
+## The brief
+
+Decided 2026-10-18, from the same session. The person who typed *"a simple
+coming-soon page for Acme"* did not have less to say — **they had no place to say
+it.** The brief is that place: a stepper in the drawer, one decision per screen,
+that ends by sending one well-formed prompt and by setting the things that are a
+fact rather than an interpretation.
+
+`BriefStepper.vue`, mounted by `AgentDrawer` in place of the transcript while
+`briefOpen`. The presets, the tables and the template are `src/lib/agentBrief.ts` —
+pure data and pure functions, so a brief compiles headlessly.
+
+### Two cards on an empty project
+
+`isEmptyProject` (`useProject`) is the seed and nothing more: one page whose body
+has no children, no components, no collections (`createProject`,
+`src/lib/factories.ts`). When it is true and the transcript is empty, the list
+area shows **Build a brief** and **Just chat** instead of the placeholder
+sentence. Once the site has content the cards go, and a **New brief** item stays
+in the composer toolbar — a brief then restyles rather than starts over.
+
+**Empty means empty, and it is derived, never cached.** It has to go false the
+moment the agent writes one element, or a reload mid-build would offer the cards
+over a live transcript.
+
+**The Main-writes notice and the cards are the same slot, and the notice wins.**
+Offering a brief to an agent that cannot write Main is a dead end.
+
+### The intake
+
+| # | screen | goes to |
+|---|---|---|
+| 1 | What is it, and who is it for? — **required** | prompt |
+| 2 | What should a visitor do? (sign up · buy · contact · book · read · download · just look) | prompt — it decides the hero and the CTA, which is the thing the Acme run guessed |
+| 3 | Pages or sections | prompt |
+| 4 | Palette — eight mood presets, then optional primary / accent / background pickers | **tokens** (light + `dark`); a picked colour overrides its token. The mood name is also in the prompt |
+| 5 | Light or dark? | **token** `theme.colorMode` |
+| 6 | Shape — 4 stops: not rounded · rounded · very rounded · bubbly | **token** `theme.radius`; the stop name in the prompt |
+| 7 | Grid — 4 stops: structured · loose · playful · wild | prompt, one fixed sentence per stop |
+| 8 | Motion — 4 stops: still · subtle · lively · showy | prompt; *still* also turns off the offer afterwards |
+| 9 | Tone & type | prompt; the font direction picks a fixed Google Fonts pairing → `fonts.googleFontsUrl` + the family tokens |
+| 10 | Imagery | prompt |
+| 11 | Languages | **project** `locales` + `defaultLocale`, set BEFORE the build so content is written translatable from the first page |
+| 12 | Logo & brand | **media** — the asset lands in the library and its path goes in the prompt |
+| 13 | References — up to 3 screenshots, an optional URL each | the images ride on the `agent-send`; the URLs are named in the prompt |
+| 14 | Anything I must use, or must not invent | prompt, under a heading the rules tell the model is law |
+
+**Skip is on every screen but the first.** Fourteen is the ceiling, not the floor —
+a brief answered on two screens is a valid brief, and a skipped screen is simply
+absent from the prompt.
+
+**Finish sends, so Finish is unmistakable**: one primary button, *Build it*, dead
+until screen 1 is answered. Next on the last screen is not Finish.
+
+**The stepper is not a modal.** It replaces the transcript inside the column, and
+`docs/ui.md`'s rule is that a persistent column never closes on Escape — so here
+Escape closes the stepper, not the column. The answers survive it: they live in a
+plain `<script>` block rather than in `<script setup>`, whose consts are
+per-instance and so forgot fourteen screens the moment Escape unmounted the
+stepper. The first version did exactly that, and the spec caught it.
+
+### A token is a fact, a sentence is a wish
+
+This is the whole shape of the thing. The palette, the radius scale, the colour
+mode, the fonts and the locales are **written into the project** by the stepper,
+through the same `useSettings` / `useLocale` path Settings → Design uses — so
+`useThemeTokens` restyles the canvas live and undo covers them
+(`docs/theming.md`). The prompt then says they are already set and closes with
+*build on them, do not replace them.*
+
+Grid and motion are **sentences**, from a fixed table, because nothing in
+`ProjectSettings` holds "playful" — the model gets a word and a line saying what
+it means, so two briefs on the same stop ask for the same thing.
+
+**The writes land before the send.** If a run shows the agent "setting the theme"
+after a brief, either the closing line is not strong enough or the settings write
+did not resolve first — check that ordering in `build()` before anything else.
+
+### No WebFetch, and the URL is text
+
+A reference carries a **screenshot**, and the URL beside it is a note in the
+prompt. The spawn allows `mcp__guano__*` only, and opening `WebFetch` would hand
+a prompt-injected agent an outbound channel — the fence is `docs/mcp.md`,
+**Untrusted content**, and the allowlist is per spawn, not per message. Do not
+"just allow it for the brief".
+
+Coverage: `e2e/ui-agent-panel.spec.ts` cases (f)–(j) and `e2e/ui-a11y.spec.ts`.
+
 ## There is no permission prompt channel
 
 `--permission-prompts host` means "the SDK host or `--permission-prompt-tool`",
