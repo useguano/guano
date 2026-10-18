@@ -75,7 +75,7 @@ Rebuilding a runtime moves the `check:corpus` baseline by exactly that asset.
 
 ## `test:e2e` — the Playwright suite
 
-`e2e/`, 459 tests in 62 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
+`e2e/`, 545 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
 
 What is in it, by group:
 
