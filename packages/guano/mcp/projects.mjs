@@ -50,7 +50,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createApi } from './api.mjs'
-import { readPin } from './pin.mjs'
+import { readPin, writePin } from './pin.mjs'
 
 /**
  * Where this project is listening NOW.
@@ -355,6 +355,22 @@ export function createProjectRouter({
       return { ...projects[r.slug], api: clientFor(r.slug), pinned: !!r.pinned }
     },
     resolve,
+    /** is this one up? cached like every other probe */
+    probe: (slug) => (projects[slug] ? probeProject(slug) : Promise.resolve({ ok: false })),
+    /**
+     * Point every client on this machine at `slug`.
+     *
+     * The write itself is the same pin `guano use` sets — what differs is only
+     * who asked: this path is reached from `use_project`, which gets the
+     * human's answer through an elicitation dialog first. The agent proposes;
+     * it never decides.
+     */
+    pin: (slug) => {
+      if (!projects[slug]) return false
+      writePin(slug)
+      probes.delete(slug)
+      return true
+    },
     list: () => slugs.map((s) => ({ slug: s, url: addressOf(projects[s]), name: projects[s].name })),
     /** the active project's key, for invalidating per-project session state */
     activeKey: () => active,

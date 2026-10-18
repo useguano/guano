@@ -168,7 +168,7 @@ const GUIDE_HASH = GUIDE
 // connected client never declared the elicitation capability. Only set_target
 // uses it: with a dialog available the target choice is genuinely the human's,
 // instead of an agent-asserted chosenByUser boolean.
-export function createToolSet({ api, runtime, elicit, hasElicitation = () => null }) {
+export function createToolSet({ api, runtime, elicit, hasElicitation = () => null, projects = null }) {
   const {
     whoami,
     storeGetRaw,
@@ -5809,6 +5809,103 @@ const tools = [
                 'no project on Main yet — the server seeds it on first access, so this should ' +
                 'resolve by your next call; retry get_status before reporting it as broken',
             }),
+      }
+    },
+  },
+  {
+    name: 'use_project',
+    description:
+      'Switch which Guano SITE the tools work on, when this connection carries more than one. ' +
+      'THE HUMAN DECIDES: this opens a dialog they answer. Call it when they name another ' +
+      'site, or after a refusal that says several are running. No argument lists them. ' +
+      'Switching clears the write target, so call set_target again afterwards.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: {
+          type: 'string',
+          description: 'slug to switch to; omit to list what is configured',
+        },
+      },
+    },
+    handler: async (args) => {
+      if (!projects) {
+        return {
+          switched: false,
+          message:
+            'this connection carries one project, so there is nothing to switch to — ' +
+            'run `guano connect` in another project to add it',
+        }
+      }
+      const list = await projects.list()
+      if (!args.project) return { projects: list, active: projects.active() }
+
+      const slug = String(args.project).trim()
+      const found = list.find((p) => p.slug === slug)
+      if (!found) {
+        throw new Error(
+          `"${slug}" is not one of this connection's projects (${list.map((p) => p.slug).join(', ')}). ` +
+            'The human runs `guano connect` in its folder to add it.',
+        )
+      }
+      if (found.active) return { switched: false, active: slug, message: `already working on "${slug}"` }
+
+      // The consent channel, exactly as set_target uses it: a dialog the agent
+      // cannot answer for the human. Choosing the site is the decision where
+      // getting it wrong is worst — a write that lands on someone else's live
+      // site and reports success — so a client that cannot show a dialog does
+      // NOT fall back to an agent-asserted boolean the way set_target does.
+      // It is sent to `guano use`, which is a shell the agent has no access to.
+      if (!elicit) {
+        throw new Error(
+          `this client cannot show a confirmation dialog, and switching sites is not a ` +
+            `decision an agent may assert on its own. Ask the human to run \`guano use ${slug}\` ` +
+            '— it takes effect on your next call, with no restart.',
+        )
+      }
+      let res
+      try {
+        res = await elicit({
+          message:
+            `The AI agent wants to switch to the Guano site "${found.name || slug}"` +
+            `${found.running ? '' : ' (which is not running right now)'}. ` +
+            'Its later changes would go to that site instead of the current one.',
+          requestedSchema: {
+            type: 'object',
+            properties: {
+              confirm: {
+                type: 'boolean',
+                title: `Work on "${found.name || slug}" from now on`,
+              },
+            },
+            required: ['confirm'],
+          },
+        })
+      } catch (e) {
+        throw new Error(
+          `the switch dialog failed or timed out (${e?.message ?? e}) — ask the human to run ` +
+            `\`guano use ${slug}\` instead`,
+        )
+      }
+      const answered = res !== null && res !== undefined
+      if (!answered || res.action !== 'accept' || res.content?.confirm !== true) {
+        return {
+          switched: false,
+          active: projects.active(),
+          message:
+            'the human did not confirm the switch — stay on the current site and ask them ' +
+            'in chat which one they want',
+        }
+      }
+      projects.use(slug)
+      return {
+        switched: true,
+        active: slug,
+        running: found.running,
+        // syncProject drops the target when the live project changes, so say so
+        // rather than let the next write ask a question that reads as a bug.
+        next: 'the write target was cleared with the switch — call set_target for this site',
+        ...(found.running ? {} : { note: 'it is not running — ask the human to start it' }),
       }
     },
   },

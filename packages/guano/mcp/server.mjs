@@ -101,6 +101,30 @@ const routedApi = multi
 const { tools, toolMap } = createToolSet({
   api: routedApi,
   runtime,
+  // `use_project`: switching sites from inside the conversation, which is the
+  // only place anybody actually wants to do it. The agent never DECIDES — the
+  // human answers an elicitation dialog, the same consent channel set_target
+  // uses — but asking the human to quit to a terminal for `guano use` was a
+  // worse answer to "work on the other site" than it looked on paper.
+  // Absent for a single-project entry, where there is nothing to switch to.
+  projects: multi
+    ? {
+        list: async () => {
+          const live = await router.resolve().catch(() => ({}))
+          const entries = router.list()
+          const states = await Promise.all(entries.map((p) => router.probe(p.slug)))
+          return entries.map((p, i) => ({
+            slug: p.slug,
+            name: p.name || '',
+            url: p.url,
+            running: !!states[i]?.ok,
+            active: p.slug === live.slug,
+          }))
+        },
+        use: (slug) => router.pin(slug),
+        active: () => router.activeKey(),
+      }
+    : null,
   // set_target's consent dialog: put the Main-vs-draft choice in front of the
   // HUMAN via MCP elicitation instead of trusting an agent-passed boolean.
   // `server` is declared below, but this closure only runs at tool-call time —
