@@ -414,13 +414,26 @@ The same prompt three times on a fresh project — *create an email capture
 landing page for a SaaS company named "Atelier"* — with every later change
 appending its own row.
 
-| when | to start | to first word | calls | guide | harness | cache read |
-|---|---|---|---|---|---|---|
-| _step 0 baseline_ | — | — | — | — | — | — |
+| when | to `ready` | to first word | steps | guide calls |
+|---|---|---|---|---|
+| step 0 baseline | **5.16 s** | not captured | 21 | **6** |
 
-Nothing that touches the handbook, the instructions or the default model is
-justified before there are numbers in that table, and each change records its
-own before/after against the same prompt.
+**The answer is not close, and it is not the process chain.** The launcher's
+log breaks the 5.16 s down: 0.70 s waiting for the page's `agent-target` (the
+editor was still booting), 0.19 s for `guano connect` — which ran because a
+brand-new project has no config yet, `isCurrent: false` being correct there
+and not the stale-config bug — and then **4.27 s from `claude spawned` to
+`system/init`**, which is Claude Code's own boot and its MCP child. None of
+that is a lever worth pulling.
+
+The first turn spent **six `get_guide` calls** before it built anything: the
+bare call for the section list, then page-html, styling, design-standards,
+forms and components, one round-trip each on Opus. That is the wait the person
+sees, and the handbook asked for every one of them — *"fetch the sections the
+job needs … BEFORE your first write"*. **So: collapse the round-trips, in the
+order steps 1–4 set out.**
+
+Each change records its own before/after against the same prompt.
 
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**
