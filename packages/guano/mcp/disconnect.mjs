@@ -23,7 +23,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import readline from 'node:readline/promises'
 import { ENTRY_KEY, claudeDesktopRunning, clientTargets, readIdentity, resolveDataDir } from './connect.mjs'
-import { identifyEntry, parseProjects } from './projects.mjs'
+import { addressOf, identifyEntry, parseProjects } from './projects.mjs'
 
 /** the GUANO_PROJECTS map inside one client config file, or null */
 function readMap(config) {
@@ -90,7 +90,14 @@ async function confirm(question) {
   }
 }
 
-/** every entry whose address answers and is provably not that entry's project */
+/**
+ * Every entry that can be DISPROVED: its address answers as somebody else, or
+ * its `dir` is gone / now holds another project. The second case is what made
+ * cleanup possible at all — an entry whose port simply has nothing on it is
+ * indistinguishable from a project that is merely off, so before entries
+ * carried a dir, one whose port had been freed could never be removed and the
+ * map could only grow.
+ */
 async function findStale(projects) {
   const stale = []
   for (const [slug, p] of Object.entries(projects)) {
@@ -111,7 +118,8 @@ async function list(targets) {
     for (const slug of slugs) {
       const verdict = await identifyEntry(projects[slug])
       const mark = verdict.ok ? '✓ live  ' : verdict.answered ? '✗ stale ' : '· down  '
-      console.log(`  ${mark} ${slug.padEnd(20)} ${projects[slug].url}${verdict.why ? `\n           ${verdict.why}` : ''}`)
+      const where = addressOf(projects[slug]) || projects[slug].dir || '(no address)'
+      console.log(`  ${mark} ${slug.padEnd(20)} ${where}${verdict.why ? `\n           ${verdict.why}` : ''}`)
     }
   }
 }

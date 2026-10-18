@@ -31,7 +31,46 @@
 // when either side has no id to compare, by the instance accepting its token.
 // That is what stops another project squatting the port from being mistaken
 // for this one — the same check `guano mcp` makes before presenting a token.
+//
+// AN ENTRY ADDRESSES A DATA DIR, NOT A PORT. `dir` is the authority on where a
+// local project is, exactly as it is everywhere else in this product; `url` is
+// a cached guess that goes stale the first time a port moves. It moved
+// constantly once the desktop launcher started pinning a port per project from
+// its .env and stopping the server when a tab closed: every dead entry anyone
+// reported was a live project at an address the map still remembered wrong.
+// `instance.json` is written AFTER listen() resolves, so the port in it is the
+// port the server actually got, and reading it costs one local stat.
+//
+// `url` stays, for remote instances (which have no local dir) and for entries
+// written before this — so an old map keeps working and `connect` upgrades it
+// in place.
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createApi } from './api.mjs'
+
+/**
+ * Where this project is listening NOW.
+ *
+ * A `dir` that cannot be read falls back to the cached `url` rather than
+ * failing: the dir may be on a volume that is not mounted this minute, and a
+ * stale address is still a better answer than none.
+ */
+export function addressOf(p) {
+  const rec = readInstanceRecord(p.dir)
+  return rec?.port ? `http://localhost:${rec.port}` : p.url
+}
+
+/** `<dataDir>/instance.json`, or null. Sync: it is one small local file, and
+ *  every caller is about to make a network request anyway. */
+export function readInstanceRecord(dir) {
+  if (!dir) return null
+  try {
+    const rec = JSON.parse(readFileSync(join(dir, 'instance.json'), 'utf8'))
+    return rec && typeof rec === 'object' ? rec : null
+  } catch {
+    return null
+  }
+}
 
 /** how long a health probe is trusted. Short enough that starting a project is
  *  picked up within a call or two; long enough that a burst of tool calls does
@@ -58,13 +97,18 @@ export function parseProjects(raw) {
   const projects = {}
   const dropped = []
   for (const [slug, v] of Object.entries(parsed)) {
-    if (!slugOk(slug) || !v || typeof v !== 'object' || typeof v.url !== 'string' || !v.url) {
+    const hasUrl = typeof v?.url === 'string' && v.url
+    const hasDir = typeof v?.dir === 'string' && v.dir
+    // One of the two is enough to address a project: a local entry can carry
+    // only `dir`, a remote one only `url`.
+    if (!slugOk(slug) || !v || typeof v !== 'object' || (!hasUrl && !hasDir)) {
       dropped.push(slug)
       continue
     }
     projects[slug] = {
       slug,
-      url: v.url.replace(/\/+$/, ''),
+      dir: hasDir ? v.dir : '',
+      url: hasUrl ? v.url.replace(/\/+$/, '') : '',
       token: typeof v.token === 'string' ? v.token : '',
       instance: typeof v.instance === 'string' ? v.instance : '',
       // the per-project write target, which used to be one GUANO_MCP_TARGET for
@@ -122,7 +166,32 @@ async function tokenAccepted(api) {
  * this question and two implementations of it would eventually disagree about
  * which entries are dead.
  */
-export async function identifyEntry(p, api = createApi({ base: p.url, token: p.token, instance: p.instance })) {
+export async function identifyEntry(p, api = createApi({ base: addressOf(p), token: p.token, instance: p.instance })) {
+  const address = addressOf(p)
+  // A `dir` that is GONE is proof, with no port involved at all: the project
+  // was deleted or moved, and no address will ever be it again. Before this,
+  // such an entry could only be disproved by something else answering on its
+  // old port — so an entry whose port was simply free was undeletable, and
+  // the map could only grow.
+  if (p.dir && !existsSync(p.dir)) {
+    return {
+      ok: false,
+      answered: true,
+      why: `${p.dir} is gone — the project was deleted or moved`,
+      instance: '',
+      offline: true,
+    }
+  }
+  const local = readInstanceRecord(p.dir)
+  if (local && p.instance && typeof local.id === 'string' && local.id && local.id !== p.instance) {
+    return {
+      ok: false,
+      answered: true,
+      why: `${p.dir} now holds a different project (instance ${short(local.id)}, expected ${short(p.instance)})`,
+      instance: local.id,
+      offline: true,
+    }
+  }
   const h = await api.health()
   const got = h && typeof h.instance === 'string' ? h.instance : ''
   const answered = !!h
@@ -136,7 +205,7 @@ export async function identifyEntry(p, api = createApi({ base: p.url, token: p.t
       : {
           ok: false,
           answered: true,
-          why: `a different project holds ${p.url} (instance ${short(got)}, expected ${short(want)})`,
+          why: `a different project holds ${address} (instance ${short(got)}, expected ${short(want)})`,
           instance: got,
         }
   }
@@ -145,7 +214,7 @@ export async function identifyEntry(p, api = createApi({ base: p.url, token: p.t
     ok: false,
     answered: true,
     why:
-      `${p.url} answered${got ? ` as instance ${short(got)}` : ''} but refused this entry's token, ` +
+      `${address} answered${got ? ` as instance ${short(got)}` : ''} but refused this entry's token, ` +
       'and the entry carries no instance id to check against — it is stale',
     instance: got,
   }
@@ -166,12 +235,17 @@ export function createProjectRouter({
   const probes = new Map() // slug -> {at, ok}
   let active = null
 
+  // Keyed by the address it was built for: a project that restarts on a new
+  // port must not keep being probed at the old one, which is the whole point
+  // of addressing a dir rather than a url.
   const clientFor = (slug) => {
-    if (!clients.has(slug)) {
-      const p = projects[slug]
-      clients.set(slug, createApi({ base: p.url, token: p.token, instance: p.instance }))
-    }
-    return clients.get(slug)
+    const p = projects[slug]
+    const base = addressOf(p)
+    const cached = clients.get(slug)
+    if (cached && cached.base === base) return cached.api
+    const api = createApi({ base, token: p.token, instance: p.instance })
+    clients.set(slug, { base, api })
+    return api
   }
 
   /**
@@ -264,7 +338,7 @@ export function createProjectRouter({
       return { ...projects[r.slug], api: clientFor(r.slug), pinned: !!r.pinned }
     },
     resolve,
-    list: () => slugs.map((s) => ({ slug: s, url: projects[s].url, name: projects[s].name })),
+    list: () => slugs.map((s) => ({ slug: s, url: addressOf(projects[s]), name: projects[s].name })),
     /** the active project's key, for invalidating per-project session state */
     activeKey: () => active,
     /** this project's pinned write target, which is per project rather than one

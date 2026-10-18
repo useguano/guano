@@ -722,7 +722,11 @@ export async function main(args = [], opts = {}) {
       if (typeof env.GUANO_PROJECTS === 'string' && env.GUANO_PROJECTS) {
         try {
           for (const [s, p] of Object.entries(JSON.parse(env.GUANO_PROJECTS))) {
-            if (p && typeof p === 'object' && typeof p.url === 'string') inherited[s] = p
+            // either address is enough to keep an entry: `dir` for a local
+            // project, `url` for a remote one
+            if (p && typeof p === 'object' && (typeof p.url === 'string' || typeof p.dir === 'string')) {
+              inherited[s] = p
+            }
           }
         } catch {
           /* malformed map — the router drops bad entries too; do not lose the rest */
@@ -759,6 +763,13 @@ export async function main(args = [], opts = {}) {
     const projects = {
       ...inherited,
       [slug]: {
+        // The data dir is the authority on where this project is; the url is
+        // a cached guess that is wrong the first time the port moves. The
+        // router reads `<dir>/instance.json` for the port the server actually
+        // got, so a project that restarts elsewhere is still found and the
+        // entry never goes stale. Remote projects have no local dir and keep
+        // url alone. → docs/instance.md
+        ...(dataDir ? { dir: dataDir } : {}),
         url: base,
         token: minted.token,
         // Which project this token belongs to. `guano mcp` compares it against
@@ -848,6 +859,28 @@ export async function main(args = [], opts = {}) {
 
     await mkdir(dirname(target.path), { recursive: true })
     await writeFile(target.path, JSON.stringify(next, null, 2))
+
+    // Read it back before claiming it worked. A write can be reverted between
+    // the two (Claude Desktop flushing its in-memory config as it quits is the
+    // one that happens), and a success line printed over a reverted write is
+    // the worst outcome there is: the person goes looking for a server problem
+    // for an hour because the setup said it was done.
+    let landed = false
+    try {
+      const back = JSON.parse(await readFile(target.path, 'utf8'))
+      landed = back?.mcpServers?.[ENTRY_KEY]?.env?.GUANO_PROJECTS === entry.env.GUANO_PROJECTS
+    } catch {
+      /* unreadable counts as not landed */
+    }
+    if (!landed) {
+      console.error(
+        `\n✗ ${target.label}'s config did not keep this write (${target.path}).\n` +
+          '  It was almost certainly rewritten from memory by a running client — quit it\n' +
+          '  completely and run `guano connect` again.',
+      )
+      blockedByDesktop = true
+      continue
+    }
     writtenTo.push(target.label)
     console.log(`✓ ${target.label} config updated: ${target.path}`)
     if (named.length) {

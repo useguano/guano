@@ -51,6 +51,13 @@ What is lost: the project no longer appears in the tool name (`mcp__guano__get_p
 
 ## Which project is live
 
+**An entry addresses a DATA DIR, not a port.** `dir` is the authority on where a local project is — the rule the rest of this file already states — while `url` is a cached guess that is wrong the first time a port moves. `identifyEntry` reads `<dir>/instance.json`, written AFTER `listen()` resolves, so it is the port the server actually got; `url` remains for remote instances (no local dir) and for entries written before this, so an old map keeps working and `connect` upgrades it in place. Ports moved constantly once the desktop launcher began pinning one per project from its `.env` and stopping the server with its tab: every "it cannot connect" report was a live project at an address the map remembered wrong, and the only cure was another `connect` that added a working entry beside the dead one.
+
+This is also what finally makes cleanup possible. `disconnect` never removes an entry it cannot DISPROVE, and a port with nothing on it disproves nothing — so before `dir`, an entry whose port had merely been freed was undeletable and the map could only grow. A dir that is GONE, or that now holds a different instance id, is proof **offline**, with no port involved.
+
+**`connect` reads its write back** before printing the success line. A write can be reverted between the two — Claude Desktop flushing its in-memory config as it quits is the case that happens — and a `✓ config updated` printed over a reverted write is the worst available outcome: it sends someone looking for a dead server for an hour. It now fails by name and exits 1 instead.
+
+
 `packages/guano/mcp/projects.mjs`. **The agent must never be the one that decides which site it writes to** — a node id addresses one tree and a token is minted into one data dir, so a misdirected write is not a smaller version of the right write, it is an edit to someone else's site reported as success.
 
 Resolution order:
