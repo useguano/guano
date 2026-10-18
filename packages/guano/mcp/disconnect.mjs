@@ -19,7 +19,8 @@
 // whose address ANSWERS — and answers as somebody else, or refuses the entry's
 // own token — is provably unusable from this config.
 import { createHash } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
+import { writeJsonAtomic } from './fsx.mjs'
 import { join } from 'node:path'
 import readline from 'node:readline/promises'
 import { ENTRY_KEY, claudeDesktopRunning, clientTargets, readIdentity, resolveDataDir } from './connect.mjs'
@@ -227,7 +228,7 @@ export async function main(args = []) {
       // empty one behind is the "could not connect" alert all over again.
       delete servers[ENTRY_KEY]
     }
-    await writeFile(target.path, JSON.stringify({ ...config, mcpServers: servers }, null, 2))
+    await writeJsonAtomic(target.path, { ...config, mcpServers: servers })
     removedAnywhere = true
     console.log(
       `✓ ${target.label}: removed ${doomed.join(', ')} — ${Object.keys(kept).length} project` +
@@ -244,12 +245,17 @@ export async function main(args = []) {
 }
 
 /** drop the keys parseProjects fills in with empty defaults, so an entry that
- *  never had a target or a name does not gain one just by surviving a removal */
+ *  never had a target or a name does not gain one just by surviving a removal.
+ *  `dir` is NOT one of those: it is the authority on where a local project is
+ *  (→ docs/instance.md), and dropping it left every surviving project addressed
+ *  by a cached `url` that goes stale the first time a port moves — which is
+ *  exactly what the desktop launcher does on every tab it opens. */
 function strip(projects) {
   const out = {}
   for (const [slug, p] of Object.entries(projects)) {
     out[slug] = {
-      url: p.url,
+      ...(p.dir ? { dir: p.dir } : {}),
+      ...(p.url ? { url: p.url } : {}),
       token: p.token,
       ...(p.instance ? { instance: p.instance } : {}),
       ...(p.target ? { target: p.target } : {}),

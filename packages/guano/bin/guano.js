@@ -19,11 +19,27 @@ const [cmd, ...rest] = process.argv.slice(2)
 // the setting it documented was inert. Node's own loader, so the zero-
 // dependency rule holds. A real env var always wins (loadEnvFile does not
 // overwrite), and an absent file is not an error worth reporting.
-try {
-  process.loadEnvFile(resolve(process.cwd(), '.env'))
-} catch {
-  /* no .env, or this node has no loader — env vars still work */
+//
+// NOT for `guano mcp`. An MCP client spawns that with ITS OWN cwd — for Claude
+// Code, whatever directory the session was opened in — so a `.env` in any repo
+// the user happens to open was being read into the agent's process. The three
+// variables that matter are the consent channel: GUANO_MCP_TARGET=main skips
+// the set_target dialog, GUANO_MCP_PROJECT pins which site the tools write to,
+// and GUANO_STATE_DIR relocates the pin file `guano use` writes. A cloned repo
+// shipping a .env could set all three. The client entry is the only thing that
+// may configure the MCP server, because it is the one file the agent cannot
+// reach.
+const ENV_COMMANDS = new Set(['dev', 'start', 'build', 'connect', 'use', 'disconnect'])
+
+function loadProjectEnv() {
+  try {
+    process.loadEnvFile(resolve(process.cwd(), '.env'))
+  } catch {
+    /* no .env, or this node has no loader — env vars still work */
+  }
 }
+
+if (ENV_COMMANDS.has(cmd)) loadProjectEnv()
 
 const HELP = `guano — self-hosted visual website builder
 

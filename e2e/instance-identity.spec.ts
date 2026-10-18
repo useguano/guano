@@ -1,6 +1,7 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { boot, bootUnpinned, exitOf, instances } from './fixtures/server'
 
@@ -326,7 +327,9 @@ test('two running projects are refused by name rather than guessed between', asy
   expect(out.out).toContain('2 projects are running')
   expect(out.out).toContain('alpha')
   expect(out.out).toContain('beta')
-  expect(out.out).toContain('GUANO_MCP_PROJECT')
+  // `guano use` replaced the hand-edit-the-config hint (919c0fc); the refusal names
+  // the command that fixes it, which is the whole point of the pin
+  expect(out.out).toContain('guano use')
   // still serving: an ambiguity is answered by the tool that needs a project,
   // not by killing the client
   expect(out.out).toContain('ready (stdio)')
@@ -421,4 +424,72 @@ test('remote connect refuses plain http and an unusable token', async () => {
   const bad = cli(['connect', '--url', `http://localhost:${srv.port}`, '--token', 'not-a-token'])
   expect(bad.code).toBe(1)
   expect(bad.out).toContain('does not look like a Guano API token')
+})
+
+test('a malformed client config is refused, never rewritten', async () => {
+  // The config holds a bearer token for every project connected on this
+  // machine — and every OTHER MCP server the user has. A parse failure used to
+  // fall through to `{...null, mcpServers}`, replacing the lot with one entry.
+  // One trailing comma gets you there.
+  const dir = mkdtempSync(join(tmpdir(), 'guano-cfg-'))
+  try {
+    const cfg = join(dir, 'claude_code_config.json')
+    const malformed = '{\n  "mcpServers": {\n    "other": { "command": "node" },\n  }\n}\n'
+    writeFileSync(cfg, malformed)
+
+    // --offline: no server needed, and it still reaches the config writer
+    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    const res = cli(['connect', '--yes', '--offline', '--config', cfg], env)
+    expect(res.code).toBe(1)
+    expect(res.out).toContain('is not valid JSON')
+    // byte-identical: the other server they had configured is still there
+    expect(readFileSync(cfg, 'utf8')).toBe(malformed)
+
+    // --print writes nothing, so it still works — it is the escape hatch the
+    // refusal points at
+    const printed = cli(['connect', '--yes', '--offline', '--print', '--config', cfg], env)
+    expect(printed.out).toContain('mcpServers')
+    expect(readFileSync(cfg, 'utf8')).toBe(malformed)
+
+    // ...and a config that DOES parse is written, privately
+    const good = join(dir, 'good.json')
+    writeFileSync(good, '{"mcpServers":{"other":{"command":"node"}}}')
+    const ok = cli(['connect', '--yes', '--offline', '--config', good], env)
+    expect(ok.code).toBe(0)
+    const back = JSON.parse(readFileSync(good, 'utf8'))
+    expect(back.mcpServers.other).toBeTruthy()
+    expect(back.mcpServers.guano).toBeTruthy()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('guano mcp ignores a .env in whatever directory the client spawned it from', async () => {
+  // An MCP client spawns `guano mcp` with its own cwd — for Claude Code, the
+  // directory the session was opened in. Loading .env there let any cloned repo
+  // set GUANO_MCP_TARGET=main (skipping the set_target dialog) or
+  // GUANO_MCP_PROJECT (pinning which site the tools write to).
+  const dir = mkdtempSync(join(tmpdir(), 'guano-env-'))
+  try {
+    writeFileSync(join(dir, '.env'), 'GUANO_MCP_TARGET=main\nGUANO_MCP_PROJECT=theirs\n')
+    const out = await new Promise<string>((done) => {
+      const proc = spawn(process.execPath, [CLI, 'mcp'], {
+        cwd: dir,
+        env: { ...process.env, GUANO_PROJECTS: JSON.stringify({ mine: { url: 'http://localhost:9', token: 'guano_x' } }) },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      let seen = ''
+      proc.stdout.on('data', (d) => (seen += d))
+      proc.stderr.on('data', (d) => (seen += d))
+      setTimeout(() => {
+        proc.kill('SIGKILL')
+        done(seen)
+      }, 2000)
+    })
+    // it works on the project the ENTRY names, and says nothing about "theirs"
+    expect(out).toContain('ready (stdio)')
+    expect(out).not.toContain('theirs')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

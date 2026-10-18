@@ -51,6 +51,10 @@ What is lost: the project no longer appears in the tool name (`mcp__guano__get_p
 
 ## Which project is live
 
+**A malformed client config is refused, never rewritten.** `connect` read the file inside a `try` that treated "missing" and "not JSON" alike, and for a target with `always: true` (Claude Desktop, an explicit `--config`) carried on with `config = null` — so `{...null, mcpServers}` replaced every other MCP server the user had with ours. One trailing comma, one `//` comment or a BOM is enough. Now only `ENOENT` is ours to create; a parse error names the file, exits 1 and writes nothing (`--print` still works, since it writes nothing either and is the escape hatch the refusal points at). Both writers also go through `mcp/fsx.mjs` `writeJsonAtomic` — tmp+rename, so a crash cannot truncate a file holding every project's token, and 0600 on a file we CREATE while an existing one keeps the mode its owner gave it.
+
+**`disconnect` keeps `dir` on the survivors.** `strip()` wrote back `{url, token, instance, target, name}`, so removing one project silently cost every OTHER project its data dir — the authority on where it is — leaving them addressed by a cached `url` that goes stale the first time a port moves, which is every tab the desktop launcher opens.
+
 **An entry addresses a DATA DIR, not a port.** `dir` is the authority on where a local project is — the rule the rest of this file already states — while `url` is a cached guess that is wrong the first time a port moves. `identifyEntry` reads `<dir>/instance.json`, written AFTER `listen()` resolves, so it is the port the server actually got; `url` remains for remote instances (no local dir) and for entries written before this, so an old map keeps working and `connect` upgrades it in place. Ports moved constantly once the desktop launcher began pinning one per project from its `.env` and stopping the server with its tab: every "it cannot connect" report was a live project at an address the map remembered wrong, and the only cure was another `connect` that added a working entry beside the dead one.
 
 This is also what finally makes cleanup possible. `disconnect` never removes an entry it cannot DISPROVE, and a port with nothing on it disproves nothing — so before `dir`, an entry whose port had merely been freed was undeletable and the map could only grow. A dir that is GONE, or that now holds a different instance id, is proof **offline**, with no port involved.
@@ -122,6 +126,8 @@ Imported from `packages/guano/`, `util.mjs` resolved to `packages/guano/server/d
 ## `.env` is loaded by the CLI
 
 `process.loadEnvFile` in `bin/guano.js` — Node's own, so the zero-dependency rule holds. Nothing read it before, so the `PORT` the scaffolder documented was inert; a real env var still wins, since `loadEnvFile` does not overwrite.
+
+**For `dev | start | build | connect | use | disconnect` only — never `guano mcp`.** An MCP client spawns `guano mcp` with ITS OWN cwd (for Claude Code, whatever directory the session was opened in), so a `.env` in any repo the user happened to open was being read into the agent's process. The three variables that matters are the consent channel: `GUANO_MCP_TARGET=main` skips the `set_target` dialog, `GUANO_MCP_PROJECT` pins which site every tool writes to, and `GUANO_STATE_DIR` relocates the pin file `guano use` writes. A cloned repo shipping a `.env` could set all three, and `loadEnvFile` not overwriting is no help: `connect` writes none of them into the entry, so there was nothing for a real env var to win against. **The client entry is the only thing that may configure the MCP server**, because it is the one file the agent cannot reach. Coverage: `e2e/instance-identity.spec.ts`.
 
 `npm create @useguano` now picks a **free port**, stepping by two because a site needs its preview port above it, and writes a real `.env` with it — so a new project's address is an explicit, non-colliding fact in a file the user can read.
 

@@ -30,6 +30,7 @@
 import { randomBytes, createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { writeJsonAtomic } from './fsx.mjs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -661,7 +662,9 @@ export async function main(args = [], opts = {}) {
   //    would connect Claude to the wrong instance. The scaffolder passes it.
   let minted
   if (remote) {
-    const given = opt('--token') ?? ''
+    // env as well as the flag: the desktop launcher spawns this, and a token
+    // on argv is readable by every process on the machine through `ps`
+    const given = opt('--token') ?? process.env.GUANO_CONNECT_TOKEN ?? ''
     if (given) {
       // The escape hatch, and the only option on a headless box: a token the
       // human made in that instance's editor. Being signed in there to create
@@ -722,6 +725,7 @@ export async function main(args = [], opts = {}) {
   const writtenTo = []
   let slug = ''
   let blockedByDesktop = false
+  let refusedAny = false
 
   for (const target of targets) {
     // Read the config BEFORE building the entry: this project is one key in
@@ -730,10 +734,30 @@ export async function main(args = [], opts = {}) {
     // they were connected at different times and neither is the authority on
     // the other — so the fold, the slug and the entry are all per file.
     let config = null
+    let unreadable = false
     try {
       config = JSON.parse(await readFile(target.path, 'utf8'))
-    } catch {
-      /* missing, or not JSON we can safely rewrite */
+    } catch (e) {
+      // ENOENT is a client that was never configured — ours to create. A PARSE
+      // error is someone else's file that we cannot safely rewrite: it holds
+      // every other MCP server they have, and `{...null, mcpServers}` replaces
+      // the lot with ours. One trailing comma, one // comment or a BOM is
+      // enough to get there, and the loss is silent and total.
+      unreadable = e.code !== 'ENOENT'
+    }
+    // ...except under --print, which writes nothing and is the escape hatch the
+    // refusal below points at
+    if (unreadable && !flag('--print')) {
+      console.error(
+        `\n✗ ${target.label === target.path ? target.path : `${target.label} (${target.path})`}` +
+          ' is not valid JSON.\n' +
+          '  Rewriting it would drop whatever else is in it — every other MCP server you have\n' +
+          '  configured there. Fix the file (a trailing comma or a comment is usually it), or\n' +
+          '  move it aside, then run `guano connect` again. `--print` gives you the entry to\n' +
+          '  paste in by hand.',
+      )
+      refusedAny = true
+      continue
     }
     if (!config && !target.always) continue
     const servers = { ...(config?.mcpServers ?? {}) }
@@ -890,8 +914,7 @@ export async function main(args = [], opts = {}) {
       )
     }
 
-    await mkdir(dirname(target.path), { recursive: true })
-    await writeFile(target.path, JSON.stringify(next, null, 2))
+    await writeJsonAtomic(target.path, next)
 
     // Read it back before claiming it worked. A write can be reverted between
     // the two (Claude Desktop flushing its in-memory config as it quits is the
@@ -935,7 +958,7 @@ export async function main(args = [], opts = {}) {
     // Nothing was written: the only client that could be was left running, or
     // Claude Code has never run here and Desktop was skipped. Either way the
     // old single-client exit code is what a script expects.
-    if (blockedByDesktop) process.exit(1)
+    if (blockedByDesktop || refusedAny) process.exit(1)
     return
   }
   console.log(`\nDone. Open ${writtenTo.join(' or ')} — guano is connected, working on "${slug}".`)
