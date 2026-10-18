@@ -2,6 +2,7 @@ import { watch } from 'vue'
 import { hostBridge, installHostCallbacks } from '@/lib/hostBridge'
 import { usePersistence } from './usePersistence'
 import { usePublishDialog } from './usePublishDialog'
+import { useAgentChat } from './useAgentChat'
 
 let started = false
 
@@ -11,7 +12,9 @@ export function useHostBridge() {
     started = true
     const { status } = usePersistence()
     const { openPublish } = usePublishDialog()
-    installHostCallbacks(openPublish)
+    const { ingest, exit, start: startAgent } = useAgentChat()
+    installHostCallbacks({ openPublish, agentEvent: ingest, agentExit: exit })
+    startAgent()
     watch(status, (value) => hostBridge.post({ type: 'save-status', status: value }), {
       immediate: true,
     })

@@ -3,11 +3,28 @@ export type HostSaveStatus = 'saved' | 'pending' | 'error'
 type OutboundMessage =
   | { type: 'save-status'; status: HostSaveStatus }
   | { type: 'unauthorized' }
+  | { type: 'agent-start' }
+  | { type: 'agent-send'; text: string }
+  | { type: 'agent-interrupt' }
+  | { type: 'agent-stop' }
+
+export interface HostAgentExit {
+  code?: number
+  reason?: string
+}
 
 interface HostCallbacks {
   sessionRestored: () => void
   sessionLost: (reason?: string) => void
   openPublish: () => void
+  agentEvent: (event: unknown) => void
+  agentExit: (info?: HostAgentExit) => void
+}
+
+export interface HostHandlers {
+  openPublish: () => void
+  agentEvent: (event: unknown) => void
+  agentExit: (info?: HostAgentExit) => void
 }
 
 declare global {
@@ -75,12 +92,14 @@ export const hostBridge = {
   requestReauth,
 }
 
-export function installHostCallbacks(openPublish: () => void): void {
+export function installHostCallbacks(handlers: HostHandlers): void {
   if (!channel()) return
   window.__guanoHost = {
     sessionRestored: () => settle((p) => p.resolve()),
     sessionLost: (reason?: string) =>
       settle((p) => p.reject(new Error(reason || 'the session could not be restored'))),
-    openPublish,
+    openPublish: handlers.openPublish,
+    agentEvent: handlers.agentEvent,
+    agentExit: handlers.agentExit,
   }
 }

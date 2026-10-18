@@ -1,7 +1,7 @@
-# Roadmap: launcher auth, host-aware chrome, collaboration, server deploy
+# Roadmap: launcher auth, host-aware chrome, collaboration, server deploy, the AI panel
 
-Four workstreams worked out in design on **2026-10-17**, in the order they came
-up. Nothing here is built yet. Each one records what was decided, what the code
+Five workstreams worked out in design on **2026-10-17** and **2026-10-18**, in
+the order they came up. Nothing here is built yet. Each one records what was decided, what the code
 already does (with the file and line that proves it), the traps found while
 reading, and what is still open.
 
@@ -214,15 +214,368 @@ the README.
 
 ---
 
+## 5. The AI panel: Claude Code inside the editor
+
+**Goal.** A chat with the site's agent, opened from the canvas, under the
+launcher. The person types next to the page they are looking at; the agent's
+edits land on that page as it works.
+
+**Status.** Direction decided (option 1 below) on 2026-10-18. Wire format
+probed on a real machine. Not built.
+
+### The decision: drive the person's own `claude` CLI, headless
+
+Three ways to put a model behind a chat box were weighed:
+
+1. **Spawn the installed `claude` binary** in print mode with JSONL on both
+   pipes, and render the stream. The harness, the auth and the bill are the
+   person's existing Claude Code install. **Chosen.**
+2. The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) in a node sidecar —
+   the same harness as a library. Cleaner than parsing a CLI, but it is a
+   second integration surface for the same thing, and it still needs the
+   person's Claude credentials. Not for step 1; nothing below precludes it.
+3. Our own loop on the Anthropic SDK with the guano tools attached. Rejected:
+   it makes every user bring an API key to a self-hosted AGPL tool, and makes
+   context management, compaction and the permission model ours to own.
+
+**Why (1) is cheap here and not elsewhere:** the project is already an MCP
+server the person's Claude Code can reach — `guano connect` mints the token and
+writes the entry (`packages/guano/mcp/connect.mjs`), and `mcp/server.mjs:317`
+speaks stdio to whichever client launches it. The chat needs a *client*, and
+the person has one installed. What exists today supplies the tools; this
+section supplies the box.
+
+### What was observed (2026-10-18, `claude` at `/opt/homebrew/bin/claude`)
+
+```sh
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"…"}}' \
+| claude -p --input-format stream-json --output-format stream-json --verbose \
+    --include-partial-messages --replay-user-messages \
+    --strict-mcp-config --mcp-config '{"mcpServers":{}}' --setting-sources ""
+```
+
+One JSON object per stdout line, in this order for a one-turn exchange:
+
+| line | what it is | the panel does |
+|---|---|---|
+| `{"type":"system","subtype":"init","session_id","tools":[…],"cwd",…}` | the session is up; first line | remember `session_id` (for `--resume`), show the model name once it arrives |
+| `{"type":"system","subtype":"status","status":"requesting"}` | a request is in flight | the "thinking" pulse |
+| `{"type":"user","message":{…},"isReplay":true}` | our own stdin line echoed back (from `--replay-user-messages`) | flip the pending bubble to sent — **do not render it a second time** |
+| `{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"thinking"}}}` | thinking begins | pulse. **The `thinking_delta`s that follow carry `""`** — display is omitted on current models, so never build a thinking bubble from them |
+| `{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"pong"}}}` | a token | append to the open assistant bubble |
+| `{"type":"assistant","message":{"content":[…]}}` | the block so far, consolidated | source of truth for `tool_use` blocks (name + input) — render a tool row from these, not from deltas |
+| `{"type":"user","message":{"content":[{"type":"tool_result",…}]}}` | a tool answered (not a replay — no `isReplay`) | close the matching tool row, mark `is_error` |
+| `{"type":"rate_limit_event","rate_limit_info":{"status","resetsAt","unifiedWindows":…}}` | the plan's windows | surface when `status !== "allowed"` — the probe machine showed `overageDisabledReason: "out_of_credits"`, which is exactly the message a person needs to see |
+| `{"type":"result",…,"is_error","session_id","total_cost_usd","duration_api_ms"}` | the turn is over | close the turn, re-enable the composer |
+
+**One turn holds several `message_start`s** — every tool call is another API
+round — so turns are bounded by *our send* and *the `result` line*, not by
+message boundaries. `--replay-user-messages` is what makes the send
+acknowledgeable at all; without it the first evidence a line landed is the
+model's first token.
+
+### Step 0's answers (probed 2026-10-18, `claude` 2.1.277)
+
+**The interrupt is confirmed.** Write to stdin:
+
+```json
+{"type":"control_request","request_id":"<ours>","request":{"subtype":"interrupt"}}
+```
+
+and the CLI answers on stdout:
+
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"<ours>","response":{"still_queued":[]}}}
+```
+
+then ends the turn with `{"type":"result","subtype":"error_during_execution",
+"is_error":true,"result":""}`. **An interrupted turn is indistinguishable from a
+crashed one by the result line alone** — same subtype, and the `result` string
+is EMPTY, so trap 9's "render the error text" would render nothing. The panel
+must remember that it asked and label the turn *Stopped*; a `result` error it
+did not ask for is a real failure.
+
+**The permission `control_request` does not exist, and the plan's step 3 was
+wrong about it.** `--permission-prompts host` means "the SDK host or
+`--permission-prompt-tool`" — and **`--permission-prompt-tool` is not a flag on
+this build**; it appears only inside that help text. A raw spawned CLI is
+therefore nobody, so with `host` and no SDK on the other end a tool call that
+needs a prompt is **denied automatically**, exactly as `none` would. Observed
+with a `Write` call under `--permission-mode manual`: no control line of any
+kind, and the model then said *"I need your permission to write the file"* with
+nothing anywhere to grant it.
+
+A denial is not silent, though — it arrives twice, and both are the panel's to
+render:
+
+| line | |
+|---|---|
+| `{"type":"system","subtype":"permission_denied","tool_name","tool_use_id","message"}` | live, as it happens, with a sentence written for a person |
+| `result.permission_denials[]` — `{tool_name, tool_use_id, tool_input}` | the turn's summary |
+
+Three consequences:
+
+1. `--permission-prompts none` is **forced**, not chosen. Nothing is lost by it
+   on this build.
+2. **Rendering `permission_denied` is step 1 work, not step 3.** Without it the
+   panel shows a model asking for permission and a UI with no answer to give —
+   the worst version of this feature.
+3. **Step 3 moves to the Agent SDK** (option 2), whose `canUseTool` callback
+   owns the control protocol the CLI will not speak. That makes option 2 the
+   upgrade path rather than an alternative, and it is the reason to keep the
+   reducer's input a plain event object: the SDK emits the same message types.
+
+Two smaller things the probe settled:
+
+- **`content_block_start` for a `tool_use` already carries `name` and `id`** (with
+  `input: {}`; the arguments arrive as `input_json_delta`). So the row can appear
+  the moment the call starts and have its input filled by the consolidated
+  `assistant` event — which remains the authority for the input, as planned.
+- **`{"type":"system","subtype":"thinking_tokens","estimated_tokens":N}`** is the
+  only non-empty thinking signal, and it is a good pulse.
+- A sandboxed read-only `Bash` (`echo hi`) is auto-allowed even under
+  `--permission-mode manual`. Irrelevant once Bash is disallowed, but "manual
+  prompts for everything" is not true.
+
+Flags that decide the panel's shape (all from `claude --help` on this build):
+
+- **`--permission-prompts host|none`** (default `host`) — who answers a prompt
+  in print mode. `host` means the process that holds the pipes answers a
+  `control_request` on stdin; `none` means anything that would have prompted
+  is denied. **Step 1 runs with `none`** and pre-approves the one toolset it
+  wants: `--allowedTools "mcp__guano__*"`. The server-side agent policy is the
+  real boundary (`docs/server.md`, Agent policy), so a tool call the panel
+  never prompts for is a tool call the server still refuses when it should.
+- **`--restricted`** removes Bash and the other code-running tools and
+  confines the file tools to the working directories. **Not enough on its own
+  — see trap 4.** Add `--disallowedTools Read Edit Write MultiEdit NotebookEdit
+  Glob Grep` on top, so what is left is the guano toolset and the web tools.
+- **`--mcp-config <file> --strict-mcp-config`** — only this server, from a
+  file the launcher owns. The entry comes from `guano connect --config <that
+  file>`, never from Swift (launcher `CLAUDE.md`: never write an MCP config
+  from Swift). Confirmed in `connect.mjs:71`: an explicit `--config` target is
+  `needsQuit: false`, so **the Claude-Desktop-is-running refusal does not
+  apply** to this path and `quitDesktop()` stays out of it. Also note that
+  target is `stdio: false`, i.e. the written entry has no `type` key — verify
+  `--mcp-config` accepts a `command`-only entry; if it does not, pass the
+  entry inline with `type: "stdio"` added, which is still not "writing a
+  config".
+- **`--session-id <uuid>` / `--resume <id>`** — a fresh id per project the
+  first time, `--resume` after that. The id is the launcher's to remember per
+  project; the page never mints one (and never calls `crypto.randomUUID`; the
+  launcher's `UUID()` is fine, this is Swift).
+- **`--setting-sources user`**, cwd = the project folder — the person's model
+  and effort preferences apply, no project-level hooks or `CLAUDE.md`s are
+  loaded from a folder a site owner did not write.
+- **`--append-system-prompt`** — three sentences: this chat sits inside the
+  Guano editor; the human is looking at the canvas and sees every write land;
+  publishing is the human's button, not a tool (and `mcp__guano__publish` is in
+  `--disallowedTools` so the model cannot try).
+
+### Where it lives
+
+**Builder: a second round button in the Insert dock's corner.**
+`InsertDock.vue:200` is `absolute bottom-1 left-1`, a `size-10` round button
+with a `w-[28rem]` panel above it (list `max-h-96`). The AI button sits to its
+right in the same dock root — the two buttons in one `flex items-center gap-2`
+row, the dock root's `flex-col-reverse` kept so whichever panel is open grows
+upward from its button. **The AI panel is the insert panel's footprint**:
+`w-[28rem]`, the same `rounded-2xl border border-input bg-background/96
+shadow-xl backdrop-blur`, same `origin-bottom-left` transition, a `max-h-96`
+transcript where the insert panel has its list, and a composer where the insert
+panel has its search. Icon `Sparkles`; tooltip because the icon is ambiguous.
+One is open at a time: opening one calls the other's close.
+
+It mounts where `InsertDock` mounts — `CanvasEditor.vue:210`, the overlay slot
+— so it is **Edit-only in step 1**, like ⌘E (`docs/ui.md`: the insert dock is a
+surface that does not exist in Play). Play-mode availability is a later
+decision, not an oversight; it is listed under open.
+
+**Shown by concern, not by host.** `useAuth` deliberately exports
+`showsPublishControl` and never `isLauncher` (`docs/ui.md`, The two rails; two
+bugs from gating on the cause). The AI button follows the rule: a new
+`useAgentChat` singleton owns `available` (false until the host has answered
+that it found a `claude` binary), and the button renders on that. `host ===
+'launcher'` is never the test — a launcher on a machine with no Claude Code is
+a launcher with no AI button.
+
+**Launcher: one `AgentSession` per project, beside `EditorSession`.** Keyed the
+same way (`AppModel.swift:797` creates sessions per `ProjectID`), started
+lazily on the first `agent-start`, torn down with `serverStopped()`
+(`EditorSession.swift`) and when the tab closes. It owns the child process,
+the per-project session id, and the transcript so far (so a page reload can be
+replayed into; see trap 8).
+
+### The bridge, extended
+
+`src/lib/hostBridge.ts` posts `{type}` objects out through the `guano`
+`WKScriptMessageHandler` and the host calls back on `window.__guanoHost`.
+Four messages out, two callbacks in:
+
+| page → host | host does |
+|---|---|
+| `{type:'agent-start'}` | spawn or resume; reply `agentEvent({type:'ready', sessionId, replay:[…]})`, or `agentEvent({type:'unavailable', reason})` |
+| `{type:'agent-send', text}` | write one `{"type":"user","message":{"role":"user","content":text}}` line to stdin |
+| `{type:'agent-interrupt'}` | the stream-json interrupt (**verify** — step 0) |
+| `{type:'agent-stop'}` | SIGTERM, drop the session (the id is kept for resume) |
+
+| host → page | |
+|---|---|
+| `__guanoHost.agentEvent(obj)` | one parsed JSONL line, or one of the two synthetic ones above |
+| `__guanoHost.agentExit({code, reason})` | the process went away; the composer disables with the reason |
+
+`EditorSession.swift:224` only accepts a message from the **main frame of the
+project's own origin**, and that must stay exactly as it is: the canvas renders
+the person's site, and a hostile iframe there would otherwise be able to send
+`agent-send`. JSON into `evaluateJavaScript` goes through the same
+`JSONSerialization` + `[0]` indexing that `sessionLost` already uses
+(`EditorSession.swift:154`) — never string-interpolate a model's output into JS.
+
+`useHostBridge.ts` installs the callbacks once and already watches
+`usePersistence().status`; the agent callbacks install in the same place.
+
+### What the page gains from being in the page
+
+- **Context travels with the message.** `useAgentChat.send()` prefixes the
+  typed text with the active page's slug and, when something is selected, the
+  selected node's `data-id`/`ref` — shown in the composer as a chip, not typed.
+  That is the whole reason to have the chat *here* and not in a terminal.
+- **Edits are already live.** `server/index.mjs:1545` tags every store write
+  by `isAgentRequest`, and `useLiveSync.ts:75` adopts exactly the agent ones,
+  suspending autosave for `QUIET_MS` and offering `takeOver`. Nothing new is
+  needed for the canvas to follow the agent; the existing agent-lock pill is
+  the right UI while a turn runs.
+- `requestReveal()` / `selectElement()` in `useElement` exist for a later
+  "jump to what it just edited" affordance; not step 1.
+
+### Traps, numbered because the plan refers to them
+
+1. **A GUI app's PATH is not the terminal's.** `claude` lives in
+   `~/.local/bin`, `/opt/homebrew/bin` or `/usr/local/bin` depending on how it
+   was installed, and none of those are in a `.app`'s environment. Resolve it
+   explicitly (those three, then `$SHELL -lc 'command -v claude'` as the last
+   resort), and report "Claude Code is not installed" through `available`
+   rather than failing the first send.
+2. **`ChildProcess` wires stdin to `/dev/null`**
+   (`ChildProcess.swift`, `process.standardInput = FileHandle.nullDevice`).
+   The agent needs a writable stdin pipe. Add a spawn option for it rather than
+   a second class; the line-splitting and the flush grace are exactly right for
+   JSONL and must be kept.
+3. **Nesting.** A `claude` spawned from inside a Claude Code session refuses
+   unless `CLAUDECODE` is unset in its environment. The launcher is not nested,
+   so this only bites the developer probing from a terminal — the probe above
+   ran `env -u CLAUDECODE`.
+4. **The project folder contains `data/`.** `--restricted` confines the file
+   tools to the working directory — which is the project, which holds
+   `data/store/guano-project__main.json`, every token and `agent-policy.json`.
+   A confined `Edit` on the store is a write that bypasses the whole agent
+   policy. That is why the file tools are *disallowed*, not merely confined,
+   and why the MCP server itself never touches the data dir
+   (`docs/mcp.md`, the fence). Do not relax this for convenience.
+5. **No elicitation in print mode.** The guano server's consent dialogs
+   (`set_target`, `use_project`, `publish`) are MCP elicitation; a headless
+   client declares none, so `set_target` falls to the ask-in-chat attestation
+   path (`tools.mjs` ~5955, `docs/server.md`) and `use_project` refuses. Both
+   are fine here: the launcher's connect already asked the two policy
+   questions, so the written entry carries `target: main` when Main is
+   allowed and the agent otherwise works in a draft the editor shows. Publish
+   is simply not the agent's — see the flags.
+6. **Gate on the concern.** Not `host === 'launcher'`, not `hostBridge.available`
+   — `useAgentChat().available`, which is false until the host has said yes.
+7. **Thinking deltas are empty; several `assistant` events arrive per turn;
+   the replayed `user` line is ours.** All three are in the table above and
+   each will produce a visibly wrong transcript if forgotten: a blank
+   "thinking" bubble, a duplicated answer, a doubled question.
+8. **A page reload loses the DOM, not the process.** The web view reloads on
+   reauth (`reauth(reload: true)`) and on the person's own ⌘R. The
+   `AgentSession` keeps the transcript it has streamed and replays it on the
+   next `agent-start`; the page never persists it (it is runtime state, like
+   selection — never in `project`).
+9. **`result` can be an error.** `is_error: true` with the text in `result`;
+   render it in the turn, re-enable the composer, keep the session. A process
+   *exit* is different and comes through `agentExit`.
+10. **Kill order.** SIGTERM first, like the server — a turn mid-write is a
+    tool call the guano server will finish or refuse on its own; what must not
+    happen is a SIGKILL that leaves the child's MCP server orphaned holding
+    the token file open.
+
+### Order
+
+0. **Probe the two unverified wire shapes** — **DONE 2026-10-18**, written up
+   under *Step 0's answers* above. The interrupt is as expected; the permission
+   `control_request` does not exist on this build, which pulled denial-rendering
+   into step 1 and moved step 3 to the Agent SDK.
+1. **Builder first, host faked — DONE 2026-10-18.** Shipped as
+   `src/composables/useAgentChat.ts` (the singleton + reducer),
+   `src/components/editor/canvas/AgentDock.vue`, the four messages and two
+   callbacks on `hostBridge.ts`, ⌘J in `useEditorShortcuts.ts`, and
+   `e2e/ui-agent-panel.spec.ts` (9 cases) over
+   `e2e/fixtures/agentStream.ts`. Written up in **`docs/agent-panel.md`**.
+   Three things came out differently than planned, each recorded there:
+   **`agent-start` is posted at BOOT**, not on open — the button is gated on
+   `available`, so a page that asked on open could never be opened;
+   **rendering a denial is step-1 work** (step 0), and the `result`'s summary
+   must not overwrite the live `permission_denied` message, which it did until
+   the spec caught it; and **both dock buttons needed an `aria-label`**, the
+   insert `+` included — `v-tooltip` only sets `aria-describedby` while
+   showing, so neither icon button had an accessible name. Original shape, for
+   the record: `hostBridge.ts` messages + callbacks;
+   `useAgentChat.ts` (singleton: `available`, `status`, `turns`, `sessionId`,
+   `model`, `send`, `interrupt`, the reducer over the table above);
+   `AgentDock.vue` beside `InsertDock` with the footprint rules above;
+   ⌘-shortcut registered in `useEditorShortcuts.ts` next to ⌘E
+   (`useEditorShortcuts.ts:47`, `buildOnly`), key chosen after checking the
+   four registration sites (`docs/ui.md`, Shortcuts) for a free one. **e2e:**
+   `addInitScript` installs a fake `window.webkit.messageHandlers.guano` that
+   records posts, and the test feeds the recorded probe transcript through
+   `window.__guanoHost.agentEvent` line by line, asserting the bubbles, the
+   tool row, the single rendering of the replayed question, and that the
+   button is absent until `ready`. Shippable alone: without a host the button
+   does not exist.
+2. **Launcher.** `ClaudeCLILocator` (trap 1); writable stdin on `ChildProcess`
+   (trap 2); `guano connect --config <app-support>/mcp/<slug>.json` at
+   first use and whenever the project's port or token changes (connect owns
+   staleness — `ConnectionListParser` already reads its verdicts); `AgentSession`
+   with the spawn line assembled from the flags above; the bridge handlers in
+   `EditorSession.handle(message:)`; replay on reload (trap 8). **Tests:** a
+   `StreamJSONReader` over the recorded transcript in `LauncherCoreTests`, the
+   locator over a fake filesystem, and a real-run test gated the way
+   `RealConnectTests` is.
+3. **Permissions as a real surface — and therefore the Agent SDK** (option 2).
+   The CLI cannot be asked (step 0), so an inline approve/deny row means
+   swapping the child process for `@anthropic-ai/claude-agent-sdk` in a node
+   sidecar and answering its `canUseTool`. Everything above survives that swap
+   except the spawn itself: the SDK emits the same message types the reducer
+   already consumes. Until then the toolset is what `--allowedTools` says, and
+   anything else is denied with the denial shown.
+4. **Later, each on evidence:** "jump to what it edited"; the panel in Play;
+   the transcript surviving a launcher relaunch (Claude Code keeps the session
+   under `~/.claude/projects/`, but reading its on-disk format is a bet on a
+   format nobody promised); the same panel on a server-hosted studio (§4b),
+   which is the first time the agent runs on a machine that is not the
+   person's and so the first time credentials are a design question.
+
+Landed in: **`docs/agent-panel.md`** (the bridge protocol, the wire table, the
+four ways a transcript goes wrong, the permission and interrupt findings), a
+section in `docs/ui.md` (the corner now holds two docks), the ⌘J row in the
+README, and the registry line in `CLAUDE.md`. Still owed: the launcher's
+`PLAN.md` as a Phase 4.6, when step 2 lands — at which point this section goes
+away and `docs/agent-panel.md` carries all of it.
+
+---
+
 ## Suggested order
 
 1. **§1 + §2 together.** One change, and §2's `store.ts` re-mint is what keeps
    §1 from rotting. Smallest, highest certainty, unblocks the launcher.
 2. **§4(b) install doc + snapshot verification.** Mostly writing, over machinery
    that already works, and it answers the question users actually ask.
-3. **§3 step 1, presence only.** Then stop and watch before committing to the
+3. **§5 step 2** (steps 0 and 1 are done — the builder half is in, behind a
+   faked host). What is left is the launcher: one process, one config file
+   written by `guano connect --config`, and the replay on reload.
+4. **§3 step 1, presence only.** Then stop and watch before committing to the
    rest of Option A.
-4. Everything else, on evidence.
+5. Everything else, on evidence.
 
 ## Still open
 
@@ -231,3 +584,6 @@ the README.
   real requirement? The answer changes the whole workstream.
 - **§3:** does the launcher's "a tab is its server's lifetime" rule survive
   collaboration? If not, that decision comes before any sync work.
+- **§5:** whether the panel exists in Play. Contributors are pinned there, and
+  an agent that edits for a contributor is a policy question before a UI one.
+  (The shortcut is settled: **⌘J**, free across all four registration sites.)

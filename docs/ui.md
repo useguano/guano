@@ -75,6 +75,26 @@ There is no header: the two rails own the chrome.
 
 Two consequences worth knowing before changing any of it. The status button is **also the only save-status surface** (`SAVE_ICONS`/`SAVE_COLORS`, `aria-live`), so hiding it obliges the host to show save state: `src/lib/hostBridge.ts` posts `usePersistence().status` out over a `WKScriptMessageHandler` named `guano`, and the host calls back through `window.__guanoHost` (`openPublish`, `sessionRestored`, `sessionLost`). And the **Account section is NAVLESS** (`NAVLESS_SECTIONS`, reachable only from the My account button), so hiding that button removes password changes in launcher mode — accepted knowingly; they happen in a browser. Coverage: `e2e/auth-launcher-session.spec.ts`.
 
+## The canvas's bottom-left corner holds two docks
+
+`InsertDock` (the ⌘E insert palette) and `AgentDock` (the ⌘J AI panel) sit side
+by side in that corner — `left-1` and `left-13`, which is exactly the first
+button's right edge plus a `gap-2`. Both mount in `CanvasEditor`'s overlay
+slot, so both are **Edit-only**, like ⌘E itself: they are surfaces that do not
+exist in Play. One panel is open at a time, and each closes the other from the
+COMPONENT (`AgentDock` watches the palette's `open` and calls `closePalette`
+when it opens), so neither singleton imports the other — the same care
+`ModeToggle` takes not to pull `useStructure` into the view-mode singleton.
+
+The AI panel is `available`-gated and so normally absent: it needs a desktop
+host that found a `claude` binary, and the whole dock is `v-if`'d on that — not
+on `host === 'launcher'`, which is the cause rather than the concern.
+→ `docs/agent-panel.md`
+
+Both buttons carry an `aria-label`. They are raw icon buttons, and `v-tooltip`
+only sets `aria-describedby` while the tooltip is showing, so neither had an
+accessible name — the insert `+` had none since it was written.
+
 ## The right sidebar's panels
 
 `SettingsEditor` + `usePanel`, one panel open at a time: **data · style · interactions · branches** (branches is labelled "Drafts" in the UI).
@@ -145,7 +165,7 @@ They are programmed in **four** places, by scope:
 
 **Escape is deliberately in none of them.** Each layer owns its own listener, so the peel order falls out of who is mounted: `ModalStackHost`, `useEffectsDrawer`, `PopoverHost`, `useDrawerEscape`, and `InteractionsEditor` for a pending target pick.
 
-In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces.
+In the app-wide set: Style/Data/Interactions open with **S / D / I while the Layers tree has focus** (the tree owns them, so they can never fire while typing elsewhere); **Shift+↑/↓** moves the selection one slot (app-level, so it works from the canvas too); and the structural ones — ⌘C/X/V/D, ⌘G wrap-in-div, delete — **self-gate to Build mode** via `isBuild` rather than being a separate Preview keymap. ⌘Z/⌘⇧Z, ⌘S (save), ⌘E (the in-canvas insert dock, `useCommandPalette`) and ⌘P (publish) work in both surfaces; ⌘J (the AI panel, `useAgentChat`) is Edit-only like its dock.
 
 ## The two surfaces
 
@@ -157,7 +177,7 @@ One admin shell (`BuildView` at `/admin`, laid out by `EditorLayout`) with **two
 
 **Preview** (shown as **Play**) — the Build-only columns drop out and the centre becomes the full-site render (`SitePreview` → `PreviewRenderer`). For an admin or editor it is **read-only**: the site the way a visitor gets it, with links navigating (state-driven, no URL change), interactions, animations, scrub, sliders and smooth scroll all running for real, no editor affordance drawn over it, and text edited on the Edit canvas (`ElementRenderer`). Anyone can add a **comment** (hold C, click). **A contributor also edits content on the render** (`usePreviewEditing`, gated on `!canBuild`): double-click text to edit it in place (`useInlineEdit` with `escBehavior: 'save'`; field-bound text writes the entry, locale-aware), double-click an image/video to replace it from the media library, and right-click for **Edit content** / **Replace background** (the menu lives in `SitePreview`). Text inside a component instance is per-instance content, so it is editable; a background inside one is the master's (`backgroundInfo` renders from it, and the contributor merge keeps masters), so it is not offered. While editing is on, a link's single click waits 250ms (one shared `pendingNav` timer) so a double-click can cancel it; for builders a click navigates at once. The chrome around it still edits: the sidebar panels are per account type, not per mode, so an admin keeps the full Data/Style/Interactions inspector in Play, and the Pages drawer keeps its page/item settings. **Contributors are pinned here** (`useViewMode` forces the mode the moment `canBuild` resolves false; the Components rail button, the Pages drawer's Edit-layers icons and the toggle itself are hidden for them, so they only ever see Play and never learn there was a switch) — which means a contributor's content editing is the in-place editing above, plus the **Pages drawer's** item/page settings (entry field values, name/slug/status/seo) and comments.
 
-The toggle is a **page's** mode, so `BuildView` mounts it only when `canBuild && !showComponents` — the components board has nothing to play, and you leave it by opening a page. Leaving Edit closes the ⌘E palette (`ModeToggle` calls `closePalette`, not `setMode`, so the view-mode singleton never pulls in `useStructure`). It sits bottom-RIGHT so it never shares a corner with `InsertDock`, and its Play offset pays back the framed pane's `my-2` + border so switching doesn't move it under the pointer.
+The toggle is a **page's** mode, so `BuildView` mounts it only when `canBuild && !showComponents` — the components board has nothing to play, and you leave it by opening a page. Leaving Edit closes the ⌘E palette (`ModeToggle` calls `closePalette`, not `setMode`, so the view-mode singleton never pulls in `useStructure`). It sits bottom-RIGHT so it never shares a corner with the two docks (`InsertDock` and `AgentDock`), and its Play offset pays back the framed pane's `my-2` + border so switching doesn't move it under the pointer.
 
 ## Tailwind at runtime
 

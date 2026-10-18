@@ -223,6 +223,7 @@ Edit only:
 | Key | Action |
 |---|---|
 | `⌘E` | Insert dock |
+| `⌘J` | AI panel (desktop launcher only) |
 | `⌘⇧E` | Effects drawer |
 | `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste elements |
 | `⌘D` | Duplicate |

@@ -12,6 +12,7 @@ import CommentMarker from '@/components/shared/CommentMarker.vue'
 import CommentLayer from '@/components/site/CommentLayer.vue'
 import { anchorFromPoint, anchorScreenPos } from '@/lib/commentAnchor'
 import InsertDock from '@/components/editor/canvas/InsertDock.vue'
+import AgentDock from '@/components/editor/canvas/AgentDock.vue'
 import { useCollections } from '@/composables/useCollections'
 import { useComments } from '@/composables/useComments'
 import { useCommentMode } from '@/composables/useCommentMode'
@@ -208,6 +209,7 @@ watch(focusTick, async () => {
     <template #overlay>
       <CommentLayer :root="viewport" />
       <InsertDock />
+      <AgentDock />
     </template>
   </CanvasViewport>
 </template>

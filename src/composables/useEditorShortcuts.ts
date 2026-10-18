@@ -3,6 +3,7 @@ import { useContextMenu } from './useContextMenu'
 import { usePersistence } from './usePersistence'
 import { useStructure } from './useStructure'
 import { togglePalette } from './useCommandPalette'
+import { toggleChat } from './useAgentChat'
 import { useEffectsDrawer } from './useEffectsDrawer'
 import { usePublishDialog } from './usePublishDialog'
 import { useViewMode } from './useViewMode'
@@ -47,5 +48,6 @@ export function useEditorShortcuts() {
     { key: 'e', mod: true, shift: false, allowInInput: true, handler: buildOnly(togglePalette) },
     { key: 'e', mod: true, shift: true, allowInInput: true, handler: buildOnly(toggleDrawer) },
     { key: 'p', mod: true, shift: false, allowInInput: true, handler: openPublish },
+    { key: 'j', mod: true, shift: false, allowInInput: true, handler: buildOnly(toggleChat) },
   ])
 }
