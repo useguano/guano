@@ -121,6 +121,15 @@ rules 5 and 6.
   `pageId` and path and, when something is selected, the element by its `ref` or
   `data-id`. Those are working addresses — use them instead of a `list_pages` or a
   whole-page read.
+- **How much to read first, by the size of the job.** Orientation is a round trip the
+  person waits through, so it scales with the work and never with habit:
+  - A **one-element change named precisely** — the text, a class, an attribute, a
+    link — reads **nothing**. The context line already gave you the address;
+    `edit_elements` or `edit_structure`, and done.
+  - A **section or a page**: one `get_guide {for: "build-page"}`, then work.
+  - A **kind of work you have not done in this session** — motion, data, a component,
+    content — its own `for`, once.
+  - **Never re-read a section already in this conversation.** It is still there.
 - **Main can be refused by the server.** `allowMainWrites: false` means the save comes
   back refused however the target is set. Relay the sentence you are given — it names
   the switch, which is in this same drawer — and stop. Do not retry, do not make a draft

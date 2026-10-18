@@ -435,6 +435,29 @@ order steps 1–4 set out.**
 
 Each change records its own before/after against the same prompt.
 
+### The levers, and what each one does
+
+1. **One `ToolSearch`, not three.** The harness defers tool schemas and takes a
+   whole list after `select:`; nothing tells the model that. The handbook names
+   the set and the launcher's system prompt says it in a sentence, so the half
+   the client might drop is still guaranteed.
+2. **`get_guide {for}`** — the handbook by job rather than by section, so
+   orientation is one round trip instead of six. → `docs/mcp.md`.
+3. **A ladder, so a trivial edit reads nothing.** The read-first rule was
+   unconditional, which made *make the heading say Hello* cost the same
+   orientation as a page build. Now: a precisely named one-element change reads
+   nothing (the context line is the address); a section or a page is one
+   `for`; a kind of work new to the session is its own `for`, once; and a
+   section already in the conversation is never re-read.
+4. **Whether the essentials move INTO the instructions** — gated on the cache
+   figures above, and not decided yet.
+5. **The panel's default model** — today it is whatever `~/.claude/settings.json`
+   says, i.e. the person's TERMINAL default. The baseline run above was on
+   Opus 5 · 1M, which nobody chose for a canvas.
+
+Steps 1–3 are in. Step 4 needs a `cache_read_input_tokens` from a second turn;
+step 5 is a product change and wants a row in the table first.
+
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**
 (five runs, 2026-10-18, no instance listening). That boot reads the 185 KB
