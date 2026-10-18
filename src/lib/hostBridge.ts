@@ -1,10 +1,16 @@
 export type HostSaveStatus = 'saved' | 'pending' | 'error'
 
+export interface HostAgentImage {
+  mediaType: string
+  data: string
+}
+
 type OutboundMessage =
   | { type: 'save-status'; status: HostSaveStatus }
   | { type: 'unauthorized' }
   | { type: 'agent-start' }
-  | { type: 'agent-send'; text: string }
+  | { type: 'agent-send'; text: string; images?: HostAgentImage[] }
+  | { type: 'agent-model'; model: string }
   | { type: 'agent-interrupt' }
   | { type: 'agent-stop' }
 

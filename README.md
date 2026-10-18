@@ -5,11 +5,26 @@ with a layers tree — insert and arrange elements, style them with Tailwind cla
 add interactions, build reusable components and
 CMS collections, translate into locales, leave comments, and work in drafts before
 applying to the live site. Publishing compiles everything to a fully static site (plain HTML +
-one CSS file + a ~1.5 KB runtime) that the built-in server hosts at `/` — or
-ships as a zip, or pushes straight to a GitHub repo. The admin editor lives at
+one CSS file + a ~1.5 KB runtime) that ships as a zip, pushes straight to a
+GitHub repo, or is hosted at `/` by the built-in server. The admin editor lives at
 `/admin`; invite editors, contributors and reviewers with role-based access.
 
+Guano is **launcher-first**: the way to run it on your own machine is the
+**Guano Launcher**, a native macOS app that creates projects, runs their
+servers, opens the editor and hosts the AI panel's Claude session — no terminal.
+The same server runs headless on any Node host when a site needs an always-on
+instance, and the Launcher connects to that instance too. A project is one
+ordinary folder either way.
+
 ## Quickstart
+
+**On a Mac:** open the Guano Launcher, choose **New project**, name it. The
+Launcher scaffolds the folder, starts its server, opens the builder and offers
+to connect Claude. Create the first (admin) account, build, publish. Projects
+sit in the Launcher's home; a project you stop stays on disk and reopens where
+you left it.
+
+**From a terminal** (Linux, Windows, a server, or if you prefer it):
 
 ```sh
 npm create @useguano   # asks for a folder name, installs guano, connects Claude Desktop
@@ -29,7 +44,7 @@ so after `npm run dev` and the admin account there is nothing else to set up:
 open Claude and the agent is working. See [Working with an AI
 agent](#working-with-an-ai-agent).
 
-Requires Node `^22.18.0 || >=24.12.0`.
+Requires Node `^22.18.0 || >=24.12.0` (the Launcher bundles its own).
 
 ## Developing (two processes)
 
@@ -49,44 +64,54 @@ serves `dist/` on an isolated port and data dir).
 ## Deploying
 
 The mental model: **Guano is the studio, the site is the product.** The editor
-always lives wherever the Guano server runs; the published site is a portable
-static export that can live on that same host or anywhere else. Pick one of two
-topologies — both are fully supported, and the only difference is the publish
-method you choose in Settings → Publish.
+lives wherever the Guano server runs; the published site is a portable static
+export that can live anywhere. Two questions decide the setup, in this order:
+**where does the instance run**, and **where does the site live**.
 
-### Topology 1 — all-in-one
+### Default — studio on your Mac, site on a static host
 
-One host runs Guano and serves everything. Point the site's domain at it:
-`yoursite.com` is the published site, `yoursite.com/admin` is the editor.
-Publish method: **server** (the default — every publish refreshes `/` in place).
+The Launcher runs the instance on your machine. You build locally and publish
+by pushing the export to a GitHub repo (publish method: **github** →
+Pages/Netlify/anything watching the repo) or by downloading a zip (**zip**) to
+drop on any static host. Nothing of Guano is on the public internet; the site
+gets CDN speed and is up whether or not your Mac is. This is where every
+project starts.
 
-Best for solo builders and single-site owners: one host, one cert, zero extra
-config. Trade-off: the site is up only while the Guano process is.
+The export is fully portable (root-absolute URLs, plain HTML + one CSS file + a
+~1.5 KB runtime). A site with no forms needs nothing beyond those files.
 
-### Topology 2 — studio + static site
+### When the instance moves to a host
 
-Guano runs on *your* infrastructure (`studio.youragency.com`); clients and
-editors log in there. Publishing pushes the export to a GitHub repo (publish
-method: **github** → Pages/Netlify/anything watching the repo) or hands you a
-zip (**zip**) to drop on any static host. The client's domain serves the static
-export; the studio host never appears on it.
+Some things need the Guano process reachable at 9pm when your laptop is closed:
 
-Best for agencies and client work: the site gets CDN speed and survives the
-studio being down, and auth/data stay per-instance on your box. The export is
-fully portable (root-absolute URLs, plain HTML + one CSS file + a ~1.5 KB
-runtime).
+- a **client, contributor or reviewer** who logs in, comments, or is invited by mail;
+- **form submissions**, the mail they send and any webhook forward;
+- a **private site**, or publish method **server** (the host serves the site at `/`);
+- an **agent on another machine** connecting over `guano connect --url`.
 
-One setting matters here: if the site uses **forms**, set **Settings → Publish →
-Studio URL** to this instance's public address (`https://studio.youragency.com`).
-The static pages are files on someone else's host, so a submission posts back to
-the studio, which validates and stores it. The studio only accepts a submission
-from the site's own domain (Settings → General → Domain), and never with
-cookies. Leave it empty in topology 1 — there the site and the studio are the
-same host.
+The moment one of those is true, the instance moves to a persistent Node host
+and the Launcher connects to it (**Connect a remote instance…**) instead of
+running it. Two shapes:
 
-### Either way
+**Studio + static site.** Guano runs on *your* infrastructure
+(`studio.youragency.com`); clients and editors log in there. Publishing stays
+github or zip; the client's domain serves the static export and the studio host
+never appears on it. Best for agencies: auth and data stay per-instance on your
+box, the site survives the studio being down. If the site uses **forms**, set
+**Settings → Publish → Studio URL** to the instance's public address — the
+static pages post submissions back to the studio, which validates and stores
+them, accepting only the site's own domain (Settings → General → Domain) and
+never with cookies.
 
-The editor needs a **persistent Node process with a writable disk** — a VPS,
+**All-in-one.** One host runs Guano and serves everything: `yoursite.com` is
+the published site, `yoursite.com/admin` is the editor. Publish method:
+**server** — every publish refreshes `/` in place. One host, one cert, zero
+extra config; the site is up only while the Guano process is. Leave Studio URL
+empty here — site and studio are the same host.
+
+### On the host
+
+The instance needs a **persistent Node process with a writable disk** — a VPS,
 Railway, Fly.io, Render, etc. **It cannot run on Vercel/Netlify or any static
 host** — only the published site can. On platforms with ephemeral filesystems,
 mount a volume and point `GUANO_DATA_DIR` at it, or your users, media, and site
@@ -97,26 +122,20 @@ npm ci && npm run build
 NODE_ENV=production PORT=80 node server/index.mjs
 ```
 
-There's no Dockerfile yet, but the recipe is exactly the three lines above on a
-`node:22` base (install, build, run; declare a volume for the data dir).
+Or use the shipped `Dockerfile` and `compose.yaml` — see [Docker](#docker).
 
-Rules that hold in every topology:
+Rules that hold wherever the instance runs:
 
 - **One instance = one project = one site.** An agency with five clients runs
-  five instances (five data dirs behind one reverse proxy, or five containers).
-  That's deliberate — auth, content, and backups are isolated per client.
-- **Server-backed features need the studio reachable.** Form submissions, the
-  mail they send and any webhook forward all run on the Guano process. A site
-  with no forms needs nothing beyond the static files.
+  five instances (five data dirs behind one reverse proxy, or five containers,
+  or five projects in the Launcher). That's deliberate — auth, content, and
+  backups are isolated per client.
 - **Behind a reverse proxy (nginx, Caddy, a PaaS router), set `TRUST_PROXY=1`**
   so login rate limiting sees real client IPs from `X-Forwarded-For` instead of
   lumping everyone under the proxy's address. Never set it without a proxy in
   front — the header is client-spoofable.
 - **HTTPS is required for real use** (the session cookie is `Secure` by
   default); terminate TLS at the proxy or platform.
-- **Laptop mode is valid** — run Guano locally and publish via zip/github. The
-  moment a client needs to log in, the instance moves to a public host; that's
-  the line.
 
 ## Running it
 

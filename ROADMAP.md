@@ -263,7 +263,7 @@ One JSON object per stdout line, in this order for a one-turn exchange:
 | `{"type":"user","message":{…},"isReplay":true}` | our own stdin line echoed back (from `--replay-user-messages`) | flip the pending bubble to sent — **do not render it a second time** |
 | `{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"thinking"}}}` | thinking begins | pulse. **The `thinking_delta`s that follow carry `""`** — display is omitted on current models, so never build a thinking bubble from them |
 | `{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"pong"}}}` | a token | append to the open assistant bubble |
-| `{"type":"assistant","message":{"content":[…]}}` | the block so far, consolidated | source of truth for `tool_use` blocks (name + input) — render a tool row from these, not from deltas |
+| `{"type":"assistant","message":{"content":[…]}}` | **ONE block, alone, at array index 0** (corrected 2026-10-18: it is not the message so far — keying it by array index doubled every paragraph) | source of truth for a `tool_use`'s input and a text block's final text; reconciled against the block the stream opened, never by index |
 | `{"type":"user","message":{"content":[{"type":"tool_result",…}]}}` | a tool answered (not a replay — no `isReplay`) | close the matching tool row, mark `is_error` |
 | `{"type":"rate_limit_event","rate_limit_info":{"status","resetsAt","unifiedWindows":…}}` | the plan's windows | surface when `status !== "allowed"` — the probe machine showed `overageDisabledReason: "out_of_credits"`, which is exactly the message a person needs to see |
 | `{"type":"result",…,"is_error","session_id","total_cost_usd","duration_api_ms"}` | the turn is over | close the turn, re-enable the composer |
@@ -409,8 +409,9 @@ Four messages out, two callbacks in:
 | page → host | host does |
 |---|---|
 | `{type:'agent-start'}` | spawn or resume; reply `agentEvent({type:'ready', sessionId, replay:[…]})`, or `agentEvent({type:'unavailable', reason})` |
-| `{type:'agent-send', text}` | write one `{"type":"user","message":{"role":"user","content":text}}` line to stdin |
-| `{type:'agent-interrupt'}` | the stream-json interrupt (**verify** — step 0) |
+| `{type:'agent-send', text, images?}` | write one `user` line to stdin — a string, or a content array of image blocks then the text |
+| `{type:'agent-model', model}` | a `set_model` control request (probed 2026-10-18: answered, then a fresh `init` names the new model) |
+| `{type:'agent-interrupt'}` | the stream-json interrupt (confirmed — step 0) |
 | `{type:'agent-stop'}` | SIGTERM, drop the session (the id is kept for resume) |
 
 | host → page | |

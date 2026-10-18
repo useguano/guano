@@ -38,7 +38,8 @@ reauth round-trip (→ `docs/ui.md`, The two rails).
 | page → host | the host's job |
 |---|---|
 | `{type:'agent-start'}` | spawn or resume, then answer `ready` or `unavailable` |
-| `{type:'agent-send', text}` | one `{"type":"user","message":{"role":"user","content":text}}` line on stdin |
+| `{type:'agent-send', text, images?}` | one `user` line on stdin — a plain string, or with images a content array of image blocks then the text (verified with a real screenshot) |
+| `{type:'agent-model', model}` | a `set_model` control request; the CLI answers it and then emits a fresh `system/init` naming the new model, which is how the page learns it took |
 | `{type:'agent-interrupt'}` | the interrupt control request (below) |
 | `{type:'agent-stop'}` | SIGTERM; keep the session id for a resume |
 
@@ -75,7 +76,7 @@ than against our idea of it. Lines arrive one JSON object per line.
 | `user` with **`isReplay: true`** | OUR echoed question: confirms the pending bubble, or (on a replay) rebuilds the turn |
 | `stream_event` `content_block_start` `tool_use` | opens the tool row — `name` and `id` are already here |
 | `stream_event` `content_block_delta` `text_delta` | appends to the open text item |
-| `assistant` — the consolidated message | the authority for a `tool_use`'s **input**, and for a text block's final text |
+| `assistant` — **one block, alone, at array index 0** | the authority for a `tool_use`'s **input**, and for a text block's final text — see below |
 | `user` with `tool_result` blocks | closes the matching tool row, `is_error` and all |
 | `system/permission_denied` — `tool_name`, `tool_use_id`, `message` | marks the row denied, **with the message** |
 | `rate_limit_event` | shown only when `status !== "allowed"` |
@@ -87,6 +88,17 @@ boundaries: every tool call is another API round, so one turn holds several
 that — a second message restarts its block indices at 0, and a key of the index
 alone made the second answer overwrite the first.
 
+**An `assistant` event carries ONE block, alone, at array index 0 — not the
+message so far.** The stream put the answer at index 1, after a thinking
+block; the consolidated event then arrived as `content: [{text}]`, so keying it
+by its array position made it a *second* item under `msg:0` beside the streamed
+one under `msg:1`, and the first real session rendered every paragraph twice.
+The reducer now remembers which text block the stream opened (`openText`) and
+hands the consolidated text to that; a consolidated text with nothing open — a
+replay that carried no stream events — becomes its own item. The first fixture
+had encoded the wrong shape by hand and the test passed on it, which is why
+`e2e/fixtures/agentStream.ts` builds every block from the recorded wire now.
+
 ### Four ways this is visibly wrong if you forget
 
 Each has a case in the spec, because none of them is a type error:
@@ -97,6 +109,44 @@ Each has a case in the spec, because none of them is a type error:
    thinking bubble built from them is a permanently blank box.
 3. **An interrupt is not a crash** — see below.
 4. **A denial has to be shown** — see below.
+
+## What the transcript shows, and what it hides
+
+A session is mostly tool calls: the first real one made seven in a row before
+its first sentence, and a row per call turned the column into a log. So:
+
+- **Consecutive tool calls collapse into one activity bubble** between the
+  sentences — `3 steps · Listed the pages`, with the running step named while
+  it runs — and expand on click to the list. Each call is described in words
+  (`describeTool` in `lib/agentLabels.ts`: `get_guide {section}` → *Read the
+  guide: styling*), never by its wire name; the raw input sits under it,
+  truncated.
+- **The strip above the composer says what the agent is doing right now** —
+  the running tool's description, else *Writing…* / *Thinking…* — with the
+  Stop button beside it. It only exists while a turn runs.
+- **The person's message is a filled bubble on the right**; the model's words
+  are plain text, rendered through a token-based markdown-lite
+  (`lib/agentMarkdown.ts`: paragraphs, bold, inline code, lists, headings as
+  bold lines, fenced code) into Vue nodes — **never `v-html`**: the text is a
+  model's output over content the site's users wrote.
+- **The page/element context is a small mono line**, above the bubble and in
+  the composer's toolbar — it stretched to full width as a badge in a flex
+  column, which is what `self-start` is for.
+- **The composer is one box**: a bare textarea, attachments as thumbnails
+  above it, and a toolbar — the context, `+` (images, up to 5 MB each, read
+  with `FileReader`, posted as base64), the model menu (`opus` / `sonnet` /
+  `haiku` aliases; disabled mid-turn), and a round send arrow. Enter sends,
+  Shift-Enter breaks the line.
+- **How much the model says is the launcher's system prompt**, which asks for
+  one or two plain sentences and no inventories — a 16rem column cannot carry
+  the three-screen recap the first session wrote.
+
+**The lock scrim covers the canvas, not the app.** `AgentLockHost` used to
+mount in `App.vue` as `fixed inset-0`, swallowing every key: while the agent
+worked the chat itself was frozen, which is the one surface that must stay
+live. It mounts in `BuildView` over the canvas region now, `absolute inset-0`,
+and lets keystrokes through to any editable element — the point was to keep
+the person's hands off the tree mid-write, not off the keyboard.
 
 ## There is no permission prompt channel
 

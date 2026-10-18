@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
-import { hostBridge, type HostAgentExit } from '@/lib/hostBridge'
+import { hostBridge, type HostAgentExit, type HostAgentImage } from '@/lib/hostBridge'
 import { uid } from '@/lib/shared/ids'
+import { describeTool } from '@/lib/agentLabels'
 import { useNotice } from './useNotice'
 
 export type AgentStatus = 'unknown' | 'unavailable' | 'idle' | 'thinking' | 'streaming'
@@ -16,6 +17,7 @@ export interface AgentToolItem {
   kind: 'tool'
   key: string
   name: string
+  summary: string
   input: string | null
   state: AgentToolState
   detail: string | null
@@ -27,11 +29,17 @@ export interface AgentTurn {
   id: string
   question: string
   context: string | null
+  images: string[]
   sent: boolean
   items: AgentItem[]
   done: boolean
   error: string | null
   stopped: boolean
+}
+
+export interface AgentAttachment {
+  mediaType: string
+  data: string
 }
 
 export interface AgentContext {
@@ -52,10 +60,22 @@ const turns = ref<AgentTurn[]>([])
 let requested = false
 let interrupting = false
 let blockOwner = 'm0'
+let openText: { owner: string; key: string } | null = null
+let consolidated = 0
 
 export const agentBusy = computed(
   () => status.value === 'thinking' || status.value === 'streaming',
 )
+
+export const agentStep = computed<string | null>(() => {
+  const turn = turns.value[turns.value.length - 1]
+  if (!turn || turn.done) return null
+  for (let i = turn.items.length - 1; i >= 0; i--) {
+    const item = turn.items[i]
+    if (item?.kind === 'tool' && item.state === 'running') return item.summary
+  }
+  return null
+})
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -86,7 +106,13 @@ function upsertText(key: string, text: string, mode: 'append' | 'set'): void {
 
 function upsertTool(
   key: string,
-  patch: { name?: string; input?: string | null; state?: AgentToolState; detail?: string | null },
+  patch: {
+    name?: string
+    summary?: string
+    input?: string | null
+    state?: AgentToolState
+    detail?: string | null
+  },
 ): void {
   const turn = currentTurn()
   if (!turn) return
@@ -94,10 +120,12 @@ function upsertTool(
     (item): item is AgentToolItem => item.kind === 'tool' && item.key === key,
   )
   if (!found) {
+    const name = patch.name ?? 'tool'
     found = {
       kind: 'tool',
       key,
-      name: patch.name ?? 'tool',
+      name,
+      summary: patch.summary ?? describeTool(name, null),
       input: null,
       state: 'running',
       detail: null,
@@ -105,6 +133,7 @@ function upsertTool(
     turn.items.push(found)
   }
   if (patch.name !== undefined) found.name = patch.name
+  if (patch.summary !== undefined) found.summary = patch.summary
   if (patch.input !== undefined) found.input = patch.input
   if (patch.state !== undefined) found.state = patch.state
   if (patch.detail !== undefined) found.detail = patch.detail
@@ -136,11 +165,17 @@ function resultText(content: unknown): string | null {
   return null
 }
 
-function openTurn(question: string, context: string | null, sent: boolean): AgentTurn {
+function openTurn(
+  question: string,
+  context: string | null,
+  images: string[],
+  sent: boolean,
+): AgentTurn {
   const turn: AgentTurn = {
     id: uid(),
     question,
     context,
+    images,
     sent,
     items: [],
     done: false,
@@ -149,6 +184,19 @@ function openTurn(question: string, context: string | null, sent: boolean): Agen
   }
   turns.value = [...turns.value, turn]
   return turn
+}
+
+function imageUrls(content: unknown): string[] {
+  const out: string[] = []
+  for (const block of asList(content)) {
+    const record = asRecord(block)
+    if (asString(record?.type) !== 'image') continue
+    const source = asRecord(record?.source)
+    const type = asString(source?.media_type)
+    const data = asString(source?.data)
+    if (type && data) out.push(`data:${type};base64,${data}`)
+  }
+  return out
 }
 
 function ingestSystem(event: Record<string, unknown>): void {
@@ -198,10 +246,13 @@ function ingestStreamEvent(event: Record<string, unknown>): void {
     const block = asRecord(inner.content_block)
     const kind = asString(block?.type)
     if (kind === 'text') {
-      upsertText(`${blockOwner}:${index}`, '', 'set')
+      const key = `${blockOwner}:${index}`
+      openText = { owner: blockOwner, key }
+      upsertText(key, '', 'set')
     } else if (kind === 'tool_use') {
       const id = asString(block?.id)
-      if (id) upsertTool(id, { name: toolLabel(asString(block?.name) ?? 'tool') })
+      const name = toolLabel(asString(block?.name) ?? 'tool')
+      if (id) upsertTool(id, { name, summary: describeTool(name, null) })
     }
     return
   }
@@ -221,21 +272,29 @@ function ingestAssistant(event: Record<string, unknown>): void {
   if (!message) return
   const owner = asString(message.id) ?? blockOwner
   blockOwner = owner
-  asList(message.content).forEach((raw, index) => {
+  for (const raw of asList(message.content)) {
     const block = asRecord(raw)
     const kind = asString(block?.type)
     if (kind === 'text') {
-      upsertText(`${owner}:${index}`, asString(block?.text) ?? '', 'set')
+      const text = asString(block?.text) ?? ''
+      if (openText && openText.owner === owner) {
+        upsertText(openText.key, text, 'set')
+        openText = null
+      } else if (text) {
+        upsertText(`${owner}:c${consolidated++}`, text, 'set')
+      }
     } else if (kind === 'tool_use') {
       const id = asString(block?.id)
       if (id) {
+        const name = toolLabel(asString(block?.name) ?? 'tool')
         upsertTool(id, {
-          name: toolLabel(asString(block?.name) ?? 'tool'),
+          name,
+          summary: describeTool(name, block?.input),
           input: stringifyInput(block?.input),
         })
       }
     }
-  })
+  }
 }
 
 function ingestUser(event: Record<string, unknown>): void {
@@ -249,7 +308,7 @@ function ingestUser(event: Record<string, unknown>): void {
       return
     }
     const question = resultText(message.content)
-    if (question) openTurn(question, null, true)
+    if (question) openTurn(question, null, imageUrls(message.content), true)
     return
   }
 
@@ -268,6 +327,7 @@ function ingestUser(event: Record<string, unknown>): void {
 
 function ingestResult(event: Record<string, unknown>): void {
   const turn = currentTurn()
+  openText = null
   for (const raw of asList(event.permission_denials)) {
     const denial = asRecord(raw)
     const key = asString(denial?.tool_use_id)
@@ -372,16 +432,35 @@ function restart(): void {
 }
 
 export function useAgentChat() {
-  function send(text: string, context?: AgentContext | null): void {
+  function send(
+    text: string,
+    context?: AgentContext | null,
+    attachments: AgentAttachment[] = [],
+  ): void {
     const body = text.trim()
-    if (!body || !available.value) return
-    openTurn(body, context?.label ?? null, false)
+    if ((!body && !attachments.length) || !available.value) return
+    openTurn(
+      body || `${attachments.length} image${attachments.length === 1 ? '' : 's'}`,
+      context?.label ?? null,
+      attachments.map((a) => `data:${a.mediaType};base64,${a.data}`),
+      false,
+    )
     status.value = 'thinking'
     interrupting = false
+    const images: HostAgentImage[] = attachments.map((a) => ({
+      mediaType: a.mediaType,
+      data: a.data,
+    }))
     hostBridge.post({
       type: 'agent-send',
       text: context?.prompt ? `${context.prompt}\n\n${body}` : body,
+      ...(images.length ? { images } : {}),
     })
+  }
+
+  function setModel(choice: string): void {
+    if (!available.value || agentBusy.value) return
+    hostBridge.post({ type: 'agent-model', model: choice })
   }
 
   function interrupt(): void {
@@ -394,12 +473,14 @@ export function useAgentChat() {
     available,
     status,
     busy: agentBusy,
+    step: agentStep,
     unavailableReason,
     sessionId,
     model,
     rateLimit,
     turns,
     send,
+    setModel,
     interrupt,
     restart,
     ingest,

@@ -1,11 +1,14 @@
 import { test, expect, type Page } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
 import {
+  AGENT_BUSY_TURN,
   AGENT_DENIAL,
   AGENT_INIT,
+  AGENT_INIT_SONNET,
   AGENT_INTERRUPT_RESULT,
   AGENT_RATE_LIMITED,
   AGENT_READY,
+  AGENT_STEP_IN_FLIGHT,
   AGENT_TURN,
   agentReplay,
 } from './fixtures/agentStream'
@@ -134,7 +137,7 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-question]')).not.toHaveClass(/opacity-50/)
   })
 
-  test('a recorded turn renders one question, one tool row and the answer', async ({ page }) => {
+  test('a recorded turn renders one question, one activity bubble and the answer ONCE', async ({ page }) => {
     await readyPanel(page)
     await page.locator('[data-agent-input]').fill('make the heading say Hello')
     await page.locator('[data-agent-send]').click()
@@ -144,18 +147,53 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-question]')).toHaveCount(1)
     await expect(page.locator('[data-agent-turn]')).toHaveCount(1)
 
-    const tool = page.locator('[data-agent-tool]')
-    await expect(tool).toHaveCount(1)
-    await expect(tool).toContainText('set_page_html')
-    await expect(tool).toHaveAttribute('data-agent-tool-state', 'done')
+    // tool calls live in a collapsed bubble, described in words, not as names
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveCount(1)
+    await expect(activity).toHaveAttribute('data-agent-activity-count', '1')
+    await expect(activity).toHaveAttribute('data-agent-activity-state', 'done')
+    await expect(activity).toContainText('Wrote home')
+    await expect(page.locator('[data-agent-tool]')).toHaveCount(0)
+    await activity.getByRole('button').click()
+    await expect(page.locator('[data-agent-tool]')).toHaveCount(1)
+    await expect(page.locator('[data-agent-tool]')).toHaveAttribute('data-agent-tool-state', 'done')
 
-    // trap 7: thinking deltas carry "" — a bubble built from them is blank
+    // The answer is streamed at block index 1 (after a thinking block) and
+    // then consolidated ALONE at array index 0. Keying by array index drew
+    // every paragraph twice — the first bug a real session showed.
     const texts = page.locator('[data-agent-text]')
     await expect(texts).toHaveCount(1)
     await expect(texts).toHaveText('The heading now reads Hello.')
 
     await expect(page.locator('[data-agent-error]')).toHaveCount(0)
-    await expect(page.locator('[data-agent-stop]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-step]')).toHaveCount(0)
+  })
+
+  test('consecutive tool calls collapse into one bubble between the sentences', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('build it')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('build it'), ...AGENT_BUSY_TURN])
+
+    await expect(page.locator('[data-agent-text]')).toHaveCount(2)
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveCount(1)
+    await expect(activity).toHaveAttribute('data-agent-activity-count', '3')
+    await expect(activity).toContainText('3 steps')
+    await expect(activity).toContainText('Listed the pages')
+    await activity.getByRole('button').click()
+    await expect(page.locator('[data-agent-tool]').nth(0)).toContainText('Read the guide: page-html')
+  })
+
+  test('the strip above the composer says what the agent is doing right now', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('style it')
+    await page.locator('[data-agent-send]').click()
+    const strip = page.locator('[data-agent-step]')
+    await expect(strip).toContainText('Thinking')
+    await feed(page, AGENT_STEP_IN_FLIGHT)
+    await expect(strip).toContainText('Read the guide: styling')
+    await expect(page.locator('[data-agent-activity]')).toHaveAttribute('data-agent-activity-state', 'running')
   })
 
   test('Stop interrupts, and an interrupted turn is not reported as a crash', async ({ page }) => {
@@ -180,6 +218,9 @@ test.describe('the AI panel', () => {
     await page.locator('[data-agent-send]').click()
     await feed(page, AGENT_DENIAL)
 
+    const activity = page.locator('[data-agent-activity]')
+    await expect(activity).toHaveAttribute('data-agent-activity-state', 'error')
+    await activity.getByRole('button').click()
     const tool = page.locator('[data-agent-tool]')
     await expect(tool).toHaveAttribute('data-agent-tool-state', 'denied')
     await expect(tool).toContainText('Write')
@@ -206,7 +247,46 @@ test.describe('the AI panel', () => {
     await page.locator('[data-agent-button]').click()
     await expect(page.locator('[data-agent-question]')).toHaveText('make the heading say Hello')
     await expect(page.locator('[data-agent-text]')).toHaveText('The heading now reads Hello.')
-    await expect(page.locator('[data-agent-tool]')).toHaveAttribute('data-agent-tool-state', 'done')
+    await expect(page.locator('[data-agent-activity]')).toHaveAttribute('data-agent-activity-state', 'done')
+  })
+
+  test('the model menu switches the session and shows what came back', async ({ page }) => {
+    await readyPanel(page)
+    const trigger = page.locator('[data-agent-model] button').first()
+    await expect(trigger).toContainText('Opus 5')
+    await trigger.click()
+    await page.locator('[data-agent-model-choice="sonnet"]').click()
+    const switched = (await posts(page)).some(
+      (m) => (m as { type: string; model?: string }).type === 'agent-model' && (m as { model?: string }).model === 'sonnet',
+    )
+    expect(switched).toBe(true)
+
+    // set_model is answered by a fresh init naming the new model
+    await feed(page, [AGENT_INIT_SONNET])
+    await expect(trigger).toContainText('Sonnet 5')
+  })
+
+  test('an attached image travels as an image block beside the text', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-file]').setInputFiles({
+      name: 'shot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('not really a png'),
+    })
+    await expect(page.locator('[data-agent-attachments] img')).toHaveCount(1)
+    await page.locator('[data-agent-input]').fill('match this')
+    await page.locator('[data-agent-send]').click()
+
+    const sent = (await posts(page)).filter((m) => (m as { type: string }).type === 'agent-send') as {
+      text: string
+      images?: { mediaType: string; data: string }[]
+    }[]
+    expect(sent).toHaveLength(1)
+    expect(sent[0]!.images).toHaveLength(1)
+    expect(sent[0]!.images![0]!.mediaType).toBe('image/png')
+    expect(sent[0]!.images![0]!.data).toBe(Buffer.from('not really a png').toString('base64'))
+    await expect(page.locator('[data-agent-attachments]')).toHaveCount(0)
+    await expect(page.locator('[data-agent-turn] img')).toHaveCount(1)
   })
 
   test('one column at a time, and the chat survives being closed', async ({ page }) => {
