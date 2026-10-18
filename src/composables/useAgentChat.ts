@@ -58,6 +58,37 @@ export type AgentItem = AgentTextItem | AgentToolItem | AgentSuggestItem
 /** the one tool the panel renders as conversation — see AgentSuggestItem */
 const PROMPT_TOOLS = new Set(['suggest_next'])
 
+/** the `result` line's cache figures, kept so step 4's premise can be checked */
+export interface AgentUsage {
+  inputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+}
+
+/**
+ * What the turn cost, in wall clock and in round-trips.
+ *
+ * Rendered under a finished turn and never behind a flag: a person who finds
+ * the panel slow has to be able to say by how much, and the call counts are
+ * the half that says WHY — orientation the handbook asked for, or harness
+ * bookkeeping nobody chose.
+ *
+ * `sentAt` is null for a turn built by a transcript REPLAY (a reload, or
+ * reopening the project): those lines arrive all at once and any duration
+ * taken from them is a lie, so the meta line is not drawn for them.
+ */
+export interface AgentTurnTimings {
+  sentAt: number | null
+  firstTextAt: number | null
+  doneAt: number | null
+  /** `agent-start` → `ready`, carried by the first turn of a spawn only */
+  bootMs: number | null
+  calls: number
+  guideCalls: number
+  harnessCalls: number
+  usage: AgentUsage | null
+}
+
 export interface AgentTurn {
   id: string
   question: string
@@ -68,6 +99,7 @@ export interface AgentTurn {
   done: boolean
   error: string | null
   stopped: boolean
+  timings: AgentTurnTimings
 }
 
 export interface AgentAttachment {
@@ -114,7 +146,22 @@ const switchingTo = ref<string | null>(null)
  */
 const readyTick = ref(0)
 
+/**
+ * The spawn chain, as the page can see it: `agent-start` posted, `ready`
+ * back, `system/init` read. The launcher logs the same milestones from its
+ * side with the steps in between (`docs/agent-panel.md`, Startup cost).
+ */
+const timings = ref<{ startedAt: number | null; readyAt: number | null; initAt: number | null }>({
+  startedAt: null,
+  readyAt: null,
+  initAt: null,
+})
+
 let requested = false
+/** `ready - agent-start`, waiting for the first turn that follows it */
+let pendingBoot: number | null = null
+/** tool_use ids already counted, so the stream and the `assistant` echo agree */
+let countedTools = new Set<string>()
 /** the host has seen our `agent-target` since the last `ready` */
 let targetAcknowledged = false
 let interrupting = false
@@ -269,12 +316,18 @@ function resultText(content: unknown): string | null {
   return null
 }
 
+/**
+ * `sent` is true only when a transcript REPLAY built this turn, which is also
+ * what makes it untimed: those lines arrive in one burst and a duration taken
+ * from them would read as a fast turn rather than as a replayed one.
+ */
 function openTurn(
   question: string,
   context: string | null,
   images: string[],
   sent: boolean,
 ): AgentTurn {
+  const timed = !sent
   const turn: AgentTurn = {
     id: uid(),
     question,
@@ -285,9 +338,46 @@ function openTurn(
     done: false,
     error: null,
     stopped: false,
+    timings: {
+      sentAt: timed ? Date.now() : null,
+      firstTextAt: null,
+      doneAt: null,
+      bootMs: timed ? pendingBoot : null,
+      calls: 0,
+      guideCalls: 0,
+      harnessCalls: 0,
+      usage: null,
+    },
   }
+  if (timed) pendingBoot = null
   turns.value = [...turns.value, turn]
   return turn
+}
+
+/** every `tool_use`, once, whether or not the transcript shows it as a step */
+function countCall(id: string, name: string): void {
+  const turn = currentTurn()
+  if (!turn || countedTools.has(id)) return
+  countedTools.add(id)
+  turn.timings.calls++
+  if (HARNESS_TOOLS.has(name)) turn.timings.harnessCalls++
+  else if (name === 'get_guide') turn.timings.guideCalls++
+}
+
+function markFirstText(): void {
+  const turn = currentTurn()
+  if (turn && turn.timings.firstTextAt === null) turn.timings.firstTextAt = Date.now()
+}
+
+function readUsage(value: unknown): AgentUsage | null {
+  const usage = asRecord(value)
+  if (!usage) return null
+  const num = (key: string): number => (typeof usage[key] === 'number' ? usage[key] : 0)
+  return {
+    inputTokens: num('input_tokens'),
+    cacheReadInputTokens: num('cache_read_input_tokens'),
+    cacheCreationInputTokens: num('cache_creation_input_tokens'),
+  }
 }
 
 function imageUrls(content: unknown): string[] {
@@ -307,6 +397,7 @@ function ingestSystem(event: Record<string, unknown>): void {
   switch (asString(event.subtype)) {
     case 'init': {
       available.value = true
+      timings.value.initAt = Date.now()
       unavailableReason.value = null
       sessionId.value = asString(event.session_id) ?? sessionId.value
       model.value = asString(event.model) ?? model.value
@@ -359,6 +450,7 @@ function ingestStreamEvent(event: Record<string, unknown>): void {
       const id = asString(block?.id)
       const name = toolLabel(asString(block?.name) ?? 'tool')
       if (!id) return
+      countCall(id, name)
       // registered HERE, before upsertTool can be reached with this id: the
       // start event already names the tool, and an ask opened as a tool row
       // once is a step in the activity bubble for the rest of the turn
@@ -380,6 +472,7 @@ function ingestStreamEvent(event: Record<string, unknown>): void {
     if (asString(delta?.type) !== 'text_delta') return
     const text = asString(delta?.text)
     if (!text) return
+    markFirstText()
     upsertText(`${blockOwner}:${index}`, text, 'append')
     status.value = 'streaming'
   }
@@ -395,6 +488,7 @@ function ingestAssistant(event: Record<string, unknown>): void {
     const kind = asString(block?.type)
     if (kind === 'text') {
       const text = asString(block?.text) ?? ''
+      if (text) markFirstText()
       if (openText && openText.owner === owner) {
         upsertText(openText.key, text, 'set')
         openText = null
@@ -405,6 +499,7 @@ function ingestAssistant(event: Record<string, unknown>): void {
       const id = asString(block?.id)
       if (id) {
         const name = toolLabel(asString(block?.name) ?? 'tool')
+        countCall(id, name)
         // the `assistant` event is the authority for a tool_use's INPUT, which
         // for these two is the whole of the call: the questions, or the offers
         if (PROMPT_TOOLS.has(name)) {
@@ -477,6 +572,8 @@ function ingestResult(event: Record<string, unknown>): void {
   if (turn) {
     turn.done = true
     turn.sent = true
+    turn.timings.doneAt = Date.now()
+    turn.timings.usage = readUsage(event.usage)
     if (event.is_error === true) {
       if (interrupting) turn.stopped = true
       else turn.error = asString(event.result) || 'the turn failed'
@@ -485,6 +582,7 @@ function ingestResult(event: Record<string, unknown>): void {
   interrupting = false
   hiddenTools = new Set()
   promptTools = new Set()
+  countedTools = new Set()
   status.value = 'idle'
 }
 
@@ -505,6 +603,7 @@ function ingest(raw: unknown): void {
 
   switch (asString(event.type)) {
     case 'ready': {
+      const readyAt = Date.now()
       available.value = true
       answered.value = true
       switchingTo.value = null
@@ -516,6 +615,10 @@ function ingest(raw: unknown): void {
       const replay = asList(event.replay)
       for (const line of replay) ingest(line)
       if (!currentTurn()) status.value = 'idle'
+      // after the replay: a turn rebuilt from the transcript is not the turn
+      // this spawn's boot time belongs to
+      timings.value.readyAt = readyAt
+      pendingBoot = timings.value.startedAt ? readyAt - timings.value.startedAt : null
       return
     }
     case 'unavailable': {
@@ -526,6 +629,7 @@ function ingest(raw: unknown): void {
       return
     }
     case 'switching': {
+      timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
       status.value = 'switching'
       switchingTo.value = asString(event.target) ?? null
       return
@@ -567,6 +671,7 @@ function exit(info?: HostAgentExit): void {
 export function startAgent(): void {
   if (requested || !hostBridge.available) return
   requested = true
+  timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
   hostBridge.post({ type: 'agent-start' })
 }
 
@@ -648,6 +753,7 @@ export function useAgentChat() {
     model,
     rateLimit,
     turns,
+    timings,
     send,
     setModel,
     interrupt,

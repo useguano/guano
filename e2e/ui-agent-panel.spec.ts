@@ -72,6 +72,22 @@ async function openEditor(page: Page) {
   await expect(ready).toBeVisible({ timeout: 30_000 })
 }
 
+const posts = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __hostPosts: unknown[] }).__hostPosts)
+
+const feed = (page: Page, lines: unknown[]) =>
+  page.evaluate((batch) => {
+    const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } })
+      .__guanoHost
+    for (const line of batch) host.agentEvent(line)
+  }, lines)
+
+async function readyPanel(page: Page) {
+  await feed(page, [AGENT_READY, AGENT_INIT])
+  await page.locator('[data-agent-button]').click()
+  await expect(page.locator('[data-agent-panel]')).toBeVisible()
+}
+
 const railButton = (page: Page) => page.getByRole('button', { name: 'Ask the AI agent' })
 
 test.describe('the AI panel', () => {
@@ -249,6 +265,23 @@ test.describe('the AI panel', () => {
     await expect(page.locator('[data-agent-tool]').nth(0)).toContainText('Read the guide: page-html')
   })
 
+  // Step 0 of the startup-cost work (docs/agent-panel.md): the panel measures
+  // itself, in the open. The counts are the half that says WHERE the time
+  // went — guide reads the handbook asked for, harness round-trips nobody
+  // chose — so they are asserted rather than the durations, which a fed
+  // fixture makes 0.0s.
+  test('a finished turn says what it cost', async ({ page }) => {
+    await readyPanel(page)
+    await page.locator('[data-agent-input]').fill('build it')
+    await page.locator('[data-agent-send]').click()
+    await feed(page, [agentReplay('build it'), ...AGENT_BUSY_TURN])
+
+    const meta = page.locator('[data-agent-meta]')
+    await expect(meta).toHaveCount(1)
+    await expect(meta).toContainText('3 calls (2 guide)')
+    await expect(meta).toContainText('to first word')
+  })
+
   test('harness bookkeeping is neither a step nor a row', async ({ page }) => {
     await readyPanel(page)
     await page.locator('[data-agent-input]').fill('what pages are there')
@@ -264,6 +297,8 @@ test.describe('the AI panel', () => {
     await activity.getByRole('button').click()
     await expect(page.locator('[data-agent-tool]')).toHaveCount(1)
     await expect(page.locator('[data-agent-panel]')).not.toContainText('ToolSearch')
+    // hidden from the transcript, not from the clock
+    await expect(page.locator('[data-agent-meta]')).toContainText('3 calls (2 harness)')
   })
 
   test('a DENIED harness tool is still shown — hidden is not silent', async ({ page }) => {

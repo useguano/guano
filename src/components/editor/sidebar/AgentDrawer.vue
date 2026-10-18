@@ -23,6 +23,7 @@ import {
   type AgentSuggestItem,
   type AgentToolItem,
   type AgentToolState,
+  type AgentTurn,
 } from '@/composables/useAgentChat'
 import { useAuth } from '@/composables/useAuth'
 import { useBranches } from '@/composables/useBranches'
@@ -128,6 +129,31 @@ function inert(isLast: boolean): boolean {
 function pickSuggestion(item: AgentSuggestItem, suggestion: { label: string; prompt: string }) {
   item.picked = suggestion.label
   send(suggestion.prompt, context.value)
+}
+
+/**
+ * `3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness)`.
+ *
+ * Shown on every finished turn the page actually timed, never behind a dev
+ * flag: the point of measuring the panel is that a person who says it is slow
+ * can say by how much, and that the call counts say where the time went.
+ * A turn rebuilt from a replayed transcript has no `sentAt` and gets nothing.
+ */
+function metaLine(turn: AgentTurn): string | null {
+  const t = turn.timings
+  if (t.sentAt === null || !turn.done) return null
+  const parts: string[] = []
+  if (t.bootMs !== null) parts.push(`${(t.bootMs / 1000).toFixed(1)}s to start`)
+  const first = t.firstTextAt ?? t.doneAt
+  if (first !== null) parts.push(`${((first - t.sentAt) / 1000).toFixed(1)}s to first word`)
+  const breakdown: string[] = []
+  if (t.guideCalls) breakdown.push(`${t.guideCalls} guide`)
+  if (t.harnessCalls) breakdown.push(`${t.harnessCalls} harness`)
+  parts.push(
+    `${t.calls} call${t.calls === 1 ? '' : 's'}` +
+      (breakdown.length ? ` (${breakdown.join(', ')})` : ''),
+  )
+  return parts.join(' · ')
 }
 
 function activityState(tools: AgentToolItem[]): AgentToolState {
@@ -550,6 +576,14 @@ nextTick(() => input.value?.focus())
             </div>
           </div>
         </template>
+
+        <p
+          v-if="metaLine(turn)"
+          data-agent-meta
+          class="self-start px-0.5 font-mono text-[9px] text-muted-foreground"
+        >
+          {{ metaLine(turn) }}
+        </p>
 
         <p v-if="turn.stopped" class="px-0.5 text-[10px] text-muted-foreground">Stopped.</p>
         <p v-if="turn.error" data-agent-error class="px-0.5 text-[10px] text-danger">

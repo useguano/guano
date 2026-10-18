@@ -365,6 +365,63 @@ The flag that would turn deferred loading off is Claude Code's, not ours, and
 eager loading puts the whole tool list in every turn. Hiding the rows is the
 cheaper answer.
 
+## Startup cost
+
+A one-line request on a fresh project sat for a long time showing *5 steps ·
+Read the guide: styling* before a single sentence appeared. **Two different
+waits are stacked there and they have different fixes**, so the panel measures
+both and neither is behind a developer flag.
+
+**Getting to `ready`** is a chain of other people's boots: `agent-start` →
+`AgentMCPConfig.isCurrent` → (maybe) `guano connect --embedded`, which is a
+Node boot and a token mint over HTTP → `claude -p` → its own `node guano.js
+mcp` (the 242 KB runtime bundle, the 110 KB `GUIDE.md`, a call to
+`/api/auth/me`) → `initialize` → `system/init`. `AgentSession` marks each link
+into the project's log (⌘L) through `AgentMilestones`, elapsed from
+`agent-start` every time rather than between steps — the useful number is how
+long the person has been waiting. The lines carry `launcher=1`, because a
+server log is the server's.
+
+**The first turn** is model round-trips, and that is the half the person
+feels: the handbook asks for orientation before the first write, so the model
+reads the rules, calls `get_guide`, waits, calls again, waits — plus the
+`ToolSearch` calls the harness needs to load tool schemas, which are hidden
+from the transcript and not from the clock. The page times its own half in
+`useAgentChat`'s `timings` ref and per-turn `AgentTurnTimings`, and a finished
+turn ends with one mono line:
+
+```
+3.1s to start · 14.3s to first word · 6 calls (3 guide, 2 harness)
+```
+
+**It is not dev-only, deliberately.** The whole point is that a person who
+says the panel is slow can say by how much, and the call counts are what say
+where the time went. A turn rebuilt from a replayed transcript has no `sentAt`
+and gets no line — those lines arrive in one burst and a duration taken from
+them would read as a fast turn rather than as a replayed one.
+
+The `result` line's `usage` is kept on the turn too (`input_tokens`,
+`cache_read_input_tokens`, `cache_creation_input_tokens`). It is the evidence
+for one question and only one: whether Claude Code serves the system prompt
+and the MCP instructions from cache after turn one. **Bigger instructions are
+paid once per session if it does and once per turn if it does not**, so
+anything that proposes to grow them is checked against this number rather than
+against the belief that caching happens.
+
+### The runs
+
+The same prompt three times on a fresh project — *create an email capture
+landing page for a SaaS company named "Atelier"* — with every later change
+appending its own row.
+
+| when | to start | to first word | calls | guide | harness | cache read |
+|---|---|---|---|---|---|---|
+| _step 0 baseline_ | — | — | — | — | — | — |
+
+Nothing that touches the handbook, the instructions or the default model is
+justified before there are numbers in that table, and each change records its
+own before/after against the same prompt.
+
 ## Onboarding
 
 The drawer's unavailable state distinguishes two things, because they need
