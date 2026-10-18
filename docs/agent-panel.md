@@ -164,6 +164,98 @@ live. It mounts in `BuildView` over the canvas region now, `absolute inset-0`,
 and lets keystrokes through to any editable element — the point was to keep
 the person's hands off the tree mid-write, not off the keyboard.
 
+## Asking and suggesting
+
+Decided 2026-10-18, from the second real session. Asked for *"a simple coming-soon
+page for a tech startup named Acme"*, the agent invented the palette, the copy, the
+CTA and two placeholder email addresses, told the person what it had decided for
+them, and stopped — no interactions, no second language, no SEO, and no way to reach
+any of those except by knowing to type it. Both halves of that are design, not bugs:
+nothing told it to **ask** rather than guess, and nothing told it to **end on the next
+move**.
+
+So two MCP tools, **embedded profile only** (`PANEL_ONLY` in `tools.mjs`; the schemas
+and the refusals are `docs/mcp.md` → Embedded mode):
+
+```
+ask_user      {questions: [{id, question, options: [{label, hint?}] (2–5), freeText?}] (1–4)}
+suggest_next  {suggestions: [{label, prompt}] (1–4)}
+```
+
+**Both are inert on the server.** They validate, echo a count and return. The whole
+effect is here: the panel reads the `tool_use` input the `assistant` event carries and
+renders clickable options. **`claude -p` cannot block on a person**, so the contract is
+a sentence in the description and in the result alike — call it, say nothing more, end
+the turn — and the answer is simply the next user message. If a session shows the model
+calling `ask_user` and then carrying on building, **the handbook sentence is not strong
+enough: fix the words, not the tool.**
+
+They are not in the external profile. Claude Desktop and a Claude Code terminal are
+already a chat, and a tool whose contract is "stop talking and wait" is wrong in the one
+place talking is all there is.
+
+### One batch, then build
+
+The rule the model is given is *ask ONCE, with two to four questions, then work* — not a
+dialogue. A 16rem column beside a canvas is not a place to hold a conversation about a
+page that could already exist, and every round is a round the person is watching
+nothing happen. A second round is allowed only when an answer made a genuinely new
+choice appear.
+
+The questions that are worth asking are the ones a person can answer: **named moods, not
+adjectives** (*stark editorial* over *warm and rounded*, never "modern" versus "clean"),
+what sections, which pages, and what must not be invented. Both rules and a worked
+example of each tool live in `GUIDE.md` → **Inside the editor**, which
+`guideInstructions(embedded)` injects whole, and in `AgentLaunch.systemPrompt`, which
+the launcher appends whatever the client did with the MCP instructions. Twice, because
+the behaviour has to be right on the first message of a session.
+
+### An ask is not a step
+
+`ask_user` and `suggest_next` become **item kinds of their own** —
+`{kind:'ask', key, questions, picks}` and `{kind:'suggest', key, suggestions, picked}` —
+and `segment()` gives each a segment of its own. They are conversation, not work: neither
+joins the activity bubble, neither counts towards `3 steps · …`.
+
+**The trap is the ordering.** The id is registered as a prompt tool in
+`content_block_start`, BEFORE anything can reach `upsertTool` with it — that event
+already names the tool, and an ask opened as a tool row once reads *1 step · Ask user*
+for the rest of the turn. The item itself is built in `ingestAssistant`, which is the
+authority for a `tool_use`'s input and for these two carries the whole of the call. The
+`tool_result` is consumed in silence, like a harness tool's.
+
+**A denied one is un-hidden back into a denied tool row**, by `permission_denied` and by
+the result's `permission_denials[]` alike. A denial is never hidden, whatever the tool.
+
+### What the chips do
+
+- **One question sends on the click.** There is nothing to collect, so the message is
+  the label.
+- **Several go through the one composer.** Clicks mark picks, the placeholder becomes
+  *Pick above, or type an answer*, and the send arrow enables once every question has a
+  pick **or** there is typed text. It then sends `Q: <question> → <label>` lines plus any
+  typed text as ONE message — composed in `send()`, not in the drawer, so the person's
+  bubble and the line on the wire are the same string. **There is no second send button**
+  (`docs/ui.md`).
+- **A suggestion sends its own `prompt`, verbatim.** Never applied unasked.
+- **A typed message is always a valid answer.** The composer stays live, and a
+  half-picked batch sends no `Q` lines at all: a typed answer replaces the chips rather
+  than arriving beside them.
+- **Chips are kept once spent** — dimmed, the picked one highlighted — so the transcript
+  still reads as what was asked and what was answered. They go inert as soon as a later
+  turn exists or a turn is running, which is also what stops a second click landing a
+  second message.
+- **Every chip is a real `ButtonUI` with its label as its accessible name.** There is no
+  chip primitive in `src/components/ui/`; `variant="outline"`, picked becomes `default`.
+  A chip is the only way to answer without typing, so one with no name takes the feature
+  away rather than making it awkward (`e2e/ui-a11y.spec.ts`).
+
+Coverage: `e2e/ui-agent-panel.spec.ts` cases (a)–(e), over `AGENT_ASK_TURN`,
+`AGENT_ASK_ONE`, `AGENT_SUGGEST_TURN` and `AGENT_ASK_DENIAL` in
+`e2e/fixtures/agentStream.ts` — built with `agentToolCall` like every other call,
+because the panel has to pick these two names out of the same stream everything else
+arrives on.
+
 ## There is no permission prompt channel
 
 `--permission-prompts host` means "the SDK host or `--permission-prompt-tool`",
