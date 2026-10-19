@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml, PREVIEW_TOKEN, PREVIEW_MOUNT } from './fixtures/mcpSession'
 import { motionTriggers } from './fixtures/fxWire'
 // @ts-expect-error — plain .mjs, no types
-import { createToolSet } from '../packages/guano/mcp/tools.mjs'
+import { createToolSet, guideInstructions } from '../packages/guano/mcp/tools.mjs'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
 // comes from something that cost the Cocoapp session real calls: a response too
@@ -76,6 +76,27 @@ test.describe('get_guide', () => {
     expect(miss.error).toContain('everything')
     expect(miss.jobs).toContain('build-page')
     expect(miss.guide).toBeUndefined()
+  })
+
+  // Step 4 (docs/agent-panel.md): the panel's instructions carry the
+  // essentials so a first turn needs no get_guide at all. Three measured runs
+  // showed the model calling `for: "build-page"` and then re-reading sections
+  // that response had already given it — naming the contents did not stop it,
+  // so the fix is for there to be nothing to call.
+  test('the panel gets the essentials in its instructions, the external client does not', () => {
+    const panel: string = guideInstructions(true)
+    const external: string = guideInstructions(false)
+
+    expect(panel).toContain('## Essentials')
+    // the three things a page build would otherwise cost a round trip each
+    expect(panel).toContain('data-ref')
+    expect(panel).toContain('Conflicts auto-resolve')
+    expect(panel).toContain('One content width, everywhere')
+
+    // an external client injects instructions on EVERY turn and pays for them
+    // every time, so it keeps the small ones
+    expect(external).not.toContain('## Essentials')
+    expect(external.length).toBeLessThan(panel.length)
   })
 
   test('the described size is computed, not a stale number in prose', async () => {

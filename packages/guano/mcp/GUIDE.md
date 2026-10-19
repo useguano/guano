@@ -360,6 +360,169 @@ fresh project's Home) without a `get_page` round trip first. Both `list_pages` a
 adds `diagnostics` when the stored page no longer validates (a `<collection-list>` whose
 collection was deleted since): treat those as a to-fix list.
 
+## Essentials
+
+Enough of the format to build a page WITHOUT reading anything first. Every rule here
+is the short form of a section you can still fetch when you need the detail and the
+worked examples — `get_guide {for: "build-page"}`. If what you need is here, you do not
+need that call.
+
+### The shape of a page
+
+A page is a strict HTML subset. `<body>` is optional on input; write the elements
+inside it. Every element is closed or self-closed, every attribute value is quoted —
+JSX discipline. A write that cannot be read is refused with `line:col` and saves
+nothing, so a failed write is always safe to retry. Refused: unknown tags, mismatched
+or unclosed tags, duplicate attributes, unquoted values, `on*` handlers,
+`<script>`/`<style>`, and loose text inside a container.
+
+Page `name`, `slug` and `status` are tool parameters, never markup.
+
+### The element registry
+
+Most types ARE their tag: `section` `div` `header` `footer` `nav` `main` `aside`
+`article` `h1`–`h6` `span` `label` `button` `form` `input` `textarea` `select` `option`
+`fieldset` `legend` `table` `thead` `tbody` `tr` `th` `td` `video` `blockquote`
+`figure` `figcaption`. The rest:
+
+| write | means | |
+|---|---|---|
+| `<p>` | `paragraph` | leaf |
+| `<a href="…">` | `link` | **container** |
+| `<ul>` / `<li>` | `list` / `list-item` | containers |
+| `<img src alt />` | `image` | void |
+| `<svg data-icon="mail" />` | `icon` | void; the name is a bundled Lucide name |
+| `<input type="checkbox" />` / `<input type="radio" />` | `checkbox` / `radio` | the `type` IS the element |
+| `<div data-type="text">…</div>` | `text` | a `<div>` of plain text promotes to this |
+| `<collection-list source="post">` | repeats per entry | |
+| `<collection-item source="post" />` | one picked entry | |
+| `<list-empty>` | a list's empty state | |
+| `<slider source?>` | carousel | |
+| `<custom-code>` | raw HTML, verbatim | leaf; gated by a server switch |
+| `<Card>` | a component instance | capitalized |
+
+**A leaf carries text; a container carries elements**, and which is which comes from
+the registry rather than from what you write. The leaves are the headings, `<p>`,
+`<span>`, `<option>`, `<legend>`, `<figcaption>`, `<div data-type="text">` and the void
+ones. `<section>Hello</section>` is refused. **`<button>`, `<a>` and `<label>` are
+containers** — their words go in a `<span>` child, which is what lets an icon sit beside
+the label. `<blockquote>` and `<figure>` are containers too: the words go in a `<p>`
+inside.
+
+A leaf's inner markup is its content, and rich copy keeps its own tags —
+`<p>Read the <a href="/docs">docs</a>.</p>`. Those inline tags are content, not
+elements of this format.
+
+### Attributes
+
+| attribute | is |
+|---|---|
+| `class` | Tailwind classes |
+| `id` | a real DOM id (an anchor target) |
+| `data-ref` | **your** name for the element — the address every tool prefers |
+| `data-id` | the element's identity. Echo it back. |
+| `href` | the link (also on a container: the whole block becomes clickable) |
+| `data-field="title"` | bind this element's text to a collection field |
+| `source="post"` | the collection a list/item/slider iterates |
+| `data-bind-<attr>="field"` | that attribute's value comes from a field |
+| `data-hidden="true"` | hidden in the editor AND the export |
+| `data-variant-<axis>="opt"` | which option an instance wears — `<Card>` only |
+| `src`, `alt`, `placeholder`, `type`, `name`, `value`, `for`, `aria-*` | ordinary |
+| `data-interactions` / `data-animations` | **read-only** |
+
+**An attribute you leave out is removed** — the document you send is the whole truth for
+everything the format carries. `data-source`, `data-collection`, `collection` and
+`field` are refused BY NAME, so a near miss cannot land as an inert DOM attribute.
+
+**Not in the HTML**, and preserved on every element a write adopts: interactions,
+animations, translations, slider config, list queries, the picked entry and
+per-placement attribute overrides. Each has its own tool.
+
+**`data-ref`** is a page-unique name you give an element (`[a-zA-Z][a-zA-Z0-9-]*`).
+Write one on everything you will come back to — the hero, the nav, a modal, a CTA — as
+you generate the page; it is what `edit_elements`, `bind_interaction` and
+`edit_structure` address by, and it survives the page being restructured. Not on
+`<body>`, and not inside a component instance. It emits nothing in the published page.
+
+**`data-id`** is the machine identity. Echo back what a read gave you and the element
+keeps everything it carries, including the human's comments anchored to it. `removed`
+in the response counts elements you replaced; it should usually be 0.
+
+### Styling
+
+Tailwind class tokens, written as `class` in the markup or attached afterwards with
+`edit_elements` (`addClasses` / `removeClasses`), one `edits[]` entry per element and
+**the whole page in one call**. Inside a component instance, `edit_elements` is the only
+way.
+
+**Style the `<body>` on EVERY page.** It renders as the real `<body>` and carries the
+page's base look; the export's defaults are white/black, so a page whose body you never
+styled ships white even when every other page is dark.
+
+- **Conflicts auto-resolve**: `p-8` replaces `p-4`. Display utilities are one group
+  (`hidden` / `flex` / `inline-flex` …). Background COLOUR conflicts across forms
+  (`bg-paper`, `bg-red-500`, `bg-[#f5f3edee]`), while a background's colour, image,
+  size, position, repeat and attachment are separate groups. Font-family is one group.
+- **Prerequisites auto-add**: `grid-cols-3` adds `grid`, `flex-row` adds `flex` — but
+  only when the element has no display class of its own at any variant, so
+  `hidden md:flex` stays exactly what you wrote.
+- **Invalid classes are skipped and reported**; the rest still apply.
+
+Accepted: the editor's style catalog; the full colour palette for `bg-`/`text-`/
+`border-`; any numeric step on spacing and sizing (`p-7`, `h-11`, `gap-9`, negatives);
+fractions (`w-2/3`, `-translate-x-1/2`); size and offset keywords (`max-w-prose`,
+`top-full`, `inset-x-1/4`); the t-shirt scale (`max-w-3xs` … `max-w-7xl`); dynamic
+numeric families (`scale-140`, `z-2`, `opacity-85`, `leading-6`); the whole radius
+family including per-corner; `line-clamp-1`…`6`; background-position and
+`transform-origin` keywords; `visible`/`invisible`/`collapse`; **any arbitrary value**
+(`p-[13px]`, `bg-[#fffff9]`, `text-[clamp(2.75rem,7vw,5.25rem)]`) and arbitrary
+properties (`[mask-image:…]`); gradients, which need a direction class beside the stops
+(`bg-linear-to-b from-… to-…`); 8-digit hex for translucency (`bg-[#0d0d0cbb]` — there
+is no `bg-token/60` syntax); and `font-[Instrument_Serif]` for an arbitrary family.
+
+Variants: state (`hover:` `focus-visible:` `disabled:` `checked:` …), position
+(`first:` `odd:` `empty:` …), responsive and theme (`sm:`…`2xl:`, `dark:`, `print:`,
+`motion-reduce:`, `min-[900px]:`), pseudo-elements (`before:` `after:` `placeholder:`
+`selection:`), descendant styling (`[&_a]:underline`, `[&>*]:mt-4`), `group`/`peer`
+with any state, and ancestor state (`in-[.dark]:hidden`, `group-[.open]:rotate-180`).
+**`dark:` is CLASS-based here**, matching a `dark` class on the element or an ancestor —
+not `prefers-color-scheme`.
+
+### Forms
+
+A `<form>` is inert until ENABLED. Left alone it exports `method="dialog"`, which the
+browser refuses to submit — nothing is sent and nothing is stored, though native
+validation still runs. `edit_elements {form: {enabled: true}}` makes it really submit
+and store every submission. `publish` warns when a form that is not enabled holds NAMED
+controls, because that shape reads to everyone else as "this collects". A questionnaire
+built as a mock is better off with no `<form>` at all.
+
+`<input>` honours its own `type`; `<select>` takes `<option>` children; `<fieldset>`
+wraps a `<legend>`; a `<label>`'s `for` points at the control's `id`.
+
+### What a review fails you for
+
+Not taste — the defects found first.
+
+- **One content width, everywhere.** Every page's content sits in the same container
+  (`mx-auto w-full max-w-6xl px-6`). Never `px-4` on one page and `px-8` on the next.
+- **One spacing scale.** Section gaps `gap-8/12/16`, card padding `p-5/6`, element gaps
+  `gap-2/3/4`. If two pages differ, one is wrong.
+- **One radius per kind of thing** — controls, cards, chips. Not `rounded-lg` here and
+  `rounded-2xl` there for the same component.
+- **No layout shift.** Nothing changes size on load, hover or open. Hover changes
+  colour and opacity, not dimensions.
+- **Never ship browser-default controls.** Style every `<input>`, `<select>` and
+  `<button>`, including their focus state.
+
+### The rhythm
+
+`set_page_html` carries structure, classes and text together, so a page is ONE write;
+a second `edit_elements` covers what markup does not (media, variants, icons, form
+enabling). Not one call per element. Every write returns a `version` — pass the latest
+to the next write on that page. Use `fresh: true` when replacing a page with unrelated
+content, so it cannot arrive wearing the old page's interactions and translations.
+
 ## Page HTML
 
 A page is a **strict HTML subset**. `get_page` returns it, `set_page_html` replaces it,

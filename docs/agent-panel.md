@@ -485,10 +485,14 @@ Each change records its own before/after against the same prompt.
    nothing (the context line is the address); a section or a page is one
    `for`; a kind of work new to the session is its own `for`, once; and a
    section already in the conversation is never re-read.
-4. **Whether the essentials move INTO the instructions.** The premise is
-   confirmed (caching, above), so this is now a live option rather than a
-   conditional one — but it is worth doing only if turn one is still spending
-   guide calls after the manifest fix. Measure before building.
+4. **The essentials moved INTO the instructions**, because the measurement
+   said to. The premise was confirmed first (caching, above) and the manifest
+   was tried first and failed. `## Essentials` — the element registry, the
+   attribute rules, the class rules, the form switch, what a review fails you
+   for — is appended to `guideInstructions(embedded)` and to no other
+   profile, taking the panel's instructions from ~22 KB to ~31 KB. An
+   external client injects instructions on every turn and keeps the small
+   ones; the panel pays once per session. → `docs/mcp.md`, Embedded mode.
 5. **The panel's default model is the panel's, not the terminal's.** It used
    to be whatever `~/.claude/settings.json` said; both measured runs were on
    **Opus 5 · 1M**, which nobody chose for a canvas, and 81.1 s and 49.1 s to
@@ -530,7 +534,7 @@ Each change records its own before/after against the same prompt.
    reload like any other line. A panel that silently forgot is
    indistinguishable from one that is broken.
 
-Steps 1–3 and 5–7 are in; step 4 is waiting on a measurement.
+All of it is in.
 
 **One link of the chain is already measured and already ruled out.** `node
 packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**

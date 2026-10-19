@@ -92,6 +92,19 @@ console.log(
     `\n  instructions: ${embeddedInstructions.length.toLocaleString()} B (${tok(embeddedInstructions.length)})`,
 )
 
+// Neither instructions figure is budgeted, and the panel's being the larger of
+// the two is a DECISION rather than drift. Printed in words because the next
+// person to read these two numbers side by side will otherwise trim the panel
+// back to match the external one and undo it.
+console.log(
+  `\n  ↳ the panel's instructions are deliberately the larger number: it carries` +
+    `\n    GUIDE.md's "## Essentials" so a first turn needs no get_guide at all.` +
+    `\n    An external client injects instructions on EVERY turn; Claude Code caches` +
+    `\n    the system prompt, so the panel pays this once per session (measured:` +
+    `\n    cache_read 258k/363k on two turns — docs/agent-panel.md, Startup cost).` +
+    `\n    Neither figure is gated. The tools/list budget is, and is never raised.`,
+)
+
 if (over) {
   const which = bytes > BUDGET ? 'the external' : 'the panel'
   const size = bytes > BUDGET ? bytes : panel.bytes

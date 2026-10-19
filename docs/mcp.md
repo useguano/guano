@@ -138,9 +138,19 @@ Local path arguments (`codePath`, `editsPath`, `manifestPath`, `upload_media.pat
 Four things change, all at toolset creation:
 
 - **`PANEL_DROPPED`** is filtered out of `tools` and `toolMap`, so a call to one is `unknown tool` — which is already the right answer. It holds `use_project` and `set_target` (the panel knows the project and the branch), `publish` (the person's button), and `list_integrations` / `list_form_submissions` (a connected instance's operations surface, not design work beside a canvas). **`preview` stays**: it renders the target and returns the same `warnings` publish does, which is the only review the panel can run.
-- **`guideInstructions(embedded)`** replaces golden rules 5 and 6 — which site, which target — with the handbook's `## Inside the editor`, renumbering what is left, and drops the workflow recipe's `set_target` and `publish` steps. `GUIDE_INSTRUCTIONS` stays as the external value so nothing else moves.
+- **`guideInstructions(embedded)`** replaces golden rules 5 and 6 — which site, which target — with the handbook's `## Inside the editor`, renumbering what is left, and drops the workflow recipe's `set_target` and `publish` steps. It also appends **`## Essentials`**, which the external profile never gets. `GUIDE_INSTRUCTIONS` stays as the external value so nothing else moves.
 - **`get_status`** answers `embedded: true`, and its Main-vs-draft advice is trimmed from the tool description: in the panel the editor already chose, so "propose a DRAFT" is an instruction to do something there is no tool for.
 - **`PANEL_ONLY`** is the filter's other half: `suggest_next` exists in this profile and nowhere else. Embedded drops `PANEL_DROPPED`; external drops `PANEL_ONLY`.
+
+### The panel's instructions are bigger on purpose
+
+**~31 KB against the external client's ~18 KB**, and that is a decision with a measurement under it, not drift.
+
+`## Essentials` is the short form of Page HTML, Styling and Design standards — the element registry, the attribute rules, the class rules, the form switch, what a review fails you for — with the worked examples left behind. It exists because **telling a model it already has something is not a lever.** Three instrumented runs showed the model opening with `get_guide {for: "build-page"}` (the advice lands) and then re-reading sections that response had handed it in full: `forms` and `design-standards`, both inside the bundle. Naming the response's contents on its own first line did not stop it. What a model has in context and what it believes it has are different things, and only one of them is controllable — so the way to make a read cost nothing is for there to be **nothing to call**.
+
+**The economics, which are the whole reason this is affordable in one profile and not the other.** An external client injects `instructions` into the model's context on EVERY turn, so every byte is a per-turn tax and that profile stays small. Claude Code caches the system prompt: `cache_read_input_tokens` came back at **258k and 363k on two consecutive turns** (`docs/agent-panel.md`, Startup cost), so the panel pays its instructions **once per session**. That was checked before the section was written, not assumed — it is the one condition the whole step turned on.
+
+**The `tools/list` budget is untouched and still never raised.** It is 80,000 B for both profiles and this changed neither; `check:mcp` prints the two instructions figures and gates neither, and it now prints a line saying in words that the panel's is the larger number on purpose. Trimming it back to match the external profile would be undoing this.
 
 ### `suggest_next`: the server never blocks
 

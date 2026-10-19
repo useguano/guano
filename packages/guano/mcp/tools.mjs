@@ -173,11 +173,25 @@ export function guideInstructions(embedded = false) {
     kept.push(line)
   }
   const noTarget = kept.join('\n')
+  // Embedded ALSO carries the essentials, which the external profile never
+  // does. Three measured runs said why: the model opens with
+  // `get_guide {for: "build-page"}` — the advice lands — and then re-reads
+  // sections that response already handed it in full. Naming the contents in
+  // the response did not stop it; what a model has in context and what it
+  // believes it has are different things. The way to make a read cost
+  // nothing is for there to be nothing to call.
+  //
+  // It roughly doubles the instructions, and that is affordable HERE and only
+  // here: an external client injects them on every turn, while Claude Code
+  // caches the system prompt — `cache_read_input_tokens` came back 258k and
+  // 363k on two consecutive turns, so the panel pays this once per session.
+  // → `docs/agent-panel.md` (Startup cost), `docs/mcp.md` (Embedded mode).
   return [
     parts[0].trimEnd(),
     trimmed,
     guideSection(parts, 'Inside the editor'),
     noTarget,
+    guideSection(parts, 'Essentials'),
     '## The rest of the handbook',
     REST_OF_HANDBOOK,
   ].join('\n\n')
@@ -210,12 +224,12 @@ const GUIDE_JOBS = {
 }
 
 const REST_OF_HANDBOOK =
-  'Everything else — the HTML format, the element registry, styling, content and data,' +
-  ' components, variants, nesting, icons, class interactions, project settings,' +
-  ' interactions, animations, sliders, publishing — is in the handbook. Take it by the' +
-  ' JOB, in ONE call: `get_guide {for: "build-page"}`, or ' +
-  Object.keys(GUIDE_JOBS).filter((j) => j !== 'build-page').join(', ') +
-  '. A section at a time is a round trip each, and the person waits through every one.'
+  'Everything above is enough to build and style a page. The DETAIL and the worked' +
+  ' examples — content and data, components, variants, nesting, icons, class' +
+  ' interactions, project settings, interactions, animations, sliders, publishing — is' +
+  ' in the handbook. Take it by the JOB, in ONE call: `get_guide {for: "build-page"}`,' +
+  ` or ${Object.keys(GUIDE_JOBS).filter((j) => j !== 'build-page').join(', ')}.` +
+  ' A section at a time is a round trip each, and the person waits through every one.'
 
 /** the EXTERNAL client's instructions — kept as a constant so nothing else moves */
 export const GUIDE_INSTRUCTIONS = guideInstructions(false)
