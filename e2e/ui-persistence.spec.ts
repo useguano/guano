@@ -1,5 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
-import { openEditor } from './fixtures/session'
+import { test, expect, request as pwRequest, type Page } from '@playwright/test'
+import { becomeBuilder, openEditor } from './fixtures/session'
 
 // Autosave against a second writer.
 //
@@ -192,6 +192,83 @@ test('switching drafts mid-edit writes each branch to its own key', async ({ pag
  * surface to show it on: a failed save was a colour on a pill inside a
  * popover, and an uncaught render error was nothing at all.
  */
+test('a save that lost the race is refused, reloaded and SAID — not silently dropped', async ({
+  page,
+  baseURL,
+}) => {
+  // The window `persistMerged` cannot close on its own.
+  //
+  // It reads the stored blob, three-way merges onto it and writes the result —
+  // so a save that lands BETWEEN that read and that write is erased, with
+  // every call reporting success. The MCP server has sent `If-Match` from the
+  // start and gets a 412 for exactly this; the editor kept last-writer-wins.
+  //
+  // The race is FORCED rather than hoped for: the editor's own PUT is held at
+  // the route while a second builder — a real session of its own, outside this
+  // page and so outside its route handlers — writes the blob underneath it.
+  // The held save then goes out naming bytes that have moved.
+  await openEditor(page)
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
+
+  // an edit of our own first, so this tab holds a hash the server gave it
+  const MINE = `Mine ${Date.now()}`
+  await retitle(page, MINE)
+  await waitForStored(page, MAIN, (b) => JSON.stringify(b).includes(MINE))
+
+  const other = await becomeBuilder(await pwRequest.newContext({ baseURL }))
+  const theirPage = async () => {
+    const feed = (await (await other.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>
+    const blob = JSON.parse(feed[MAIN]!)
+    blob.pages.push({
+      id: 'raced',
+      name: 'raced',
+      path: '/raced',
+      status: 'draft',
+      elements: [{ id: 'body-raced', type: 'body', content: '', children: [] }],
+    })
+    expect((await other.put(`/api/store/${MAIN}`, { data: JSON.stringify(blob) })).ok()).toBeTruthy()
+  }
+
+  let raced = false
+  await page.route('**/api/store/guano-project%3Amain', async (route) => {
+    if (route.request().method() !== 'PUT' || raced) return route.fallback()
+    raced = true
+    await theirPage()
+    await route.continue()
+  })
+
+  const LOST = `Lost ${Date.now()}`
+  await retitle(page, LOST)
+  await expect.poll(() => raced, { timeout: 20_000 }).toBe(true)
+
+  // SAID, not silently dropped: a view refreshed with no word is a person
+  // retyping work they can no longer see.
+  //
+  // `status`, not `alert`: nothing failed. The server refused a write to
+  // protect the other writer and this tab caught up — a warning, which is the
+  // role NoticeHost gives one.
+  const notice = page.getByRole('status')
+  await expect(notice).toBeVisible({ timeout: 20_000 })
+  await expect(notice).toContainText('Someone saved this branch')
+  // and the undo history is named, because that is the part that cannot
+  // survive: it holds snapshots of a project that has moved
+  await expect(notice).toContainText('undo history')
+
+  // their page is there and ours was never written — which is the whole point
+  // of a refusal rather than a clobber
+  const after = await stored(page, MAIN)
+  expect((after?.pages ?? []).some((p: any) => p.name === 'raced')).toBe(true)
+  expect(JSON.stringify(after)).not.toContain(LOST)
+
+  // ...and this tab adopted their version rather than sitting on a document
+  // the server does not have
+  await page.unroute('**/api/store/guano-project%3Amain')
+  await page.getByRole('button', { name: 'Pages', exact: true }).click()
+  await expect(page.locator('[data-page-row="raced"]')).toBeVisible({ timeout: 20_000 })
+
+  await other.dispose()
+})
+
 test('a rejected save says what the server said, and offers no pointless retry', async ({
   page,
 }) => {

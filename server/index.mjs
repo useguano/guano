@@ -1748,8 +1748,19 @@ async function handleStore(req, res, path, query) {
       return fail(res, 400, 'invalid keys')
     }
     const out = {}
+    // The hash of what is STORED for each key, which is what an `If-Match`
+    // write is compared against. A header rather than a field, because the
+    // body's shape is `{key: value}` and every reader of it — the editor, the
+    // MCP server, a CI script — would have to learn a new one.
+    //
+    // It is the stored bytes' hash even when the VALUE below is redacted: a
+    // contributor reads a blob with `settings.smtp` removed and writes a
+    // merged one back, and the condition they are naming is "the stored copy
+    // has not moved", not "the copy I was shown".
+    const digests = {}
     for (const key of keys) {
       let val = await readFileOrNull(storeFile(key))
+      digests[key] = val === null ? null : sha256Hex(val)
       // S4: never hand a contributor the server-side secrets (smtp/integration
       // keys) carried in the project blob. Safe because contributor writes
       // ignore incoming `settings`, so a redacted round-trip can't blank them.
@@ -1760,6 +1771,7 @@ async function handleStore(req, res, path, query) {
       }
       out[key] = val
     }
+    res.setHeader('x-guano-hashes', JSON.stringify(digests))
     return send(res, 200, JSON.stringify(out))
   }
 
@@ -1863,7 +1875,17 @@ async function handleStore(req, res, path, query) {
       await writeAtomic(storeFile(key), toWrite)
       storeSize.bytes += Math.max(0, Buffer.byteLength(toWrite) - existingBytes)
       broadcastStoreEvent(key, isAgentRequest(req) ? 'agent' : 'human')
-      return send(res, 200, JSON.stringify({ ok: true }))
+      // `hash` is of what was WRITTEN, which is not always what was sent: a
+      // contributor's blob is content-merged here and a reviewer's is reduced
+      // to its comments. A client that hashed its own body would name a
+      // condition the server never stored, and every following write would
+      // 412 against bytes nobody has.
+      //
+      // It is also how the browser editor can send `If-Match` at all: the
+      // client cannot hash (`crypto.subtle` needs a secure context, and an
+      // editor reached over plain http at a LAN address has none — the same
+      // trap that broke `crypto.randomUUID`), so the server reports it.
+      return send(res, 200, JSON.stringify({ ok: true, hash: sha256Hex(toWrite) }))
     })
   }
   if (req.method === 'DELETE') {
