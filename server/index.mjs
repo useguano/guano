@@ -773,21 +773,13 @@ async function handleAuth(req, res, path) {
     })
   }
   if (path === '/api/auth/launcher-session' && req.method === 'POST') {
-    // The desktop launcher spawned this process and holds the data dir, which
-    // is the same ownership `/api/auth/connect` below already trusts — so it
-    // may mint a session for the instance's owner without a password. The
-    // secret arrives in the ENV at spawn rather than a file: the launcher is
-    // the parent process, so it never touches disk and dies with the server.
-    //
-    // Unlike connect's nonce it is reusable, because the app re-mints on every
-    // 401 (expiry, a password change elsewhere). Loopback-gated with a 256-bit
-    // secret, so no rate limiter buys anything here.
-    //
-    // Absent env = no route at all, which is what keeps every ordinary deploy
-    // exactly as it was.
-    // ONE claim — *I am this person's launcher, for this instance* — and now
-    // two proofs of it, which mint the one same kind of session. Nothing else
+    // ONE claim — *I am this person's launcher, for this instance* — and two
+    // proofs of it, which mint the one same kind of session. Nothing else
     // anywhere mints `via: 'launcher'`.
+    //
+    // The PREFIX is read first and decides which proof this is, because a
+    // credential judged as the wrong kind is the whole thing this design
+    // exists to prevent.
     //
     // PROOF TWO, for an instance this app did not spawn (a VPS, another Mac):
     // a `guanol_` launcher token, obtained once through the device flow where
@@ -827,6 +819,21 @@ async function handleAuth(req, res, path) {
       return fail(res, 403, 'an agent token cannot open the editor')
     }
     // PROOF ONE, unchanged: the spawn secret, loopback only.
+    //
+    // The desktop launcher spawned this process and holds the data dir, which
+    // is the same ownership `/api/auth/connect` below already trusts — so it
+    // may mint a session for the instance's owner without a password. The
+    // secret arrives in the ENV at spawn rather than a file: the launcher is
+    // the parent process, so it never touches disk and dies with the server.
+    //
+    // Unlike connect's nonce it is reusable, because the app re-mints on every
+    // 401 (expiry, a password change elsewhere). Loopback-gated with a 256-bit
+    // secret, so no rate limiter buys anything here — unlike proof two above,
+    // which is reachable from anywhere and takes one.
+    //
+    // Absent env = no route for this proof, which is what keeps every ordinary
+    // deploy exactly as it was. A token-bearing request never reaches here, so
+    // a deployed instance still answers proof two with no secret set.
     const LAUNCHER_SECRET = process.env.GUANO_LAUNCHER_SECRET
     if (!LAUNCHER_SECRET || LAUNCHER_SECRET.length < 32) return fail(res, 404, 'not found')
     // `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours

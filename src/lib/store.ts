@@ -5,18 +5,12 @@ import { hostBridge } from '@/lib/hostBridge'
 const cache = new Map<string, string>()
 const hydratedKeys = new Set<string>()
 
-/**
- * The hash the SERVER last reported for each key — from a read's
- * `x-guano-hashes` header or a write's response — and the only source of an
- * `If-Match`. The client cannot hash: `crypto.subtle` needs a secure context,
- * which an editor reached over plain http at a LAN address does not have.
- */
+/** server-reported hash per key — the only source of an `If-Match` (docs/server.md) */
 const hashes = new Map<string, string>()
 
-/** the hash the server last reported for `key`, or undefined */
-export const storeHash = (key: string) => hashes.get(key)
+export const storeHash = (key: string): string | undefined => hashes.get(key)
 
-/** Read `x-guano-hashes` off a store GET: `{"<key>": "<sha256>" | null}`. */
+/** `x-guano-hashes` off a store GET: `{"<key>": "<sha256>" | null}` */
 function absorbHashes(res: Response) {
   const header = res.headers.get('x-guano-hashes')
   if (!header) return
@@ -27,8 +21,6 @@ function absorbHashes(res: Response) {
       else hashes.delete(key)
     }
   } catch {
-    // A header we cannot read means no baseline, which means no `If-Match` —
-    // the write still lands, with the behaviour the editor had before.
   }
 }
 
@@ -55,21 +47,7 @@ interface Op {
   method: 'PUT' | 'DELETE'
   value?: string
   seq: number
-  /**
-   * The hash of the bytes this write was computed from, sent as `If-Match`.
-   *
-   * A whole project blob goes out on every write, so what a lost update costs
-   * is not a field but every page the other writer had. `persistMerged`
-   * already reads the stored blob and three-way merges onto it — this closes
-   * the window between that read and this write, which is where a second
-   * editor's save, or an agent's, used to disappear with no error anywhere.
-   *
-   * The client never COMPUTES it: `crypto.subtle` needs a secure context, and
-   * an editor reached over plain http at a LAN address is exactly the case
-   * that broke `crypto.randomUUID` (→ src/lib/shared/ids.js). The server
-   * reports the hash on every read and every write, and this is what it last
-   * said.
-   */
+  /** sent as `If-Match` — the bytes this write was computed from */
   ifMatch?: string
 }
 
@@ -80,12 +58,7 @@ const acked = new Map<string, number>()
 
 export const storeAck = ref(0)
 
-/**
- * Someone else saved this key between the read a write was computed from and
- * the write itself. Registered by `usePersistence`, which reloads the blob and
- * says so — **never silently**: a refreshed view nobody was told about is a
- * person retyping work they cannot see any more.
- */
+/** a 412: someone else saved this key (docs/server.md) */
 let conflictHandler: ((key: string) => void) | null = null
 export function onStoreConflict(handler: (key: string) => void) {
   conflictHandler = handler
@@ -129,15 +102,6 @@ function enqueue(key: string, op: Op): number {
   return op.seq
 }
 
-/**
- * A 412 is deliberately NOT retryable.
- *
- * It means the stored bytes moved after this write was computed, so replaying
- * the same body is exactly the clobber `If-Match` exists to prevent — and it
- * would replay forever, because the condition never clears on its own. The
- * answer is to reload and let the editor recompute, which is what
- * `onStoreConflict` is for.
- */
 const isRetryable = (status: number | null) =>
   status === null || status >= 500 || status === 429
 
@@ -165,10 +129,6 @@ async function flush(key: string) {
         ...(op.ifMatch ? { headers: { 'if-match': op.ifMatch } } : {}),
       })
       if (res.status === 412) {
-        // Nothing was written, and nothing should be: this body was built on
-        // bytes that have moved. Drop the op, hand the server's view of the
-        // current hash to the conflict handler, and let the editor reload and
-        // recompute on top of what is actually stored.
         const detail = (await res.json().catch(() => null)) as { currentHash?: string } | null
         if (detail?.currentHash) hashes.set(key, detail.currentHash)
         else hashes.delete(key)
@@ -210,11 +170,6 @@ async function flush(key: string) {
           status: res.status,
         })
       }
-      // The server reports the hash of what it wrote — which is not
-      // necessarily the hash of what was SENT: a contributor's write is
-      // content-merged server-side, and a reviewer's keeps the stored blob
-      // whole. Taking it from the response rather than from our own body is
-      // what makes the next `If-Match` describe reality.
       const written = (await res.json().catch(() => null)) as { hash?: string } | null
       if (written?.hash) hashes.set(key, written.hash)
       else hashes.delete(key)

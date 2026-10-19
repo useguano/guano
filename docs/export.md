@@ -137,3 +137,34 @@ Three paths are deliberately NOT rewritten, because they are the instance's and 
 The package is a `.zip` of `store/` + `media/`, never users, sessions, invites, `publish.json` or `site`. Import strict-allowlists every entry, requires a valid `manifest.json` and at least one project blob with pages, then atomically swaps the live `store`/`media` dirs and calls `resetMediaIndexCache()` so imported media is visible without a restart.
 
 `readDirFiles` (`server/util.mjs`) is the shared recursive dir reader for zip/github/export; `readBodyRaw` (buffer) backs the import upload, capped at 512 MB.
+
+**Deploy is a MOVE, and a move is not a sync.** The launcher's *Move to a
+server…* is these two routes back to back — `GET /api/project-export` through
+the local builder session, `POST /api/project-import` through the remote one —
+and then three things that make it a move rather than a copy: the project's name
+and `settings.publishing.method = server` are written on the far side (`server`
+IS that host, which is why a VPS-hosted instance needs no `apiOrigin`), the
+local folder is **renamed** `<name>.moved-<yyyymmdd>` rather than deleted, and
+the card becomes a remote card. The package carries the WORK and not the people
+— no users, no sessions, no invites — which is what makes "deploy, then invite"
+the team story rather than "deploy, then re-invite everyone".
+
+The rename is not squeamishness: the import is atomic and has already succeeded
+by then, but the media, the `node_modules` and anything uncommitted beside the
+data dir are in that folder too, and *"the app deleted my project folder"* is
+not a sentence anyone should have to read. A second move of the same project on
+one day gets a `-2`.
+
+**Bring back to this Mac** is the same two calls reversed, and it is **refused
+while somebody else has been working**: `GET /api/users/members` reports each
+account's `lastSeenAt` (→ `docs/server.md`), and a move would simply stop their
+window with nothing anywhere telling them why. Afterwards the remote keeps
+running and its site stays up for its contributors, but it is no longer the
+source of truth — `remotes.json` marks it `superseded` and its card says so
+until it is removed. **That is the one state with two copies, and nothing
+reconciles them, ever**: two servers quietly disagreeing about a project is
+worse than either of them being wrong out loud.
+
+The *New Project* modal asks WHERE once, and on a server it hands what was typed
+straight to *Add a server…* — so a team project can be made where it will live
+and never have a local copy to move later.

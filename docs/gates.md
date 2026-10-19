@@ -81,7 +81,7 @@ Rebuilding a runtime moves the `check:corpus` baseline by exactly that asset.
 
 ## `test:e2e` — the Playwright suite
 
-`e2e/`, 565 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
+`e2e/`, 585 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
 
 What is in it, by group:
 
@@ -93,6 +93,10 @@ What is in it, by group:
 - **UI** — smoke plus thirteen `ui-*` panel and surface specs.
 
 **The content fixture is `e2e/fixtures/project.json`**, written straight to the store by `loadFixture()` — test data only, hand-maintained. The product has no demo project and no `?demo` URL.
+
+**One `openEditor`, and it holds a BUILDER session** (`e2e/fixtures/session.ts`). There were thirteen copies, one per `ui-*` spec, each logging in through the browser form — and every one of them became a contributor session the moment the server's gates started reading `effectiveRole(req, user)`, because *a browser session is never a builder session* (→ `docs/server.md`). The fixture mints the way the desktop launcher mints: `POST /api/auth/launcher-session` with the spawn secret over the suite server's loopback, which is why `playwright.config.ts` passes `GUANO_LAUNCHER_SECRET` in `webServer.env` — one definition, in the fixture. That consolidation happened in a commit of its own, BEFORE the gates flipped and with the full suite green, so the flip could only fail on a gate; doing both at once would have been one big uncertain commit instead of two small ones.
+
+Three more helpers, each for a case the first cannot cover. `openEditorInBrowser` is the form login, for the two specs where the browser IS the point — the save pill and the App button are chrome the app's own window provides or that `canBuild` gates. `becomeBuilder(ctx)` upgrades an API context, which thirteen API specs need: seeding a project, writing structure, reading the team, minting a token, publishing, snapshotting and touching settings are all builder work. And `becomeBuilderByApproval(who, baseURL, name)` is for a builder who is NOT the instance's owner — the secret proof mints for `oldestAdmin()` alone, so an editor's builder session can only be a `guanol_` token they approved for themselves through the device flow, which is the path a second builder takes in real life. Each device flow presents its own `X-Forwarded-For`, because the device pool is capped per address and every context in the suite otherwise shares one socket: without it a spec measures the limiter rather than the endpoint. (`TRUST_PROXY` is on for the suite server already, for the forms limiter.)
 
 **A spec that logs in must sort AFTER `smoke.spec.ts`.** Smoke owns the first-run flow and needs a server with no admin account yet; that is why `store-concurrency`, `store-forms`, `store-integrations`, `store-agent-security`, `ui-components-drawer`, `ui-forms-panel`, `ui-entry-editor`, `ui-interactions-panel`, `ui-layers`, `ui-nesting`, `ui-preview-editing`, `ui-persistence`, `ui-slider-panel`, `ui-a11y` and `ui-variants` are named as they are. `lifecycle`, `auth-kdf`, `auth-setup-code` and `instance-identity` are exempt: each spawns its OWN server on its own data dir, so none touches the shared instance's first-run state — a SIGTERM would otherwise end the suite, and a legacy password record has to be on disk BEFORE boot for the user cache to read it.
 

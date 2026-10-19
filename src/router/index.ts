@@ -42,15 +42,6 @@ router.beforeEach(async (to) => {
   const auth = useAuth()
   await auth.check()
   let authed = !!auth.email.value
-  // Ask the app for a BUILDER session when this page does not have one.
-  //
-  // Two cases, and the second is new: no session at all (expiry, a password
-  // changed in a browser), and a session that is not the launcher's. The
-  // second happens whenever setup was completed in the webview — the editor
-  // still serves `/setup` for any instance the app did not create, and the
-  // cookie that route sets is an ordinary BROWSER session, which the server
-  // caps at contributor. Without this, a person who set up a project inside
-  // the app's own window would be pinned to Play in it.
   const wrongKind = authed && auth.host.value !== 'launcher'
   if ((!authed || wrongKind) && !auth.needsSetup.value && hostBridge.available) {
     await hostBridge.requestReauth().catch(() => {})

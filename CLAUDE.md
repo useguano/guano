@@ -8,7 +8,9 @@ A browser-based visual website builder. The user builds pages on a live canvas w
 
 A page's structure is an `ElementNode` **tree, and the tree is all there is** — no text format sits beside it (there was an indentation DSL until the v2 schema).
 
-There is **one admin shell** with **two surfaces** over one shared document, switched by the desktop launcher's **Preview / Editor** button over the host bridge (the editor draws no switch of its own): Edit is the rails + canvas + Layers builder, Play is the full-site render. It is a runtime mode in `useViewMode`, **not a route**, and contributors are pinned to Play. → `docs/ui.md`
+There is **one admin shell** with **two surfaces** over one shared document, switched by the desktop launcher's **Preview / Editor** button over the host bridge (the editor draws no switch of its own): Edit is the rails + canvas + Layers builder, Play is the full-site render. It is a runtime mode in `useViewMode`, **not a route**. → `docs/ui.md`
+
+**Building happens in the desktop launcher, and only there.** Decided 2026-10-18: *a browser session is never a builder session.* A cookie session is capped at `contributor` at the API whatever the account's role, so an admin who opens their own deployed instance in a browser gets the content view — structure, settings, custom code, integrations, publish and invites need the kind of session the launcher holds, which it buys with a per-instance `guanol_` token (the `guano_` prefix is an AGENT token and the two are different TYPES to every parser). A deployed instance serves Play to contributors and reviewers, the site and its forms. → `docs/server.md`, Builder sessions
 
 The published site is a **static export** (`server/export.mjs`) served by the node server at `/`; it never enters the Vue app. → `docs/export.md`
 

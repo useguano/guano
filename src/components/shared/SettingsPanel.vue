@@ -2302,9 +2302,6 @@ async function onImportFile(e: Event) {
           </TabPanelUI>
 
           <TabPanelUI class="gap-9" id="account">
-            <!-- An account that could build, in a browser that cannot. Without
-                 this sentence an admin opens their own deployed instance in
-                 Safari, reads their site as read-only, and files a bug. -->
             <div
               v-if="cappedByBrowser"
               class="flex items-start gap-2 rounded-xl border border-input px-3 py-2.5 text-[11px] leading-snug text-muted-foreground"

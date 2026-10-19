@@ -328,6 +328,63 @@ Dropped: `use_project`, `set_target`, `publish`, `list_integrations`,
 which is not just a link: it renders the target and returns the same
 `warnings` publish does, the only review the panel can run.
 
+## A remote project's panel runs the app's own CLI
+
+Decided with launcher-only building (2026-10-18): the Build surface is reached
+from the desktop app, and the instance it reaches may be a **server nobody on
+this Mac has a folder for**. That changes three things about a spawn and nothing
+else — `AgentHost` in `LauncherCore` is where all three live, and the panel, the
+transcript, the flags, the model menu and the target handshake have no idea
+which kind of instance they are talking to.
+
+**The CLI.** A local project runs its own installed `@useguano/guano`: its
+version is the project's business, and its server and its MCP process are the
+same copy by construction. A remote has no copy here, so the app ships one at
+`Contents/Resources/guano`, staged by `make guano` with the MCP SDK and nothing
+else — the published package's other dependencies are the exporter's, tens of
+megabytes, and nothing the app runs from that copy touches them. **The lender is
+gone**, and not only from this path: it was the newest installed project's
+`node_modules`, borrowed for every app-wide command, which meant none of them
+worked until you had a local project and each ran whatever version that one
+happened to have. The builder-checkout override still wins, so a repo's tools
+reach a remote panel too — the same trap `cliScript(builderRepo:)` closed
+locally, where a checkout served an editor with new tools and an agent without
+them.
+
+**`--url --embedded --config --target`, together.** Verified against the CLI for
+the first time on 2026-10-19 (it had never been tried): one entry carrying the
+token, the instance id, the target and the payload fence, with
+`GUANO_MCP_EMBEDDED=1`. **One device approval per instance, not two** — the app
+mints the AGENT token itself through that instance's own tokens API, with the
+builder session its `guanol_` launcher token buys, and passes it as `--token`.
+The second device flow would have been the CLI's own, for a credential the app
+is already entitled to mint, and two approvals for one server is the kind of
+thing people stop doing.
+
+**Where it stands.** A local spawn's cwd is the project folder. A remote's is
+the **payload fence**, `~/.guano/payloads/<slug>`, which `connect --url` creates
+0700 and writes into the entry as `GUANO_MCP_FILE_ROOT`. The agent has no file
+tools either way (`AgentLaunch.disallowedTools`), so this is the belt to that
+braces. The slug is `hostSlug`'s rule verbatim — the hostname with a leading
+`www.` removed, and nothing else — because two implementations of one path only
+stay equal if they are the same rule, and a tidier one here would fence the
+agent out of the directory the server reads from, with a tool that cannot find a
+file that is plainly there as the symptom.
+
+**Which config is current** is the instance id for a remote, and nothing else
+identifies it: there is no folder to match a command line against, and the
+address is a cached guess the way a local port is — so a server that moved
+domain keeps a config that still names the right instance. The target and
+`GUANO_MCP_EMBEDDED` are checked exactly as they are locally.
+
+**Version drift is the person's problem now, so the app says it.** Two versions
+updated by two people on two schedules is a state a local project cannot be in.
+`get_status.versionMismatch` tells the AGENT its tool list may be stale, which
+is the right audience for that; the app computes the same fact from two numbers
+it already holds — the bundle's `package.json` and `/api/health` — and puts a
+strip on the tab naming WHICH side to update. "They are different" leaves a
+person with two things to try and no reason to prefer either.
+
 ## The target follows the branch
 
 `useHostBridge` watches `usePersistence().activeBranchId` with `immediate` and

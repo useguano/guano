@@ -1,18 +1,26 @@
 #!/usr/bin/env node
 // @useguano/create: scaffold a project dir that runs Guano via npm scripts,
-// install it, and connect Claude — all in this one command, so what
-// is left afterwards is `cd my-site && npm run dev`. Zero dependencies —
-// prompts with node:readline.
+// install it, and tell you how to reach it. Zero dependencies — prompts with
+// node:readline.
 //
-//   npm create @useguano [dir] [--no-install] [--no-connect | --connect]
-//                        [--main] [--publish] [--config <claude config path>]
+//   npm create @useguano [dir] [--no-install] [--connect [--main] [--publish]
+//                        [--config <claude config path>]]
 //
-// The MCP connect runs through the just-installed package's own
-// `guano connect --offline`: it mints a PENDING API token into <dir>/data,
-// writes the two agent permissions there, and writes the config of every
-// Claude client on the machine (Claude Code and Claude Desktop).
-// The server binds the token to the first admin at /admin setup, and the
-// setup form shows the permissions instead of asking them again.
+// THIS IS THE SERVER INSTALLER. Decided 2026-10-18 with launcher-only
+// building: a VPS runs this, and the Build surface is reached from Guano
+// Launcher on a Mac over the approval that instance grants it. So the Claude
+// questions are no longer ASKED — a server has no Claude on it, the editor's
+// own AI panel is Guano's main integration and needs no wiring up, and a
+// prompt that every server install answers "no" to is a prompt that teaches
+// people to stop reading prompts.
+//
+// `--connect` keeps the whole flow for the one case it was written for: a
+// person scaffolding on their own laptop who wants Claude Code or Claude
+// Desktop pointed at it. It mints a PENDING API token into <dir>/data, writes
+// the two agent permissions there, and writes the config of every Claude
+// client on the machine; the server binds the token to the first admin at
+// /admin setup, and the setup form shows the permissions instead of asking
+// them again.
 import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { existsSync } from 'node:fs'
@@ -44,21 +52,20 @@ if (!dir) {
   dir = rl ? (await ask(`Project folder (${DEFAULT_DIR}): `)).trim() || DEFAULT_DIR : DEFAULT_DIR
 }
 
-// Connect Claude? Flags decide non-interactively (CI never asks and
-// never connects); a terminal asks, default yes.
-let connect = false
-let policyFlags = []
-if (flag('--no-connect')) {
-  connect = false
-} else if (flag('--connect') || flag('--main') || flag('--publish')) {
-  connect = true
-} else if (rl) {
-  connect = await yes('Connect Claude (Code and Desktop) to this site over MCP?', true)
-}
-if (connect) {
+// Connect Claude? NOT ASKED any more — opt in with `--connect`.
+//
+// This command is how a server is installed, and a server has no Claude on
+// it: the editor's own AI panel is Guano's main integration, and the Build
+// surface is reached from Guano Launcher over the approval the instance
+// grants it. A question every server install answers "no" to is a question
+// people stop reading. `--no-connect` is still accepted and still means no,
+// so an existing script keeps working.
+const connect = flag('--connect') || flag('--main') || flag('--publish')
+const policyFlags = []
+if (connect && !flag('--no-connect')) {
   if (flag('--main')) policyFlags.push('--main')
   if (flag('--publish')) policyFlags.push('--publish')
-  if (!policyFlags.length && rl && !flag('--connect')) {
+  if (!policyFlags.length && rl) {
     console.log('\nTwo questions about what the agent may do (change them any time in\n/admin → Settings → MCP → Agent permissions):\n')
     if (await yes('Let agents edit the live project (Main)? Off, they work in a draft you apply yourself.', false))
       policyFlags.push('--main')
@@ -189,23 +196,34 @@ dist-site/
 A [Guano](https://www.npmjs.com/package/@useguano/guano) site.
 
 \`\`\`sh
-npm run dev
+npm run start
 \`\`\`
 
-Open http://localhost:${port}/admin, create the first account, then build your
-site. Your published site is served at http://localhost:${port}/.
+Open http://localhost:${port}/admin and create the first account. From this
+machine that is all it takes; from anywhere else the form asks for a **setup
+code**, which the server prints in its own log the first time it starts. It is
+what stands in for being at the machine — without it, the first stranger to
+reach a fresh instance would become its admin.
 
-This project runs on port ${port} (set in \`.env\`). Each Guano site on a
-machine needs its own, so two of them never answer for one address.
+**Then add this server in Guano Launcher** (Home → Servers → Add a server…)
+and build from there. Pages, components, settings and publishing live in the
+Mac app; what this instance serves is the site, its forms, and the content
+view for anyone you invite. Approving the app once in your browser is what
+gives that Mac builder access, and you can revoke it any time under
+My account → API tokens.
 
-If you said yes to Claude when scaffolding, it is already connected:
-the agent token is bound to the admin account you create, and the permissions
-you chose (edit the live project, publish) show on the setup form and stay
-editable in Settings → MCP → Agent permissions.
+Two things that follow from that, and are chosen rather than missed: **every
+builder needs a Mac**, and once a project is on a server there is no offline
+building.
 
+Your published site is served at http://localhost:${port}/, and this project
+runs on port ${port} (set in \`.env\`). Each Guano site on a machine needs its
+own, so two of them never answer for one address.
+
+- \`npm run dev\` — the same server with dev logging
 - \`npm run start\` — production server (\`NODE_ENV=production\`)
 - \`npm run build\` — export the site as static files to \`./dist-site\`
-- \`npm run connect\` — connect Claude later, or from another machine (writes Claude Code's \`~/.claude.json\` and Claude Desktop's config; quit Desktop first; \`--main\` / \`--publish\` grant the agent permissions, or it asks)
+- \`npm run connect\` — point Claude Code or Claude Desktop at this site over MCP. Not needed for the editor's own AI panel, which is Guano's main integration and needs no wiring up. (Writes Claude Code's \`~/.claude.json\` and Claude Desktop's config; quit Desktop first; \`--main\` / \`--publish\` grant the agent permissions, or it asks.)
 - everything lives in \`./data\` — **backing up = copying that directory**
 
 See the @useguano/guano package README for deploy notes and environment variables.
@@ -274,5 +292,16 @@ rl?.close()
 console.log(`
 Next:
   cd ${dir}${installed || !install ? '' : '\n  npm install'}
-  npm run dev   → http://localhost:${port}/admin  (create your admin account)
-${connected ? '\nThen open Claude — guano is connected; the agent token is bound to the admin you create.\n' : ''}`)
+  npm run start   → http://localhost:${port}/admin
+
+The FIRST account is created at /admin. From this machine that is all it
+takes; from anywhere else the form asks for a setup code, which the server
+prints in its own log the first time it starts — look for "the form asks for
+this code". It is what stands in for being at the machine: without it, the
+first stranger to reach a fresh instance would become its admin.
+
+Then add this server in Guano Launcher (Home → Servers → Add a server…) and
+build from there. Pages, components, settings and publishing live in the app;
+this instance serves the site, its forms, and the content view for anyone you
+invite.
+${connected ? '\nClaude is connected on this machine; the agent token is bound to the admin you create.\n' : ''}`)
