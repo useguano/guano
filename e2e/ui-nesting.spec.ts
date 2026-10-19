@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // Nesting — a component that holds another.
 //
@@ -13,32 +13,7 @@ import { loadFixture } from './fixtures/project'
 //
 // Named to sort AFTER smoke.spec (it logs in).
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-  // wait for the fixture's content to actually be on the canvas
-  await expect(page.getByText('Tuesday is roast day.').first()).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.
@@ -123,7 +98,7 @@ async function retype(page: Page, rowId: string, text: string) {
 }
 
 test('a component is given a Button: each instance says its own, and Button is styled once', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // two of them on the page
@@ -152,8 +127,8 @@ test('a component is given a Button: each instance says its own, and Button is s
   await expect(page.locator('[data-dock-item^="component:"]', { hasText: /^Button$/ })).toHaveCount(0)
   await closeDock(page)
 
-  // --- both instances on the page followed
-  await rail(page, 'App').click()
+  // --- both instances on the page followed. `openLayers` leaves the board on
+  // its own (it picks the page); the rail's App button is browser-only chrome.
   await openLayers(page)
   await expect(wrappers('Button')).toHaveCount(2)
 
@@ -174,7 +149,6 @@ test('a component is given a Button: each instance says its own, and Button is s
   await page.keyboard.press('Enter')
   await page.keyboard.press('Escape')
 
-  await rail(page, 'App').click()
   await publish(page)
   const html = await (await page.request.get('/')).text()
   const buttons = [...html.matchAll(/<button[^>]*class="([^"]*)"[^>]*><span[^>]*>([^<]*)<\/span>/g)]

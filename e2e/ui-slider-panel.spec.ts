@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // Authoring a slider end to end in the real editor: build it from the ⌘E dock
 // and the Layers tree, watch the canvas build the track, configure it in the
@@ -15,31 +15,8 @@ import { loadFixture } from './fixtures/project'
 // server with no admin account yet, so any spec that logs in has to run later
 // (same reason store-agent-security.spec carries its own name).
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
 /** log in (or do first-run setup) and load the demo project */
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.

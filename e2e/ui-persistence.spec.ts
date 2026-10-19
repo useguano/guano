@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // Autosave against a second writer.
 //
@@ -13,32 +13,8 @@ import { loadFixture } from './fixtures/project'
 //
 // Named to sort AFTER smoke.spec, which owns the first-run flow.
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const MAIN = 'guano-project:main'
 
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Retitle the hero in place.
@@ -113,6 +89,7 @@ async function draftKey(page: Page) {
 
 test('undo does not revert what another writer changed', async ({ page }) => {
   await openEditor(page)
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
 
   // an edit of our own, settled, so this tab has a baseline
   const FIRST = `Mine ${Date.now()}`
@@ -140,6 +117,7 @@ test('undo does not revert what another writer changed', async ({ page }) => {
 
 test('an undo that merges does not cost the redo', async ({ page }) => {
   await openEditor(page)
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
 
   const MARK = `Mine ${Date.now()}`
   await retitle(page, MARK)
@@ -169,6 +147,7 @@ test('an undo that merges does not cost the redo', async ({ page }) => {
 
 test('switching drafts mid-edit writes each branch to its own key', async ({ page }) => {
   await openEditor(page)
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
   const ON_MAIN = `Main ${Date.now()}`
   await retitle(page, ON_MAIN)
   await waitForStored(page, MAIN, (b) => JSON.stringify(b).includes(ON_MAIN))
@@ -217,6 +196,7 @@ test('a rejected save says what the server said, and offers no pointless retry',
   page,
 }) => {
   await openEditor(page)
+  await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
 
   // a refusal with a message, in the shape the server sends
   await page.route('**/api/store/guano-project%3Amain', async (route) => {

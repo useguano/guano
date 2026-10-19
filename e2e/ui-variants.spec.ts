@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // Variants — how ONE component comes in several looks.
 //
@@ -12,32 +12,7 @@ import { loadFixture } from './fixtures/project'
 //
 // Named to sort AFTER smoke.spec (it logs in).
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-  // wait for the fixture's content to actually be on the canvas
-  await expect(page.getByText('Tuesday is roast day.').first()).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.
@@ -74,7 +49,11 @@ async function openLayers(page: Page, name = 'Home') {
     // `exact` matters: the name match is a substring, and the Style panel's
     // 'Background' section header is a button too
     const back = page.getByRole('button', { name: 'Back', exact: true })
-    if (await back.isVisible()) await back.click()
+    // A Back click can lose its element: the detail view it belongs to is
+    // transitioning out, and Playwright's stability check retries until the
+    // node detaches. Bounded and swallowed, so the next turn round the loop
+    // re-probes rather than spending the whole test timeout on one click.
+    if (await back.isVisible()) await back.click({ timeout: 2_000 }).catch(() => {})
     else await rail(page, 'Pages').click()
     await page.waitForTimeout(150)
   }
@@ -111,7 +90,7 @@ async function insertComponent(page: Page, name: string) {
 
 
 test('an axis is named, an option styled, and one instance of two wears it', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // two Buttons on the page
@@ -180,8 +159,10 @@ test('an axis is named, an option styled, and one instance of two wears it', asy
   await expect(plain).not.toHaveClass(/(^| )h-8( |$)/)
   await page.keyboard.press('Escape')
 
-  // --- one instance of the two wears it
-  await rail(page, 'App').click()
+  // --- one instance of the two wears it. `openLayers` walks back out of the
+  // variant detail view on its own; the rail's App button used to clear the
+  // column outright, but it is inside `showsAppHome` — chrome the desktop app
+  // provides — so a builder session has none.
   await openLayers(page)
   await instances.first().click()
   await page.getByRole('button', { name: 'Data', exact: true }).click()

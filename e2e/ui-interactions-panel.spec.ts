@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // The Interactions panel and the effects drawer. Seven paths, each chosen
 // because it protects against SILENT data loss or a lie that type-checking
@@ -16,35 +16,11 @@ import { loadFixture } from './fixtures/project'
 // server with no admin account yet, so any spec that logs in has to run later
 // (same reason store-agent-security.spec carries its own name).
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
 /** log in (or do first-run setup) and load the demo project. Whether this run
  * lands on setup or login depends on test order and whether the data dir was
  * wiped, so wait for whichever form actually arrives — the guard redirects
  * after boot, so the URL right after goto() is not yet the answer. */
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    // the login form's placeholder is the bare word; setup's carries the rule
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-}
 
 /** the right rail's Interactions button is icon-only (Zap) */
 async function openPanel(page: Page) {

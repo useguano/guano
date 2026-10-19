@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
 import { fakeHost, hostViewMode } from './fixtures/host'
+import { openEditor } from './fixtures/session'
 
 // The Layers tree — the surface that replaced the code editor.
 //
@@ -13,32 +13,7 @@ import { fakeHost, hostViewMode } from './fixtures/host'
 // Named to sort AFTER smoke.spec: smoke owns the first-run flow and needs a
 // server with no admin account yet, so any spec that logs in has to run later.
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-  // wait for the fixture's content to actually be on the canvas
-  await expect(page.getByText('Tuesday is roast day.').first()).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.
@@ -133,7 +108,7 @@ const idAt = async (page: Page, index: number) =>
   (await rows(page).nth(index).getAttribute('data-layer-row'))!
 
 test('the layers column lists the page and follows the canvas selection', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // the body is the root row, and the tree is deep enough to be real
@@ -152,7 +127,7 @@ test('the layers column lists the page and follows the canvas selection', async 
 test('dragging a row INTO a container re-parents it, and it publishes that way', async ({
   page,
 }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // build a known shape at the end of the body: a section, then a heading
@@ -191,7 +166,7 @@ test('dragging a row INTO a container re-parents it, and it publishes that way',
 test('an empty container is given a box on the canvas, until it holds something', async ({
   page,
 }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // a section seeds no child, so it renders as nothing at all: zero height,
@@ -212,7 +187,7 @@ test('an empty container is given a box on the canvas, until it holds something'
 })
 
 test('a row names a ref, and refuses one already used on the page', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   await rows(page).first().click()
@@ -240,7 +215,7 @@ test('a row names a ref, and refuses one already used on the page', async ({ pag
 })
 
 test('S, D and I open the panels for the selected row', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // the code editor's typed '(' / '[' / '{' were the only keyboard way in
@@ -259,7 +234,7 @@ test('S, D and I open the panels for the selected row', async ({ page }) => {
 })
 
 test('a button lands holding its words, on a page and in a component', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // on a PAGE: a button is a container, so an insert that landed it empty
@@ -284,7 +259,7 @@ test('a button lands holding its words, on a page and in a component', async ({ 
 })
 
 test('a decorative span loses its placeholder once it has a box of its own', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // a fresh span shows its lorem on the canvas — something to see and click
@@ -300,14 +275,20 @@ test('a decorative span loses its placeholder once it has a box of its own', asy
   await page.keyboard.press('s')
   const add = page.getByPlaceholder('Add class')
   await expect(add).toBeFocused()
-  await add.fill('size-2 rounded-full bg-red-500')
-  await add.press('Enter')
+  // ONE class per Enter: `applyClass` validates a single utility, so a
+  // space-separated string is refused as "not a known class" and nothing lands
+  // — which is how this assertion came to be measuring an input that had
+  // rejected its own value.
+  for (const cls of ['size-2', 'rounded-full', 'bg-red-500']) {
+    await add.fill(cls)
+    await add.press('Enter')
+  }
   await expect(lorem).toHaveCount(before - 1)
   await expect(frame.locator('span.size-2.rounded-full')).toHaveCount(1)
 })
 
 test('an icon is picked from the grid and publishes as an inline svg', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // a button, then an icon inside it: the insert lands in the selection
@@ -333,7 +314,7 @@ test('an icon is picked from the grid and publishes as an inline svg', async ({ 
 })
 
 test('the Layers eye hides a layer in the editor only; the export keeps it', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // two instances of the same component, side by side
@@ -376,7 +357,7 @@ test('the Layers eye hides a layer in the editor only; the export keeps it', asy
 test('a component gains an element on the board, and its page instance follows', async ({
   page,
 }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // put a Card on the page: an instance for the master edit to reach
@@ -395,8 +376,11 @@ test('a component gains an element on the board, and its page instance follows',
   await insertFromDock(page, 'paragraph')
   await expect(rows(page)).toHaveCount(masterRows + 1)
 
-  // back on the page, the instance grew the same element
-  await rail(page, 'App').click()
+  // Back on the page, the instance grew the same element. `openLayers` is
+  // what leaves the board: it picks the page, and `setActivePage` sets the
+  // canvas back. The rail's App button would too, but it is inside
+  // `showsAppHome` — chrome the desktop app provides — so a builder session
+  // has none.
   await openLayers(page)
   await expect(rows(page)).toHaveCount(pageRows + 1)
 })
@@ -404,7 +388,7 @@ test('a component gains an element on the board, and its page instance follows',
 test('removing an element from a component removes it from the page instance', async ({
   page,
 }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
   await rows(page).first().click()
   await insertComponent(page, 'Alert')
@@ -423,7 +407,7 @@ test('removing an element from a component removes it from the page instance', a
 })
 
 test('Pages and Components share one column; layers live inside each', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await openLayers(page)
 
   // the Layers view is a layer of the Pages drawer: Back returns to the list
@@ -448,7 +432,7 @@ test('Pages and Components share one column; layers live inside each', async ({ 
 })
 
 test('a collection has settings: its fields and its URL', async ({ page }) => {
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await rail(page, 'Pages').click()
 
   const row = page.locator('[data-collection-row]').first()
@@ -476,7 +460,7 @@ test("the host's Edit / Play switch swaps the surface, and Play edits nothing", 
   // none of its own, and a browser session stays on the Edit canvas. The
   // page posts its mode over the bridge and the host calls back.
   await fakeHost(page)
-  await openEditor(page)
+  await openEditor(page, { canvas: true })
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)

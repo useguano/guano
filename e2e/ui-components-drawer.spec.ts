@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor, openEditorInBrowser } from './fixtures/session'
 
 // The Components column: the shared-slot rail behaviour, and a component's
 // round trip — use one on a page, publish, and check the real exported page.
@@ -12,30 +12,7 @@ import { loadFixture } from './fixtures/project'
 // Named to sort AFTER smoke.spec: smoke owns the first-run flow and needs a
 // server with no admin account yet, so any spec that logs in has to run later.
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.
@@ -85,7 +62,9 @@ async function insertComponent(page: Page, name: string) {
 }
 
 test('the three left columns share one slot', async ({ page }) => {
-  await openEditor(page)
+  // openEditorInBrowser: the App button is inside `showsAppHome`, chrome the
+  // desktop app's own window provides — so this spec is about a BROWSER.
+  await openEditorInBrowser(page)
 
   await rail(page, 'Components').click()
   await expect(page.getByPlaceholder('Search components…')).toBeVisible()

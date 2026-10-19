@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 import { resolve } from 'node:path'
+import { LAUNCHER_SECRET } from './e2e/fixtures/session'
 
 // Smoke-only e2e. The server is started on an isolated data dir (GUANO_DATA_DIR)
 // and a non-default port so it never touches real dev data or a running
@@ -44,6 +45,12 @@ export default defineConfig({
       PORT: String(PORT),
       TRUST_PROXY: '1',
       LOG_LEVEL: 'warn',
+      // So the suite's one `openEditor` fixture can mint a BUILDER session
+      // rather than logging in through the form: a browser session is never a
+      // builder session, so a UI spec that edits structure has to hold the
+      // kind of session the desktop launcher holds. Loopback-only either way.
+      // One definition, in e2e/fixtures/session.ts.
+      GUANO_LAUNCHER_SECRET: LAUNCHER_SECRET,
     },
     port: PORT,
     reuseExistingServer: false,

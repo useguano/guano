@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // Editing a collection item's FIELD VALUES in the Pages drawer.
 //
@@ -16,35 +16,12 @@ import { loadFixture } from './fixtures/project'
 // server with no admin account yet, so any spec that logs in has to run later
 // (same reason ui-slider-panel and store-agent-security carry their names).
 
-const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 
 /** the demo's first journal entry — has `fr` overrides on title/excerpt/body */
 const ENTRY = 'Why we rest our roasts for three days'
 const ENTRY_PATH = '/post/why-we-rest-our-roasts-for-three-days'
 
 /** log in (or do first-run setup) and load the demo project */
-async function openEditor(page: Page) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(ADMIN.password)
-    await page.getByPlaceholder('Confirm project password').fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(ADMIN.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(ADMIN.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await loadFixture(page)
-  await expect(ready).toBeVisible({ timeout: 30_000 })
-}
 
 /**
  * Publish, waiting out the server's rate limit if the suite has hit it.
