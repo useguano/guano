@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 import { readZip } from '../server/zip.mjs'
 
 // Three server contracts added together, API-level and self-bootstrapping like
@@ -27,6 +28,9 @@ async function adminContext(baseURL: string | undefined) {
   if (!res.ok()) {
     expect((await ctx.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })).ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(ctx)
   return ctx
 }
 

@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // A private site: one shared visitor password in front of the published
 // pages, enforced by this server. The hash lives in publish.json, the switch
@@ -37,6 +38,9 @@ test('a private site asks for its password, then serves', async ({ baseURL }) =>
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
   expect((await admin.post('/api/published', { data: snapshot() })).ok()).toBeTruthy()
 
   // anyone can read the site before the gate is on

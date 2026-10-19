@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // What a visitor's browser is allowed to keep. The `server` publish method IS
 // the host, so these headers are the published site's only caching story — and
@@ -64,6 +65,9 @@ test.beforeAll(async ({ baseURL }) => {
       (await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })).ok(),
     ).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
   expect((await admin.post('/api/published', { data: snapshot() })).ok()).toBeTruthy()
 })
 

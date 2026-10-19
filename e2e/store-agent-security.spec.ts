@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { LAUNCHER_SECRET } from './fixtures/session'
 
 // Security regressions for the MCP/agent surface. Each case here is a hole that
 // was open before: a key spelling that slipped past the contributor guards, a
@@ -17,12 +18,31 @@ const MAIN = 'guano-project:main'
 const DRAFT = 'guano-project:sec-spec-draft'
 const BASE = 'guano-base:sec-spec-draft'
 
+/**
+ * An admin who can BUILD — which means a launcher session, not a password
+ * login. A browser session is never a builder session (`effectiveRole` in
+ * server/auth.mjs), so after the gates flipped, an admin at a browser is a
+ * contributor at every gate here: seeding Main would be content-merged and
+ * every admin-only route would answer 403. Most of this spec is about the
+ * agent fence and needs a real admin on the other side of it.
+ */
 async function adminContext(baseURL: string | undefined) {
   const ctx = await pwRequest.newContext({ baseURL })
   const res = await ctx.post('/api/auth/login', { data: ADMIN })
   if (!res.ok()) {
     expect((await ctx.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })).ok()).toBeTruthy()
   }
+  // ...and upgrade the session to the kind the desktop app holds. The secret
+  // proof, over the suite server's loopback.
+  const minted = await ctx.post('/api/auth/launcher-session', { data: { secret: LAUNCHER_SECRET } })
+  expect(minted.status(), 'the suite server must carry GUANO_LAUNCHER_SECRET').toBe(200)
+  return ctx
+}
+
+/** the same account, signed in the way a person at a browser signs in */
+async function browserAdminContext(baseURL: string | undefined) {
+  const ctx = await pwRequest.newContext({ baseURL })
+  expect((await ctx.post('/api/auth/login', { data: ADMIN })).ok()).toBeTruthy()
   return ctx
 }
 
@@ -41,7 +61,17 @@ async function contributorContext(admin: APIRequestContext, baseURL: string | un
   return ctx
 }
 
-/** an editor session — a build role, so most guards let it straight through */
+/**
+ * An editor who can BUILD — a build role in a launcher session.
+ *
+ * The secret proof mints for `oldestAdmin()` only, so an editor's builder
+ * session can only come from the bearer proof: a `guanol_` token this editor
+ * approved for themselves through the device flow. That is the second builder's
+ * whole path — an editor with their own Mac — and it is why a LAUNCHER
+ * authorization needs a build role rather than an admin: the token carries
+ * exactly the approver's own role, so admin-only was a dead end and not a
+ * safeguard.
+ */
 async function editorContext(admin: APIRequestContext, baseURL: string | undefined) {
   const ctx = await pwRequest.newContext({ baseURL })
   const invite = await admin.post('/api/users/invite', {
@@ -53,7 +83,51 @@ async function editorContext(admin: APIRequestContext, baseURL: string | undefin
   } else {
     expect((await ctx.post('/api/auth/login', { data: EDITOR })).ok()).toBeTruthy()
   }
-  return ctx
+  const token = await launcherToken(ctx, baseURL, 'editor launcher')
+  const upgraded = await pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { authorization: `Bearer ${token}` },
+  })
+  expect((await upgraded.post('/api/auth/launcher-session', { data: {} })).status()).toBe(200)
+  await ctx.dispose()
+  return upgraded
+}
+
+/**
+ * A context that presents its own client address.
+ *
+ * The device pool is capped per ADDRESS (two pending) as well as rate-limited
+ * per address, and every context in this suite otherwise shares one socket —
+ * so a spec that starts a handful of authorizations measures the limiter rather
+ * than the endpoint. `TRUST_PROXY` is on for the suite server (→
+ * playwright.config.ts) precisely so a spec can say who it is.
+ */
+let deviceClients = 0
+function deviceContext(baseURL: string | undefined) {
+  deviceClients += 1
+  return pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { 'x-forwarded-for': `10.9.0.${deviceClients}` },
+  })
+}
+
+/**
+ * Run the device flow to completion as `who`, and return the raw launcher
+ * token. `who` approves their own authorization, which is the point: the token
+ * is minted for the approver.
+ */
+async function launcherToken(who: APIRequestContext, baseURL: string | undefined, name: string) {
+  const anon = await deviceContext(baseURL)
+  const begun = await anon.post('/api/auth/device', { data: { name, kind: 'launcher' } })
+  expect(begun.ok()).toBeTruthy()
+  const { userCode, deviceCode } = await begun.json()
+  expect((await who.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
+  const got = await anon.post('/api/auth/device/token', { data: { deviceCode } })
+  expect(got.ok()).toBeTruthy()
+  const { token } = await got.json()
+  await anon.dispose()
+  expect(String(token).startsWith('guanol_')).toBeTruthy()
+  return token as string
 }
 
 /** a bearer-token context — the credential the MCP server runs on */
@@ -414,7 +488,7 @@ test('an agent token cannot open the editor, and a launcher token cannot drive t
 
   /** drive the device flow to completion and return the raw token */
   const mint = async (kind: 'agent' | 'launcher') => {
-    const started = await pwRequest.newContext({ baseURL })
+    const started = await deviceContext(baseURL)
     const begun = await started.post('/api/auth/device', { data: { name: `kinds ${kind}`, kind } })
     expect(begun.ok()).toBeTruthy()
     const { userCode, deviceCode } = await begun.json()
@@ -486,6 +560,179 @@ test('an agent token cannot open the editor, and a launcher token cannot drive t
 
   await asAgent.dispose()
   await asLauncher.dispose()
+  await admin.dispose()
+})
+
+test('a browser session is never a builder session, whatever the account', async ({ baseURL }) => {
+  // THE RULE. The Build surface — structure, settings, custom code,
+  // integrations, publish, invites — is reachable only from the desktop
+  // launcher; a deployed instance serves Play in a browser. It is enforced at
+  // the API by `effectiveRole(req, user)`, which caps a cookie session at
+  // contributor whatever its account's role, and NOT by hiding UI: a test that
+  // only checks the chrome tests nothing.
+  //
+  // The same admin account, twice, through two kinds of session.
+  const launcher = await adminContext(baseURL)
+  await seedMain(launcher)
+  const browser = await browserAdminContext(baseURL)
+  expect((await (await launcher.get('/api/auth/me')).json()).host).toBe('launcher')
+  expect((await (await browser.get('/api/auth/me')).json()).host).toBe('browser')
+
+  // `/api/auth/me` reports BOTH: the account's role and this request's.
+  const asBrowser = await (await browser.get('/api/auth/me')).json()
+  expect(asBrowser.role).toBe('admin')
+  expect(asBrowser.effectiveRole).toBe('contributor')
+  expect(asBrowser.canBuild).toBe(false)
+  const asLauncher = await (await launcher.get('/api/auth/me')).json()
+  expect(asLauncher.role).toBe('admin')
+  expect(asLauncher.effectiveRole).toBe('admin')
+  expect(asLauncher.canBuild).toBe(true)
+
+  // --- refused in a browser, allowed from the launcher ---
+  const invite = { name: 'Nope', email: 'nope@example.com', role: 'contributor' }
+  expect((await browser.post('/api/users/invite', { data: invite })).status()).toBe(403)
+  expect((await browser.get('/api/users')).status()).toBe(403)
+  expect((await browser.post('/api/tokens', { data: { name: 'nope' } })).status()).toBe(403)
+  expect((await browser.get('/api/tokens')).status()).toBe(403)
+  expect((await browser.put('/api/agent-policy', { data: { allowMainWrites: true } })).status()).toBe(403)
+  expect((await browser.get('/api/snapshots')).status()).toBe(403)
+  expect((await browser.get('/api/project-export')).status()).toBe(403)
+  expect((await browser.post('/api/project-import', { data: 'not a zip' })).status()).toBe(403)
+  // zip and github ship the site OUT of the instance, so a contributor — which
+  // is what this admin is here — may not
+  expect((await browser.post('/api/published?method=zip', { data: '{"pages":[]}' })).status()).toBe(403)
+  expect((await browser.post('/api/published?method=github', { data: '{"pages":[]}' })).status()).toBe(403)
+
+  expect((await launcher.get('/api/users')).ok()).toBeTruthy()
+  expect((await launcher.get('/api/tokens')).ok()).toBeTruthy()
+  expect((await launcher.get('/api/snapshots')).ok()).toBeTruthy()
+
+  // --- a project write is CONTENT-MERGED, exactly as a contributor's is ---
+  const readMain = async (ctx: APIRequestContext) => {
+    // there is no single-key store GET — reads go through `?keys=`
+    const feed = (await (await ctx.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>
+    return JSON.parse(feed[MAIN])
+  }
+  const stored = await readMain(launcher)
+  expect(Array.isArray(stored.pages)).toBe(true)
+  const structural = {
+    ...stored,
+    pages: [...(stored.pages ?? []), { id: 'browser-admin-page', name: 'Snuck in', elements: [] }],
+  }
+  const wrote = await browser.put(`/api/store/${MAIN}`, { data: JSON.stringify(structural) })
+  expect(wrote.ok(), 'a content write succeeds — the structure in it is dropped').toBeTruthy()
+  const after = await readMain(launcher)
+  expect((after.pages ?? []).some((p: { id: string }) => p.id === 'browser-admin-page')).toBe(false)
+
+  // custom code and the publish target are refused BY NAME, never dropped: a
+  // silent drop reads as success, so nobody learns something tried
+  const code = await browser.put(`/api/store/${MAIN}`, {
+    data: JSON.stringify({
+      ...stored,
+      settings: { ...stored.settings, customCode: { head: '<script>x</script>', body: '' } },
+    }),
+  })
+  expect(code.status()).toBe(403)
+  expect((await code.json()).error).toMatch(/custom code/i)
+
+  // and the server-side secrets in the blob are redacted on the way out, as
+  // for any contributor — REMOVED, not nulled
+  expect('smtp' in (await readMain(browser)).settings).toBe(false)
+  expect('smtp' in (await readMain(launcher)).settings).toBe(true)
+
+  // the same account from the launcher writes structure, because that is the
+  // whole point: the rule is about the SESSION and not about the person
+  const ok = await launcher.put(`/api/store/${MAIN}`, { data: JSON.stringify(structural) })
+  expect(ok.ok()).toBeTruthy()
+  const landed = await readMain(launcher)
+  expect((landed.pages ?? []).some((p: { id: string }) => p.id === 'browser-admin-page')).toBe(true)
+  // put Main back
+  expect((await launcher.put(`/api/store/${MAIN}`, { data: JSON.stringify(stored) })).ok()).toBeTruthy()
+
+  await browser.dispose()
+  await launcher.dispose()
+})
+
+test('who may authorize what: a builder for a launcher, an admin for an agent', async ({
+  baseURL,
+}) => {
+  // The device flow's proof of authority is "I can sign in to this instance",
+  // and what that buys depends on WHAT is being approved.
+  //
+  // A LAUNCHER token carries exactly the approver's own role, so a build role
+  // is the right bar — and admin-only was a dead end rather than a safeguard:
+  // an editor with their own Mac could not be authorized at all, because the
+  // token is minted for whoever approved it, so an admin approving an editor's
+  // launcher would hand that Mac the ADMIN's authority.
+  //
+  // An AGENT token is instance-wide authority governed by the agent policy,
+  // which is an admin's to set. That stays admin-only.
+  const admin = await adminContext(baseURL)
+  const contrib = await contributorContext(admin, baseURL)
+  const editorSession = await pwRequest.newContext({ baseURL })
+  const invited = await admin.post('/api/users/invite', {
+    data: { name: 'Ed', email: EDITOR.email, role: 'editor' },
+  })
+  if (invited.ok()) {
+    const { token } = await invited.json()
+    await editorSession.post(`/api/invite/${token}/accept`, { data: { password: EDITOR.password } })
+  } else {
+    expect((await editorSession.post('/api/auth/login', { data: EDITOR })).ok()).toBeTruthy()
+  }
+
+  const begin = async (kind: 'agent' | 'launcher') => {
+    const anon = await deviceContext(baseURL)
+    const begun = await anon.post('/api/auth/device', { data: { name: `who ${kind}`, kind } })
+    expect(begun.ok(), await begun.text()).toBeTruthy()
+    return { anon, ...(await begun.json()) }
+  }
+
+  // a contributor cannot even READ the consent screen, for either kind — so a
+  // code left on somebody's terminal is not something they can act on
+  for (const kind of ['agent', 'launcher'] as const) {
+    const { anon, userCode } = await begin(kind)
+    expect((await contrib.get(`/api/auth/device/${userCode}`)).status(), kind).toBe(403)
+    expect((await contrib.post(`/api/auth/device/${userCode}/approve`, { data: {} })).status(), kind).toBe(403)
+    await anon.dispose()
+  }
+
+  // an editor may approve a LAUNCHER…
+  {
+    const { anon, userCode, deviceCode } = await begin('launcher')
+    expect((await editorSession.get(`/api/auth/device/${userCode}`)).ok()).toBeTruthy()
+    expect((await editorSession.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
+    const { token } = await (await anon.post('/api/auth/device/token', { data: { deviceCode } })).json()
+    expect(String(token).startsWith('guanol_')).toBeTruthy()
+    await anon.dispose()
+  }
+
+  // …and may NOT approve an AGENT
+  {
+    const { anon, userCode } = await begin('agent')
+    const refused = await editorSession.post(`/api/auth/device/${userCode}/approve`, { data: {} })
+    expect(refused.status()).toBe(403)
+    expect((await refused.json()).error).toContain('admin')
+    await anon.dispose()
+  }
+
+  // denying is open to anyone signed in: saying no can only reduce access, and
+  // the person reading a code off a screen should be able to refuse it
+  {
+    const { anon, userCode, deviceCode } = await begin('agent')
+    expect((await contrib.post(`/api/auth/device/${userCode}/deny`, { data: {} })).ok()).toBeTruthy()
+    const after = await anon.post('/api/auth/device/token', { data: { deviceCode } })
+    expect(after.ok()).toBeFalsy()
+    await anon.dispose()
+  }
+
+  // clean up the launcher token this test left on the shared server
+  const listed = (await (await admin.get('/api/tokens')).json()).tokens as { id: string; name: string }[]
+  for (const t of listed.filter((t) => t.name.startsWith('who '))) {
+    await admin.delete(`/api/tokens/${t.id}`)
+  }
+
+  await editorSession.dispose()
+  await contrib.dispose()
   await admin.dispose()
 })
 

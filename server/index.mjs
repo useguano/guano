@@ -144,7 +144,7 @@ import {
   sessionCookieHeader,
   parseCookies,
   sessionTokenOf,
-  sessionUser,
+  sessionUser as sessionAccount,
   setupCodeMatches,
   sessionVia,
   setUserRole,
@@ -473,10 +473,10 @@ const isFormPath = (path) => path.startsWith('/_guano/forms/')
 const isEmail = (v) => typeof v === 'string' && /.+@.+\..+/.test(v)
 
 /**
- * The user for a request: session cookie first, then a `guano_` API-token
+ * The ACCOUNT for a request: session cookie first, then a `guano_` API-token
  * bearer (the MCP server's credential), rate-limited per IP on failure.
  * Returns null when neither authenticates. The token resolves to its owner
- * with a LIVE role, so every existing role gate keeps working unchanged.
+ * with a LIVE role, so a demotion takes effect on the very next request.
  * PUBLISH_TOKEN (CI, no `guano_` prefix) is handled separately in handlePost.
  *
  * `Bearer guano_` AND NOTHING ELSE. This line is the enforcement that keeps
@@ -485,9 +485,13 @@ const isEmail = (v) => typeof v === 'string' && /.+@.+\..+/.test(v)
  * has no path from its own credential to a builder session. The mirror of this
  * line lives on `/api/auth/launcher-session`, which parses `guanol_` alone.
  * → `server/auth.mjs` TOKEN_KINDS.
+ *
+ * TWO CALLERS, and they are the whole list: `/api/auth/me`, which has to
+ * report the account's own role alongside what this request may do, and
+ * `requestUser` below. Everything else wants `requestUser`.
  */
-function requestUser(req) {
-  const session = sessionUser(req)
+function requestAccount(req) {
+  const session = sessionAccount(req)
   if (session) return session
   const auth = req.headers.authorization ?? ''
   if (!auth.startsWith(`Bearer ${TOKEN_KINDS.agent}`)) return null
@@ -497,6 +501,43 @@ function requestUser(req) {
   if (!user) recordApiTokenFailure(ip)
   return user
 }
+
+/**
+ * A BROWSER SESSION IS NEVER A BUILDER SESSION.
+ *
+ * The Build surface — structure, settings, custom code, integrations, publish,
+ * invites — is reachable only from the desktop launcher; a deployed instance
+ * serves Play to contributors and reviewers in a browser. So the role a request
+ * may act with is capped at `contributor` unless the request can build: a
+ * session the launcher minted, or an agent bearer (which keeps its own gate in
+ * the agent policy). → `effectiveRole` in server/auth.mjs.
+ *
+ * It is done HERE, once, rather than at each of the twenty-odd role checks
+ * downstream, because the alternative is twenty independent judgements and a
+ * straggler is a hole: capping the role on the object every gate already reads
+ * means a route written tomorrow is covered by default — the same reasoning
+ * that made `isBuildRole` one helper instead of a list of role names. `role` is
+ * the ONLY field that differs from the account's; id, email and name are the
+ * live record's.
+ *
+ * The capped user is what makes an admin in a browser a contributor at the API:
+ * their project write is content-merged, custom code and the publish target are
+ * refused by name, and users, invites, tokens, snapshots and project
+ * import/export answer 403. Their CONTENT publish still works, because that is
+ * exactly what "capped at contributor" means and what a contributor may already
+ * do.
+ *
+ * `sessionUser` shadows the import of the same name on purpose, so every
+ * existing call site reads the capped role without being touched. The two
+ * places that need the account's own role name `sessionAccount` /
+ * `requestAccount` and say why.
+ */
+const asActing = (req, user) => (user ? { ...user, role: effectiveRole(req, user) } : null)
+
+/** the request's user, with the role this request may act with */
+const requestUser = (req) => asActing(req, requestAccount(req))
+/** the request's SESSION user, with the role this request may act with */
+const sessionUser = (req) => asActing(req, sessionAccount(req))
 
 /**
  * Sliding-window rate limiter, one counter per id. Like the media uploader's
@@ -640,7 +681,9 @@ async function handleAuth(req, res, path) {
     }
     // session cookie or a `guano_` API-token bearer — the MCP server calls this
     // on boot to fail fast on a bad URL/token and to learn who it is
-    const user = requestUser(req)
+    // requestAccount, not requestUser: this response carries BOTH roles, so
+    // it needs the uncapped one. Everything else on the server wants the cap.
+    const user = requestAccount(req)
     if (!user) return send(res, 401, JSON.stringify({ needsSetup: false }))
     // An agent is told its OWN permissions, because the alternative is finding
     // out at the first write: with Main writes off, set_target {main} succeeds,
@@ -916,18 +959,50 @@ async function handleAuth(req, res, path) {
     // authority is this: an admin, with a session cookie. An API token must
     // NOT be able to approve one — that would let an agent authorize another
     // client to the instance it is already talking to.
-    const user = sessionUser(req)
+    // sessionAccount, and the ONLY place on the server that reads the account's
+    // own role: approving a client is the one action whose proof of authority
+    // IS a browser session — a human signed in to this instance's own /admin,
+    // which is the remote stand-in for holding the data dir. Cap it like
+    // everything else and nobody could ever approve anything, the desktop app's
+    // own launcher token included, because that approval is where the token
+    // comes from. An API token still must not reach here (hence sessionAccount
+    // and not requestAccount).
+    const user = sessionAccount(req)
     if (!user) return fail(res, 401, 'unauthorized')
-    if (user.role !== 'admin') return fail(res, 403, 'only an admin can authorize a client')
     const rest = path.slice('/api/auth/device/'.length)
     const [rawCode, action] = rest.split('/')
     const code = safeDecode(rawCode ?? '')
     if (code === null) return fail(res, 400, 'invalid code')
+    /**
+     * Who may approve WHAT.
+     *
+     * An AGENT authorization is admin-only, and always was: the token it mints
+     * is instance-wide authority governed by the agent policy, which is an
+     * admin's to set.
+     *
+     * A LAUNCHER authorization needs a build role, because the token carries
+     * exactly the approver's OWN role and nothing more. Admin-only here was a
+     * dead end rather than a safeguard: an editor with their own Mac could not
+     * be authorized at all — the device flow mints the token for the person who
+     * approved it, so an admin approving an editor's launcher would hand that
+     * Mac the ADMIN's authority, which is worse than what this allows. The
+     * proof of authority is unchanged: *I can sign in to this instance as
+     * someone who builds.*
+     */
+    const mayApprove = (kind) =>
+      kind === 'launcher' ? isBuildRole(user.role) : user.role === 'admin'
+    const refusal = (kind) =>
+      kind === 'launcher'
+        ? 'only an admin or an editor can authorize a builder'
+        : 'only an admin can authorize a client'
     if (req.method === 'GET' && !action) {
       const limit = deviceLookupAllowed(user.id)
       if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'lookups')
       const found = describeDevice(code)
       if (!found) return fail(res, 404, 'that code has expired or was never issued')
+      // The consent screen is refused to someone who could not approve it
+      // anyway, so a contributor never reads a code off somebody's terminal.
+      if (!mayApprove(found.kind)) return fail(res, 403, refusal(found.kind))
       return send(res, 200, JSON.stringify(found))
     }
     if (req.method === 'POST' && action === 'approve') {
@@ -945,6 +1020,7 @@ async function handleAuth(req, res, path) {
       // entry nobody can explain.
       const describing = describeDevice(code)
       if (!describing) return fail(res, 409, 'that code has expired or was never issued')
+      if (!mayApprove(describing.kind)) return fail(res, 403, refusal(describing.kind))
       if (describing.approved) return fail(res, 409, 'that code has already been used')
       // The same two onboarding switches the local flow applies, chosen here
       // in a UI that explains them rather than passed as a CLI flag — which is
@@ -974,6 +1050,9 @@ async function handleAuth(req, res, path) {
       return send(res, 200, JSON.stringify({ ok: true }))
     }
     if (req.method === 'POST' && action === 'deny') {
+      // Denying is open to any signed-in account: refusing a grant can only
+      // ever reduce access, and the person reading a code off a screen is the
+      // person who should be able to say no to it.
       denyDevice(code)
       return send(res, 200, JSON.stringify({ ok: true }))
     }
@@ -1254,7 +1333,8 @@ const API_TOKEN_LIMIT = 25 // per user — bounds api-tokens.json growth
 async function handleTokens(req, res, path) {
   const user = requestUser(req)
   if (!user) return fail(res, 401, 'unauthorized')
-  // admin + editor only — contributors are content-only and can't build
+  // admin + editor only — contributors are content-only and can't build, and
+  // a browser session is capped at contributor whatever its account's role
   if (!isBuildRole(user.role)) return fail(res, 403, 'forbidden')
 
   if (path === '/api/tokens' && req.method === 'GET') {

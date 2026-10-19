@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder, becomeBuilderByApproval } from './fixtures/session'
 
 // Integrations: a named set of keys, stored SERVER-SIDE, each key secret
 // (write-once, masked) or plain (readable and substituted into custom code).
@@ -20,6 +21,9 @@ async function adminContext(baseURL?: string) {
     res = await ctx.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(ctx)
   return ctx
 }
 
@@ -102,16 +106,19 @@ test('an integration is a named set of keys, and a secret value never leaves the
   await admin.dispose()
 })
 
-test('reads are editor+, writes are admin-at-a-browser only', async ({ baseURL }) => {
+test('reads are editor+, writes are admin-at-a-launcher only', async ({ baseURL }) => {
   const admin = await adminContext(baseURL)
   const created = await admin.post('/api/integrations', { data: { name: 'Shared' } })
   const { id } = await created.json()
   await admin.put(`/api/integrations/${id}/keys/API_KEY`, { data: { value: SECRET, secret: true } })
   await admin.put(`/api/integrations/${id}/keys/REGION`, { data: { value: 'eu', secret: false } })
 
-  // an EDITOR reads (they write the custom code that references a key) and
-  // cannot change anything
-  const editor = await userContext(admin, baseURL, 'editor')
+  // An EDITOR reads (they write the custom code that references a key) and
+  // cannot change anything. A BUILDER session for them: an editor at a browser
+  // is a contributor at the API, and a contributor sees none of this — which is
+  // the case asserted a few lines down.
+  const editorBrowser = await userContext(admin, baseURL, 'editor')
+  const editor = await becomeBuilderByApproval(editorBrowser, baseURL, 'editor integrations')
   const editorRead = await editor.get('/api/integrations')
   expect(editorRead.ok()).toBeTruthy()
   const editorText = await editorRead.text()
@@ -123,6 +130,10 @@ test('reads are editor+, writes are admin-at-a-browser only', async ({ baseURL }
   // and form settings are admin-only outright: recipients and retention are
   // decisions about other people's personal data
   expect((await editor.get('/api/forms-config')).status()).toBe(403)
+
+  // the SAME editor at a browser is a contributor at the API, so they read
+  // none of it — the rule is about the session, not about the person
+  expect((await editorBrowser.get('/api/integrations')).status()).toBe(403)
 
   // a CONTRIBUTOR sees none of it
   const contributor = await userContext(admin, baseURL, 'contributor')
@@ -153,7 +164,7 @@ test('reads are editor+, writes are admin-at-a-browser only', async ({ baseURL }
   expect([403]).toContain((await xo.post('/api/integrations', { data: { name: 'X' } })).status())
 
   await admin.delete(`/api/integrations/${id}`)
-  for (const ctx of [admin, editor, contributor, agent, xo]) await ctx.dispose()
+  for (const ctx of [admin, editor, editorBrowser, contributor, agent, xo]) await ctx.dispose()
 })
 
 test('a capability pick is refused by name when a key is missing', async ({ baseURL }) => {

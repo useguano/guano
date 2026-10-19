@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // Phase 1 (MCP): per-user API tokens are a bearer credential for the MCP server.
 // API-level spec on the same isolated server as the rest of the suite; it
@@ -26,6 +27,9 @@ test('API tokens: create via session, use as bearer, revoke kills it, contributo
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   // --- create a token (cookie-authed) → raw token returned exactly once ---
   res = await admin.post('/api/tokens', { data: { name: 'mcp-e2e' } })

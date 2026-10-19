@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import {
   Archive, Check, ChevronRight, Code2, Copy, KeyRound, Languages, Palette, Pencil, Plug,
   Plus, Rocket, ScanSearch, Search, Settings, Settings2, Trash2, Type, UserRound, Users, X,
-  Inbox, Mail, Webhook, Moon, Signpost, ArrowRight, TriangleAlert,
+  Inbox, Mail, Webhook, Moon, Signpost, ArrowRight, TriangleAlert, Info,
 } from 'lucide-vue-next'
 import ModalHost from '@/components/modal/ModalHost.vue'
 import TabsUI from '@/components/tabs/TabsUI.vue'
@@ -90,7 +90,7 @@ async function confirmDeleteLocale(loc: string) {
 }
 const { publishedInfo, unpublish } = usePublish()
 const { onMain } = useBranches()
-const { email: authEmail, name: authName, isAdmin, canBuild, canEditContent, updateAccount } = useAuth()
+const { email: authEmail, name: authName, isAdmin, canBuild, canEditContent, cappedByBrowser, updateAccount } = useAuth()
 const { confirm, openModal } = useModal()
 
 const props = defineProps<{ initialSection?: string }>()
@@ -2302,6 +2302,20 @@ async function onImportFile(e: Event) {
           </TabPanelUI>
 
           <TabPanelUI class="gap-9" id="account">
+            <!-- An account that could build, in a browser that cannot. Without
+                 this sentence an admin opens their own deployed instance in
+                 Safari, reads their site as read-only, and files a bug. -->
+            <div
+              v-if="cappedByBrowser"
+              class="flex items-start gap-2 rounded-xl border border-input px-3 py-2.5 text-[11px] leading-snug text-muted-foreground"
+            >
+              <Info class="mt-px size-3.5 shrink-0" />
+              <span>
+                You are signed in from a browser, so this is the content view.
+                <span class="text-foreground">Building happens in Guano Launcher</span> — pages,
+                components, settings and publishing are there.
+              </span>
+            </div>
             <SettingsGroup title="Profile" description="Your name and sign-in email.">
               <RowUI label="Name">
                 <InputUI v-model="accName" placeholder="Your name" />

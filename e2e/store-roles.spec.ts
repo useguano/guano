@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder, becomeBuilderByApproval } from './fixtures/session'
 
 // FINDINGS S2: contributors must not be able to DELETE store keys (the PUT
 // guard already blocks customCode/smtp changes). API-level spec — runs on the
@@ -23,6 +24,9 @@ test('contributor store permissions: PUT unchanged ok, sensitive PUT and DELETE 
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   // --- ensure a project blob exists for the guard's stored baseline ---
   let projectBody: string
@@ -109,6 +113,9 @@ test("the draft index is not a way to take over someone's draft", async ({ baseU
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   const contribCtx = await pwRequest.newContext({ baseURL })
   if (!(await login(contribCtx, CONTRIB)).ok()) {
@@ -216,6 +223,9 @@ test('publishing secrets and the site password are admin-only', async ({ baseURL
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   const editor = await pwRequest.newContext({ baseURL })
   if (!(await login(editor, EDITOR)).ok()) {
@@ -233,15 +243,19 @@ test('publishing secrets and the site password are admin-only', async ({ baseURL
     ).toBeTruthy()
   }
   expect(((await (await editor.get('/api/auth/me')).json()) as { role: string }).role).toBe('editor')
+  // An editor who BUILDS holds the session the desktop app holds. At a browser
+  // they are a contributor at the API — which is the case the contributor
+  // assertions below already cover, and is why this is not the same context.
+  const editorBuilder = await becomeBuilderByApproval(editor, baseURL, 'editor roles')
 
   // an editor may still READ both: the responses are booleans the Publish and
   // General panels need — whether a token is set, whether the gate is on — and
   // neither carries a secret
-  expect((await editor.get('/api/publish-config')).status()).toBe(200)
-  expect(await (await editor.get('/api/publish-config')).json()).toMatchObject({
+  expect((await editorBuilder.get('/api/publish-config')).status()).toBe(200)
+  expect(await (await editorBuilder.get('/api/publish-config')).json()).toMatchObject({
     github: { tokenSet: expect.any(Boolean) },
   })
-  expect((await editor.get('/api/site-password')).status()).toBe(200)
+  expect((await editorBuilder.get('/api/site-password')).status()).toBe(200)
 
   // a contributor reads neither
   const contrib = await pwRequest.newContext({ baseURL })
@@ -252,11 +266,11 @@ test('publishing secrets and the site password are admin-only', async ({ baseURL
   await contrib.dispose()
 
   // ...and may change neither
-  let bad = await editor.put('/api/publish-config', { data: { github: { token: 'ghp_theirs' } } })
+  let bad = await editorBuilder.put('/api/publish-config', { data: { github: { token: 'ghp_theirs' } } })
   expect(bad.status()).toBe(403)
   expect(await bad.text()).toContain('admin')
 
-  bad = await editor.put('/api/site-password', { data: { enabled: true, password: 'theirs12' } })
+  bad = await editorBuilder.put('/api/site-password', { data: { enabled: true, password: 'theirs12' } })
   expect(bad.status()).toBe(403)
   expect(await bad.text()).toContain('admin')
 
@@ -268,4 +282,5 @@ test('publishing secrets and the site password are admin-only', async ({ baseURL
 
   await admin.dispose()
   await editor.dispose()
+  await editorBuilder.dispose()
 })

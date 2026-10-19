@@ -7,6 +7,19 @@ export type Role = 'admin' | 'editor' | 'contributor' | 'reviewer'
 const email = ref<string | null>(null)
 const name = ref('')
 const role = ref<Role | null>(null)
+/**
+ * What this SESSION may act with, which is not always what the account is.
+ *
+ * A browser session is never a builder session: the server caps a cookie
+ * session at `contributor` whatever the account's role, because the Build
+ * surface lives in the desktop launcher. `role` stays the ACCOUNT's, for the
+ * one sentence that explains the difference to a signed-in admin; every
+ * capability below reads these two, which come from `/api/auth/me` and nowhere
+ * else. The SPA pinning itself to Play is a CONSEQUENCE of this, never the
+ * enforcement — that is at the API (→ docs/server.md, Builder sessions).
+ */
+const actingRole = ref<Role | null>(null)
+const canBuildHere = ref(false)
 const userId = ref<string | null>(null)
 const needsSetup = ref(false)
 const setupCodeRequired = ref(false)
@@ -24,6 +37,8 @@ interface Profile {
   email: string
   name?: string
   role?: Role
+  effectiveRole?: Role
+  canBuild?: boolean
   commentsSeenAt?: number
   formsSeenAt?: number
   host?: 'browser' | 'launcher'
@@ -73,6 +88,12 @@ export function useAuth() {
     email.value = profile.email
     name.value = profile.name ?? ''
     role.value = profile.role ?? null
+    // Only `/api/auth/me` answers these. A login/setup/update response carries
+    // the profile and no more — the session it mints is not the one that made
+    // the request — so capability stays FALSE until the recheck those three do,
+    // which errs toward Play rather than toward a surface the API would refuse.
+    actingRole.value = profile.effectiveRole ?? null
+    canBuildHere.value = profile.canBuild === true
     userId.value = profile.id ?? null
     commentsSeenAt.value = profile.commentsSeenAt ?? 0
     formsSeenAt.value = profile.formsSeenAt ?? 0
@@ -96,6 +117,8 @@ export function useAuth() {
 
   async function login(e: string, password: string) {
     applyProfile(await post('/api/auth/login', { email: e, password }))
+    // one source for what this session may do, and the login response is not it
+    await recheck()
   }
 
   async function setup(
@@ -117,6 +140,7 @@ export function useAuth() {
         ...(setupCode ? { setupCode } : {}),
       }),
     )
+    await recheck()
   }
 
   async function updateAccount(payload: {
@@ -126,6 +150,9 @@ export function useAuth() {
     currentPassword?: string
   }) {
     applyProfile(await post('/api/auth/update', payload))
+    // a password change revokes every session and re-issues one; `via` rides
+    // along, but the capability has to be re-read rather than assumed
+    await recheck()
   }
 
   async function logout() {
@@ -135,11 +162,23 @@ export function useAuth() {
     window.location.assign('/admin/login')
   }
 
-  const isAdmin = computed(() => role.value === 'admin')
-  const canBuild = computed(() => role.value === 'admin' || role.value === 'editor')
+  // Every capability reads the ACTING role. `role` is the account's and is for
+  // display only — deriving a capability from it is how a browser-signed-in
+  // admin gets offered a surface the API then refuses.
+  const isAdmin = computed(() => actingRole.value === 'admin')
+  const canBuild = computed(() => canBuildHere.value)
 
-  const canEditContent = computed(() => role.value !== null && role.value !== 'reviewer')
-  const isReviewer = computed(() => role.value === 'reviewer')
+  const canEditContent = computed(() => actingRole.value !== null && actingRole.value !== 'reviewer')
+  const isReviewer = computed(() => actingRole.value === 'reviewer')
+
+  /**
+   * An account that could build, in a browser that cannot. The one case that
+   * needs saying out loud: otherwise an admin opens their own deployed instance
+   * in Safari, reads their site as read-only, and files a bug.
+   */
+  const cappedByBrowser = computed(
+    () => !canBuildHere.value && (role.value === 'admin' || role.value === 'editor'),
+  )
 
   const showsAppHome = computed(() => host.value !== 'launcher')
   const showsAccountControls = computed(() => host.value !== 'launcher')
@@ -152,6 +191,9 @@ export function useAuth() {
     role,
     isAdmin,
     canBuild,
+    actingRole,
+    cappedByBrowser,
+    host,
     canEditContent,
     isReviewer,
     showsAppHome,

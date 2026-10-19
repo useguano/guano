@@ -6,7 +6,7 @@ import {
   type Page,
   type APIRequestContext,
 } from '@playwright/test'
-import { loadFixture } from './fixtures/project'
+import { openEditor } from './fixtures/session'
 
 // A CONTRIBUTOR edits content in place on the Play render.
 //
@@ -33,25 +33,6 @@ const SUBHEAD = 'Three ways to never run out.'
 
 type Node = { id: string; type: string; content?: string; children?: Node[] }
 
-async function signIn(page: Page, creds: { email: string; password: string }) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  const ready = page.getByRole('button', { name: 'Pages', exact: true })
-  await expect(projectName.or(email).or(ready).first()).toBeVisible({ timeout: 30_000 })
-  if (await projectName.isVisible()) {
-    await projectName.fill('Smoke Co')
-    await email.fill(creds.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(creds.password)
-    await page.getByPlaceholder('Confirm project password').fill(creds.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(creds.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(creds.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
-  await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-}
 
 /** a contributor session in its own browser context (invited on first run) */
 async function contributorPage(browser: Browser, admin: APIRequestContext, baseURL: string) {
@@ -118,8 +99,11 @@ test('a contributor edits text in place on Play, and it survives the server merg
   browser,
   baseURL,
 }) => {
-  await signIn(page, ADMIN)
-  await loadFixture(page)
+  // `openEditor`, not the login form: seeding the fixture is a structural
+  // write and inviting is builder-only, and a browser session is never a
+  // builder session. The CONTRIBUTOR below stays a browser session, which is
+  // the point of the spec.
+  await openEditor(page)
   const admin = page.request
 
   const contrib = await contributorPage(browser, admin, baseURL!)

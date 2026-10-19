@@ -38,24 +38,35 @@ watch(
 <template>
   <aside class="relative z-[60] flex h-full w-12 flex-col items-center gap-1 py-4 bg-background">
 
-    <template v-if="showsAppHome">
-      <ButtonUI
-        v-if="canBuild"
-        variant="ghost"
-        aria-label="App"
-        class="w-7"
-        :class="
-          isBuild && canvas === 'page' && !column ? 'text-accent-foreground' : 'text-foreground'
-        "
-        @click="showApp"
-      >
-        <MainLogo class="size-4" />
-      </ButtonUI>
-      <div v-else class="flex py-2 w-7 items-center justify-center text-foreground">
-        <MainLogo class="size-4" />
-      </div>
-      <div class="my-1 h-px w-full bg-input" />
-    </template>
+    <!-- The App button is the EDITOR's own control, not the app's home: it
+         clears the columns and puts the page canvas back, which is the only way
+         off the component board. So it is gated on `canBuild` ALONE.
+         It used to sit inside `showsAppHome` as well, and once a browser
+         session stopped being able to build, those two became mutually
+         exclusive — a builder is in the launcher, where `showsAppHome` is
+         false — so the button could not render for anyone, and a builder who
+         opened the board could only leave it through the Pages drawer.
+         `showsAppHome` keeps the LOGO it replaces: branding the desktop app's
+         own window already provides. -->
+    <ButtonUI
+      v-if="canBuild"
+      variant="ghost"
+      aria-label="App"
+      class="w-7"
+      :class="
+        isBuild && canvas === 'page' && !column ? 'text-accent-foreground' : 'text-foreground'
+      "
+      @click="showApp"
+    >
+      <MainLogo class="size-4" />
+    </ButtonUI>
+    <div
+      v-else-if="showsAppHome"
+      class="flex py-2 w-7 items-center justify-center text-foreground"
+    >
+      <MainLogo class="size-4" />
+    </div>
+    <div v-if="canBuild || showsAppHome" class="my-1 h-px w-full bg-input" />
 
     <ButtonUI
       v-if="agentAnswered"

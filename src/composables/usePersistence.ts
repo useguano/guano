@@ -3,13 +3,17 @@ import { useProject } from './useProject'
 import { migrateStoredProject, readStoredProject } from '@/lib/storage'
 import {
   ackedSeq,
+  onStoreConflict,
   pendingWrites,
+  rehydrateStore,
   storeAck,
   storeError,
   storeGet,
   storeGetFresh,
+  storeHash,
   storeSet,
 } from '@/lib/store'
+import { useNotice } from './useNotice'
 import { computeMerge } from '@/lib/merge'
 import type { Project } from '@/types/editor'
 
@@ -79,8 +83,19 @@ export function usePersistence() {
   const canUndo = computed(() => pointer.value > 0)
   const canRedo = computed(() => pointer.value < history.value.length - 1)
 
+  /**
+   * Write, naming the bytes this write was built on.
+   *
+   * `If-Match` is the hash the server last reported for this key — from the
+   * `storeGetFresh` in `persistMerged` above, or from the previous write's own
+   * response. The merge there reads the stored blob and three-way merges onto
+   * it; without this header, a save that lands between that read and this
+   * write is erased, with every call reporting success. The MCP server has
+   * sent it from the start and gets a 412; the editor kept last-writer-wins,
+   * which is the hole this closes. → `docs/server.md`
+   */
   function persist(snapshot: string, key = projectStorageKey(activeBranchId.value)) {
-    const seq = storeSet(key, snapshot)
+    const seq = storeSet(key, snapshot, storeHash(key))
     pendingBaseline = { key, snapshot, seq }
     typing.value = false
   }
@@ -247,9 +262,49 @@ export function usePersistence() {
     apply(history.value[pointer.value]!)
   }
 
+  /**
+   * Someone else saved this branch between our read and our write. Nothing of
+   * theirs was lost — the server refused us — and nothing of ours was written,
+   * so this view is now behind: re-read the blob, adopt it, and SAY SO.
+   *
+   * Never silently. A view refreshed with no word is a person retyping work
+   * they can no longer see, and the undo history is the part that cannot
+   * survive: it is a list of whole snapshots of a document that has moved, so
+   * replaying one would put their version back over the other writer's. The
+   * notice says that too.
+   */
+  async function reloadAfterConflict(key: string) {
+    if (key !== projectStorageKey(activeBranchId.value)) return
+    const { notify } = useNotice()
+    try {
+      await rehydrateStore([key])
+      const fresh = readStoredProject(key)
+      if (!fresh) throw new Error('the reloaded project could not be read')
+      adoptRemote(fresh)
+      notify({
+        kind: 'warning',
+        key: 'store-conflict',
+        title: 'Someone saved this branch',
+        detail:
+          'Your view was refreshed with their version. Nothing of yours was written, and the ' +
+          'undo history starts again here — it held snapshots of a project that has moved.',
+      })
+    } catch (e) {
+      notify({
+        kind: 'error',
+        key: 'store-conflict',
+        title: 'Someone saved this branch',
+        detail:
+          (e instanceof Error ? e.message : 'the reload failed') +
+          ' — reload the page to pick up their version.',
+      })
+    }
+  }
+
   function init() {
     if (initialized) return
     initialized = true
+    onStoreConflict((key) => void reloadAfterConflict(key))
     load()
     watch(projectVersion, () => {
       if (restoring || autosaveSuspended.value) return

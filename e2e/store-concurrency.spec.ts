@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 import { createHash } from 'node:crypto'
 
 // The server half of the lost-update fix (Vezaro, MAJOR: a saved page silently
@@ -27,6 +28,9 @@ async function adminContext(baseURL: string | undefined) {
       (await ctx.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })).ok(),
     ).toBeTruthy()
   }
+  // A browser session is never a builder session, and this spec writes whole
+  // project blobs (→ e2e/fixtures/session.ts).
+  await becomeBuilder(ctx)
   return ctx
 }
 

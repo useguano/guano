@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 import sharp from 'sharp'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -40,6 +41,9 @@ test('a snapshot survives a publish that filled the variant cache', async ({ bas
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   const MAIN = 'guano-project:main'
   const raw = ((await (await admin.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>)[MAIN]!
@@ -116,6 +120,9 @@ test('a snapshot is taken, listed, downloadable, restorable and deletable', asyn
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   // the store reads as {key: rawJsonString}; writes take the raw string
   const MAIN = 'guano-project:main'

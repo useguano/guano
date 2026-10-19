@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // DELETE /api/published takes the live site down: the export and its snapshot
 // go, visitors get the "nothing published" answer, and the next publish is a
@@ -45,6 +46,9 @@ test('unpublishing removes the live site until the next publish', async ({ baseU
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   res = await admin.post('/api/published', { data: snapshot() })
   expect(res.ok()).toBeTruthy()

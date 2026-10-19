@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // 301s. The feature exists so that renaming a page does not cost the links
 // other people made — so the one thing it must never cost is a PAGE: a rule
@@ -52,6 +53,9 @@ test.beforeAll(async ({ baseURL }) => {
       (await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })).ok(),
     ).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
   // every redirect shape in one publish: a plain move, one shadowed by a real
   // page, one into nothing, and a chain
   const published = await admin.post('/api/published', {

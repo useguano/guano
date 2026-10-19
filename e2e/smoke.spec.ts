@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
 import { fakeHost, hostViewMode } from './fixtures/host'
+import { launcherSession } from './fixtures/session'
 
 // End-to-end smoke: first-run setup → load the demo project → edit a text
 // node on the Edit canvas → see it in Play → publish → assert the edit on the
@@ -35,6 +36,14 @@ test('setup, edit content, publish, view live, auth guard', async ({ page, conte
   )
   await page.getByRole('button', { name: 'Setup project' }).click()
   await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
+
+  // 2b. ...and the launcher mints its session, which is what makes this a
+  //     BUILDER. `AppModel.completeSetup` does exactly this: it posts setup
+  //     over loopback and mints the moment the server answers. Without it the
+  //     form's own cookie is an ordinary browser session, which the server
+  //     caps at contributor — so everything below, from the fixture's
+  //     structural write to the publish, would be refused or merged away.
+  await launcherSession(page)
 
   // 3. load the demo project (the only content fixture) — resets the project
   //    in memory to the published "Brume" coffee site

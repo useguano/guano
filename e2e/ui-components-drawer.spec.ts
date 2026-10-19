@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openEditor, openEditorInBrowser } from './fixtures/session'
+import { openEditor } from './fixtures/session'
 
 // The Components column: the shared-slot rail behaviour, and a component's
 // round trip — use one on a page, publish, and check the real exported page.
@@ -62,9 +62,7 @@ async function insertComponent(page: Page, name: string) {
 }
 
 test('the three left columns share one slot', async ({ page }) => {
-  // openEditorInBrowser: the App button is inside `showsAppHome`, chrome the
-  // desktop app's own window provides — so this spec is about a BROWSER.
-  await openEditorInBrowser(page)
+  await openEditor(page)
 
   await rail(page, 'Components').click()
   await expect(page.getByPlaceholder('Search components…')).toBeVisible()

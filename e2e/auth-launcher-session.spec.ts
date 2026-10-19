@@ -153,12 +153,17 @@ test('a launcher token is exchanged for a launcher session; an agent token is re
   expect(refused.status()).toBe(403)
   expect((await refused.json()).error).toBe('an agent token cannot open the editor')
 
-  // and a revoked launcher token stops working, which is what makes
-  // Reconnect-rather-than-login the right answer in the app
-  const listed = await admin.get('/api/tokens')
+  // The token list is builder-only, so it is read with the session the token
+  // just bought and not with the browser login above: a browser session is
+  // never a builder session, whatever the account.
+  const listed = await ctx.get('/api/tokens')
+  expect(listed.ok(), await listed.text()).toBeTruthy()
   const row = (await listed.json()).tokens.find((t: { kind: string }) => t.kind === 'launcher')
   expect(row).toBeTruthy()
-  expect((await admin.delete(`/api/tokens/${row.id}`)).ok()).toBeTruthy()
+
+  // and a revoked launcher token stops working, which is what makes
+  // Reconnect-rather-than-login the right answer in the app
+  expect((await ctx.delete(`/api/tokens/${row.id}`)).ok()).toBeTruthy()
   const dead = await ctx.post('/api/auth/launcher-session', { data: {} })
   expect(dead.status()).toBe(403)
   expect((await dead.json()).error).toContain('revoked')
@@ -179,20 +184,32 @@ test('a launcher token whose owner cannot build is refused', async () => {
   })
   expect((await ctx.post('/api/auth/launcher-session', { data: {} })).status()).toBe(200)
 
-  // a second admin, so the first can be demoted (adminCount guards the last one)
-  const invite = await admin.post('/api/users/invite', {
+  // A second admin, so the first can be demoted (adminCount guards the last
+  // one). Invited through the session the launcher token bought — inviting is
+  // builder-only, and the browser login above is a contributor at the API.
+  const invite = await ctx.post('/api/users/invite', {
     data: { name: 'Second', email: 'second@example.com', role: 'admin' },
   })
-  expect(invite.ok()).toBeTruthy()
+  expect(invite.ok(), await invite.text()).toBeTruthy()
   const second = await bare(srv.port)
   await second.post(`/api/invite/${(await invite.json()).token}/accept`, {
     data: { password: 'second-admin-pw-1' },
   })
+  // ...and that second admin needs a builder session of their own to demote
+  // anyone: the same device flow, approved by themselves.
+  const secondToken = await deviceToken(srv, second, 'launcher')
+  const secondBuilder = await pwRequest.newContext({
+    baseURL: `http://localhost:${srv.port}`,
+    extraHTTPHeaders: { authorization: `Bearer ${secondToken}` },
+  })
+  expect((await secondBuilder.post('/api/auth/launcher-session', { data: {} })).status()).toBe(200)
 
-  const owner = (await (await second.get('/api/users')).json()).users.find(
+  const owner = (await (await secondBuilder.get('/api/users')).json()).users.find(
     (u: { email: string }) => u.email === EMAIL,
   )
-  expect((await second.patch(`/api/users/${owner.id}`, { data: { role: 'contributor' } })).ok()).toBeTruthy()
+  expect(
+    (await secondBuilder.patch(`/api/users/${owner.id}`, { data: { role: 'contributor' } })).ok(),
+  ).toBeTruthy()
 
   // the role is read LIVE on every exchange, which is why the app re-exchanges
   // rather than holding one session for thirty days
@@ -225,7 +242,17 @@ test('a launcher session hides the chrome the app provides; a browser session ke
   const cookie = minted.headers()['set-cookie'].split(';')[0]
   const [name, value] = [cookie.slice(0, cookie.indexOf('=')), cookie.slice(cookie.indexOf('=') + 1)]
 
-  const hidden = ['App', 'My account', 'Logout']
+  // What the desktop app's own window provides, and the editor therefore does
+  // not draw under it: the account menu, Logout, and the save pill that is
+  // also the Publish entry.
+  //
+  // The App button is NOT in this list. It is the editor's own control — it
+  // clears the columns and puts the page canvas back, which is the only way
+  // off the component board — and the app provides no replacement. It used to
+  // be hidden here too, and once a browser session stopped being able to
+  // build, `canBuild` and `showsAppHome` became mutually exclusive and the
+  // button could render for nobody.
+  const hidden = ['My account', 'Logout']
 
   const launcher = await browser.newContext()
   await launcher.addCookies([
@@ -241,8 +268,16 @@ test('a launcher session hides the chrome the app provides; a browser session ke
   await expect(page.locator('aside [aria-live="polite"]')).toHaveCount(0)
   // project settings is NOT hidden — it is the project's, not the person's
   await expect(page.locator('[aria-label="Project settings"]')).toBeVisible()
+  // ...and neither is the App button, which is the only way back to the page
+  // canvas from the component board
+  await expect(page.locator('[aria-label="App"]')).toBeVisible()
   await launcher.close()
 
+  // The same account in a browser keeps the chrome the app replaces — and is
+  // CONTENT-ONLY, because a browser session is never a builder session. So the
+  // account controls and the save pill are there, and the build surface is not:
+  // `canBuild` comes off `/api/auth/me`, and `useViewMode` pins a non-builder
+  // to Play. The App button and the Components rail are inside `canBuild`.
   const plain = await browser.newContext()
   const page2 = await plain.newPage()
   await page2.goto(`http://localhost:${srv.port}/admin/login`)
@@ -250,9 +285,12 @@ test('a launcher session hides the chrome the app provides; a browser session ke
   await page2.fill('input[type="password"]', PASSWORD)
   await page2.getByRole('button', { name: 'Sign in' }).click()
   await expect(page2.locator('[aria-label="Pages"]')).toBeVisible()
-  for (const label of hidden) {
+  for (const label of ['My account', 'Logout']) {
     await expect(page2.locator(`[aria-label="${label}"]`)).toBeVisible()
   }
   await expect(page2.locator('aside [aria-live="polite"]')).toBeVisible()
+  // pinned to Play, so nothing that builds is offered
+  await expect(page2.locator('[aria-label="Components"]')).toHaveCount(0)
+  await expect(page2.locator('[aria-label="App"]')).toHaveCount(0)
   await plain.close()
 })

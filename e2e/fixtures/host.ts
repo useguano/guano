@@ -9,7 +9,30 @@ export async function fakeHost(page: Page) {
     const posts: unknown[] = []
     Object.defineProperty(window, '__hostPosts', { value: posts })
     Object.defineProperty(window, 'webkit', {
-      value: { messageHandlers: { guano: { postMessage: (message: unknown) => posts.push(message) } } },
+      value: {
+        messageHandlers: {
+          guano: {
+            postMessage: (message: unknown) => {
+              posts.push(message)
+              // ...and ANSWER the one message the page blocks on. The router
+              // guard asks the host to mint a builder session whenever this
+              // page does not hold one, and `requestReauth` waits for
+              // `sessionRestored` or `sessionLost` — so a host that only
+              // records would make every navigation sit out the bridge's
+              // timeout before continuing. The real app answers both ways;
+              // this one says it cannot, which is a host with no secret.
+              const type = (message as { type?: string } | null)?.type
+              if (type !== 'unauthorized') return
+              queueMicrotask(() => {
+                const host = (
+                  window as unknown as { __guanoHost?: { sessionLost?: (why?: string) => void } }
+                ).__guanoHost
+                host?.sessionLost?.('this fake host mints nothing')
+              })
+            },
+          },
+        },
+      },
     })
   })
 }

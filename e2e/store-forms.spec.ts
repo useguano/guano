@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // POST /_guano/forms/:id — the only unauthenticated WRITE in the product.
 //
@@ -18,6 +19,9 @@ async function adminContext(baseURL?: string) {
     res = await ctx.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(ctx)
   return ctx
 }
 

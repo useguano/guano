@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
+import { becomeBuilder } from './fixtures/session'
 
 // POST /api/preview renders the posted snapshot to its OWN site, served by the
 // same server under /_guano/preview, and touches nothing live.
@@ -85,6 +86,9 @@ test('a preview renders under the mount, includes drafts, and leaves the live on
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
 
   // what the live site says now, so we can prove the preview did not touch it
   const liveBefore = await (await admin.get('/')).text()
@@ -164,6 +168,9 @@ test('the preview is reachable only with the token the editor was handed', async
     res = await admin.post('/api/auth/setup', { data: { ...ADMIN, name: 'Smoke Co' } })
     expect(res.ok()).toBeTruthy()
   }
+  // A browser session is never a builder session: everything below needs
+  // the kind the desktop app holds (→ e2e/fixtures/session.ts).
+  await becomeBuilder(admin)
   res = await admin.post('/api/preview', { data: snapshot() })
   expect(res.ok()).toBeTruthy()
   const { url } = (await res.json()) as { url: string }

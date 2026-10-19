@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, request as pwRequest, type APIRequestContext, type Page } from '@playwright/test'
 import { loadFixture } from './project'
 
 /**
@@ -29,6 +29,79 @@ export const PROJECT_NAME = 'Smoke Co'
  * the server refuses to expose the route at all.
  */
 export const LAUNCHER_SECRET = 'e2e-launcher-secret-0123456789abcdef'
+
+/**
+ * Upgrade an API context's session to the kind the desktop launcher holds.
+ *
+ * **A browser session is never a builder session** (`effectiveRole` in
+ * server/auth.mjs): a cookie session is capped at contributor whatever its
+ * account's role, because the Build surface lives in the desktop app. So an
+ * API spec that sets up a project, writes structure, reads the team, mints a
+ * token, publishes, snapshots or touches settings has to hold THIS kind of
+ * session — a password login would be a contributor doing builder work, which
+ * is exactly what the server now refuses.
+ *
+ * The secret proof, over the suite server's loopback, which mints for the
+ * instance's owner (`oldestAdmin()`). A spec that needs a builder session for
+ * someone ELSE — a second builder, an editor with their own Mac — needs the
+ * bearer proof instead: a `guanol_` token that account approved for itself
+ * through the device flow (see `store-agent-security.spec.ts`).
+ */
+export async function becomeBuilder(ctx: APIRequestContext) {
+  const res = await ctx.post('/api/auth/launcher-session', { data: { secret: LAUNCHER_SECRET } })
+  expect(res.status(), 'the suite server must carry GUANO_LAUNCHER_SECRET').toBe(200)
+  return ctx
+}
+
+/**
+ * A builder session for someone who is NOT the instance's owner — a second
+ * builder, an editor with their own Mac.
+ *
+ * The secret proof mints for `oldestAdmin()` alone, so this is the only way:
+ * a `guanol_` launcher token that this account approved **for itself** through
+ * the device flow. That is the whole path a second builder takes in real life,
+ * which is why a LAUNCHER authorization needs a build role rather than an
+ * admin — the token carries exactly the approver's own role, so admin-only was
+ * a dead end and not a safeguard.
+ *
+ * `who` must already hold that account's browser session; the returned context
+ * is a new one holding the builder session, and `who` is left alone.
+ *
+ * The device pool is capped per ADDRESS as well as rate-limited per address,
+ * and every context in the suite otherwise shares one socket — so each flow
+ * presents its own `X-Forwarded-For`, which `TRUST_PROXY` is on for (→
+ * playwright.config.ts).
+ */
+let deviceClients = 0
+export async function becomeBuilderByApproval(
+  who: APIRequestContext,
+  baseURL: string | undefined,
+  name: string,
+) {
+  deviceClients += 1
+  const anon = await pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { 'x-forwarded-for': `10.8.0.${deviceClients}` },
+  })
+  const begun = await anon.post('/api/auth/device', { data: { name, kind: 'launcher' } })
+  expect(begun.ok(), await begun.text()).toBeTruthy()
+  const { userCode, deviceCode } = await begun.json()
+  const approved = await who.post(`/api/auth/device/${userCode}/approve`, { data: {} })
+  expect(approved.ok(), await approved.text()).toBeTruthy()
+  const got = await anon.post('/api/auth/device/token', { data: { deviceCode } })
+  expect(got.ok(), await got.text()).toBeTruthy()
+  const { token } = await got.json()
+  await anon.dispose()
+  expect(String(token).startsWith('guanol_')).toBeTruthy()
+
+  const builder = await pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { authorization: `Bearer ${token}` },
+  })
+  const minted = await builder.post('/api/auth/launcher-session', { data: {} })
+  expect(minted.status(), await minted.text()).toBe(200)
+  return builder
+}
 
 /** the editor is up and interactive */
 const ready = (page: Page) => page.getByRole('button', { name: 'Pages', exact: true })
@@ -96,22 +169,23 @@ export async function openEditorInBrowser(
   page: Page,
   { canvas = false, who = ADMIN }: { canvas?: boolean; who?: typeof ADMIN } = {},
 ) {
-  await page.goto('/admin/')
-  const projectName = page.getByPlaceholder('Project name')
-  const email = page.getByPlaceholder('Email')
-  await expect(projectName.or(email).or(ready(page)).first()).toBeVisible({ timeout: 30_000 })
+  // Seeding the fixture is a STRUCTURAL write, so it is done by a builder:
+  // a browser session's project write is content-merged, and the fixture's
+  // custom code is refused by name. Account first, then the seed, then sign
+  // out and in through the form — which is the thing this helper is for.
+  await launcherSession(page)
+  await loadFixture(page)
+  await page.request.post('/api/auth/logout')
 
-  if (await projectName.isVisible()) {
-    await projectName.fill(PROJECT_NAME)
-    await email.fill(who.email)
-    await page.getByPlaceholder('Project password (min. 8 characters)').fill(who.password)
-    await page.getByPlaceholder('Confirm project password').fill(who.password)
-    await page.getByRole('button', { name: 'Setup project' }).click()
-  } else if (await email.isVisible()) {
-    await email.fill(who.email)
-    await page.getByPlaceholder('Password', { exact: true }).fill(who.password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-  }
+  await page.goto('/admin/login')
+  const email = page.getByPlaceholder('Email')
+  await expect(email).toBeVisible({ timeout: 30_000 })
+  await email.fill(who.email)
+  await page.getByPlaceholder('Password', { exact: true }).fill(who.password)
+  await page.getByRole('button', { name: 'Sign in' }).click()
   await page.waitForURL(/\/admin(\?.*)?$/, { timeout: 30_000 })
-  await enterEditor(page, { canvas })
+  await expect(ready(page)).toBeVisible({ timeout: 30_000 })
+  if (canvas) {
+    await expect(page.getByText('Tuesday is roast day.').first()).toBeVisible({ timeout: 30_000 })
+  }
 }
