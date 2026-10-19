@@ -35,6 +35,12 @@ export const AGENT_INIT = {
   permissionMode: 'dontAsk',
 }
 
+/**
+ * The host's own measurement of the spawn chain, `agent-start` →
+ * `system/init`. Only the host can make it (`AgentWire.boot`).
+ */
+export const AGENT_BOOT = { type: 'boot', ms: 9264 }
+
 /** What `set_model` is followed by: a fresh init naming the new model. */
 export const AGENT_INIT_SONNET = { ...AGENT_INIT, model: 'claude-sonnet-5' }
 

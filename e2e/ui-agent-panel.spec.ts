@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { loadFixture } from './fixtures/project'
 import { hostViewMode } from './fixtures/host'
 import {
+  AGENT_BOOT,
   AGENT_BUSY_TURN,
   AGENT_DENIAL,
   AGENT_HARNESS_DENIAL,
@@ -84,7 +85,7 @@ const feed = (page: Page, lines: unknown[]) =>
   }, lines)
 
 async function readyPanel(page: Page) {
-  await feed(page, [AGENT_READY, AGENT_INIT])
+  await feed(page, [AGENT_READY, AGENT_INIT, AGENT_BOOT])
   await page.locator('[data-agent-button]').click()
   await expect(page.locator('[data-agent-panel]')).toBeVisible()
 }
@@ -281,6 +282,9 @@ test.describe('the AI panel', () => {
     await expect(meta).toHaveCount(1)
     await expect(meta).toContainText('3 calls (2 guide)')
     await expect(meta).toContainText('to first word')
+    // `agent-start` → `system/init`, measured by the HOST because the page
+    // sees neither end of that chain dependably
+    await expect(meta).toContainText('9.3s to start')
     // the one number that says whether growing the MCP instructions costs
     // once per session or once per turn
     await expect(meta).toContainText('19k cached')

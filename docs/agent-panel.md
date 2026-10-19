@@ -419,8 +419,9 @@ appending its own row.
 | when | to `system/init` | to first word | steps | guide | harness | cache read |
 |---|---|---|---|---|---|---|
 | step 0 baseline | 5.2 s | not captured | 21 | **6** | ? | ? |
-| after steps 1–3, turn 1 | 35.3 s | 81.1 s | 10 | **4** | **1** | 258k |
-| after steps 1–3, turn 2 | — | 49.1 s | 5 | **0** | 2 | 363k |
+| after steps 1–3, turn 1 (Opus) | 35.3 s | 81.1 s | 10 | **4** | **1** | 258k |
+| after steps 1–3, turn 2 (Opus) | — | 49.1 s | 5 | **0** | 2 | 363k |
+| after the manifest fix, turn 1 (**Sonnet**) | 9.3 s | **28.9 s** | 14 | **5** | 1 | 268k |
 
 **The baseline's answer was not close, and it was not the process chain.**
 The launcher's log breaks that 5.2 s down: 0.70 s waiting for the page's
@@ -434,12 +435,16 @@ job needs … BEFORE your first write"*. So: collapse the round-trips.
 
 **Four things the instrumented runs then said that nothing else could.**
 
-1. **`ready` is not readiness, and measuring to it lied.** The host emits
-   `ready` the moment `claude` is spawned. The panel reported *0.8s to start*
-   for a spawn whose `system/init` the launcher logged **35.3 s** later — the
-   person waited 35 s and the number said 0.8. `bootMs` is measured to
-   `system/init` now, which is when the agent can be talked to. A `set_model`
-   emits a second `system/init` and is deliberately not counted.
+1. **The HOST measures the spawn chain, because the page cannot.** Two wrong
+   numbers came of trying it from the page. Timing to `ready` reported *0.8s
+   to start* for a spawn whose `system/init` the launcher logged 35.3 s
+   later — `ready` is emitted when `claude` is spawned, not when it answers.
+   Timing to `system/init` from the page then reported **nothing at all**:
+   the page sees neither end of the chain dependably, because the host starts
+   its clock when `agent-start` ARRIVES and a page that reloaded mid-chain
+   has no start of its own to subtract from. The host now sends
+   `{type:'boot', ms}` from its own milestones, in the transcript so it
+   survives a reload, and the page only displays it.
 2. **`claude -p`'s own boot is wildly variable and is the biggest single
    number here**: 4.27 s on one spawn, 34.5 s on the next, same machine, same
    project shape. It is not ours and there is no lever on it in this repo.
@@ -448,15 +453,21 @@ job needs … BEFORE your first write"*. So: collapse the round-trips.
    two turns. **Step 4's premise holds**: the system prompt and the MCP
    instructions are paid once per session, not per turn, so growing the
    embedded instructions is a one-off cost.
-4. **The ladder works and the job bundle half-worked.** Turn two — a whole
-   second page — read the handbook **not once**, which is step 3 doing exactly
-   what it was for. Turn one went 6 → 4, not 6 → 1: the model called
-   `get_guide {for: "build-page"}` and then re-read page-html, forms and
-   styling **one at a time, sections that response had already handed it in
-   full**. A `sections: [...]` key beside 52 KB of handbook is easy to walk
-   past, so the job response now says what it contains on the first line of
-   the text itself and tells the model not to ask again. Whether that is
-   enough is the next measurement, not a claim.
+4. **The ladder works outright.** Turn two — a whole second page — read the
+   handbook **not once**, which is step 3 doing exactly what it was for.
+5. **The job bundle is called first and then not trusted, and the manifest
+   did not fix that.** Turn one went 6 → 4 on Opus and sat at 5 on Sonnet.
+   The model opens with `get_guide {for: "build-page"}` every time — the
+   advice lands — and then re-reads sections that response already handed it
+   in full. On the Sonnet run: `{section: "forms"}` and
+   `{section: "design-standards"}`, both of them *inside* `build-page`, plus
+   a `{section: "toc"}` hunt and one legitimate `{section: "icons"}`.
+
+   The manifest — a line at the top of the response naming its own
+   contents — did not stop it, so **"tell the model it already has this" is
+   not a lever**. What a model has in context and what it believes it has are
+   different things, and only one of them is controllable. The way to make a
+   read cost nothing is for there to be nothing to call, which is step 4.
 
 Each change records its own before/after against the same prompt.
 

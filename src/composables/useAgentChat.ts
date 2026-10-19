@@ -169,17 +169,21 @@ const timings = ref<{ startedAt: number | null; readyAt: number | null; initAt: 
 
 let requested = false
 /**
- * `system/init - agent-start`, waiting for the first turn that follows it.
+ * How long the spawn chain took, waiting for the first turn that follows it.
  *
- * Measured to the INIT and not to `ready`, which is the lie the first
- * instrumented run told: the host emits `ready` the moment `claude` is
- * spawned, so the panel reported *0.8s to start* for a spawn whose
- * `system/init` the launcher logged 35 s later. The person waited 35 s. What
- * is being measured is when the agent can be TALKED TO.
+ * **The HOST measures this, not the page**, and two bad numbers came of
+ * trying it the other way round. Timing to `ready` reported *0.8s to start*
+ * for a spawn whose `system/init` the launcher logged 35 s later, because
+ * `ready` is emitted when `claude` is spawned and not when it answers.
+ * Timing to `system/init` from the page then reported nothing at all: the
+ * page sees neither end of the chain dependably — the host starts the clock
+ * when `agent-start` ARRIVES, and a page that reloaded mid-chain has no
+ * start of its own to subtract from.
+ *
+ * So the host sends `{type:'boot', ms}` once its own milestones have it, and
+ * this is only where that lands.
  */
 let pendingBoot: number | null = null
-/** a `set_model` emits a second `system/init`; only the spawn's one counts */
-let bootPending = false
 /** tool_use ids already counted, so the stream and the `assistant` echo agree */
 let countedTools = new Set<string>()
 /** the host has seen our `agent-target` since the last `ready` */
@@ -416,13 +420,8 @@ function imageUrls(content: unknown): string[] {
 function ingestSystem(event: Record<string, unknown>): void {
   switch (asString(event.subtype)) {
     case 'init': {
-      const initAt = Date.now()
       available.value = true
-      timings.value.initAt = initAt
-      if (bootPending && timings.value.startedAt !== null) {
-        pendingBoot = initAt - timings.value.startedAt
-        bootPending = false
-      }
+      timings.value.initAt = Date.now()
       unavailableReason.value = null
       sessionId.value = asString(event.session_id) ?? sessionId.value
       model.value = asString(event.model) ?? model.value
@@ -645,6 +644,13 @@ function ingest(raw: unknown): void {
       timings.value.readyAt = readyAt
       return
     }
+    case 'boot': {
+      // the host's own `agent-start` → `system/init`, which is the only
+      // place that measurement can honestly be made
+      const ms = event.ms
+      if (typeof ms === 'number' && ms >= 0) pendingBoot = ms
+      return
+    }
     case 'notice': {
       notice.value = asString(event.text)
       return
@@ -659,7 +665,6 @@ function ingest(raw: unknown): void {
     case 'switching': {
       timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
       pendingBoot = null
-      bootPending = true
       status.value = 'switching'
       switchingTo.value = asString(event.target) ?? null
       return
@@ -703,7 +708,6 @@ export function startAgent(): void {
   requested = true
   timings.value = { startedAt: Date.now(), readyAt: null, initAt: null }
   pendingBoot = null
-  bootPending = true
   hostBridge.post({ type: 'agent-start' })
 }
 
