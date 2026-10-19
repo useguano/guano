@@ -467,6 +467,10 @@ export function destroyUserSessions(userId) {
   if (changed) void persistSessions().catch(() => {})
 }
 
+// Throttled like a token's `lastUsedAt`, and for the same reason: every authed
+// request would otherwise fsync sessions.json.
+const SEEN_THROTTLE = 60 * 1000
+
 function getSession(token) {
   if (!token) return null
   const key = sha256(token)
@@ -477,7 +481,35 @@ function getSession(token) {
     void persistSessions().catch(() => {})
     return null
   }
+  // WHEN this session was last used, which is the only way to answer "is
+  // anyone else working on this instance right now". `expiresAt` is thirty days
+  // out and says nothing: a session nobody has touched since last month looks
+  // identical to one in use. The launcher's **Bring back to this Mac** asks
+  // this before it moves a project off a server, because a move is not a sync
+  // and someone else's unsaved window is work that would simply stop.
+  const now = Date.now()
+  if (!session.lastSeenAt || now - session.lastSeenAt > SEEN_THROTTLE) {
+    session.lastSeenAt = now
+    void persistSessions().catch(() => {})
+  }
   return session
+}
+
+/**
+ * Who has used a session recently, and how recently.
+ *
+ * By USER, not by session: two tabs are one person. `null` for an account with
+ * no live session at all, so a caller can tell "nobody" from "a while ago".
+ */
+export function lastSeenByUser() {
+  const out = new Map()
+  const now = Date.now()
+  for (const s of sessions.values()) {
+    if (s.expiresAt <= now) continue
+    const at = s.lastSeenAt ?? s.createdAt ?? 0
+    if (at > (out.get(s.userId) ?? 0)) out.set(s.userId, at)
+  }
+  return out
 }
 
 // ---------- cookies ----------
@@ -612,8 +644,18 @@ export const listInvitesPublic = () =>
   invites.filter(inviteActive).map((i) => ({ email: i.email, role: i.role, expiresAt: i.expiresAt }))
 
 /** redacted member list for the all-roles view (no ids — non-admins have no actions) */
-export const listMembers = () =>
-  loadUsers().map((u) => ({ name: u.name, email: u.email, role: u.role }))
+export const listMembers = () => {
+  const seen = lastSeenByUser()
+  return loadUsers().map((u) => ({
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    // No id — non-admins have no actions, and this view is editor+ (S14).
+    // `lastSeenAt` is not an id: it says whether anyone else is working here,
+    // which is what the launcher asks before moving a project off a server.
+    lastSeenAt: seen.get(u.id) ?? null,
+  }))
+}
 
 /** create a single-use invite; returns { invite, token } */
 export async function createInvite({ name, email, role, invitedBy }) {
