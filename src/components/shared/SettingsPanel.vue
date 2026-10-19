@@ -2155,7 +2155,8 @@ async function onImportFile(e: Event) {
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-xs font-medium">{{ t.name }}</p>
                     <p class="truncate text-[9px] text-muted-foreground">
-                      Created {{ timeAgo(t.createdAt) }} ·
+                      {{ t.kind === 'launcher' ? 'Guano Launcher' : 'Agent' }} ·
+                      created {{ timeAgo(t.createdAt) }} ·
                       {{ t.lastUsedAt ? `last used ${timeAgo(t.lastUsedAt)}` : 'never used' }}
                     </p>
                   </div>

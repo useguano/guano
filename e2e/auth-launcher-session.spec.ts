@@ -1,4 +1,4 @@
-import { test, expect, request as pwRequest } from '@playwright/test'
+import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { boot, instances } from './fixtures/server'
 
@@ -83,6 +83,122 @@ test('the launcher tag survives a password change', async () => {
   })
   expect(changed.status()).toBe(200)
   expect((await (await ctx.get('/api/auth/me')).json()).host).toBe('launcher')
+})
+
+// ---------- the second proof: a `guanol_` launcher token ----------
+//
+// A VPS is not spawned by the app, so there is no secret and no loopback to
+// prove with. The remote stand-in is a launcher token, approved once in the
+// instance's own /admin through the device flow — and it has to mint the one
+// same kind of session, because the rest of the server only knows about
+// `via: 'launcher'`.
+
+/** drive the device flow to completion and return the raw token it mints */
+async function deviceToken(
+  srv: { port: number; api: APIRequestContext },
+  admin: APIRequestContext,
+  kind: 'agent' | 'launcher',
+) {
+  const started = await srv.api.post('/api/auth/device', { data: { name: `test ${kind}`, kind } })
+  expect(started.ok()).toBeTruthy()
+  const { userCode, deviceCode } = await started.json()
+
+  // the consent screen is told which sentence it is showing
+  const described = await admin.get(`/api/auth/device/${userCode}`)
+  expect(described.ok()).toBeTruthy()
+  expect((await described.json()).kind).toBe(kind)
+
+  expect((await admin.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
+  const collected = await srv.api.post('/api/auth/device/token', { data: { deviceCode } })
+  expect(collected.ok()).toBeTruthy()
+  const { token } = await collected.json()
+  expect(typeof token).toBe('string')
+  return token as string
+}
+
+test('a launcher token is exchanged for a launcher session; an agent token is refused by name', async () => {
+  const srv = await boot('launcher-session-token', 4409)
+  await srv.api.post('/api/auth/setup', {
+    data: { email: EMAIL, password: PASSWORD, projectName: 'Remote' },
+  })
+  const admin = await bare(srv.port)
+  expect((await admin.post('/api/auth/login', { data: { email: EMAIL, password: PASSWORD } })).ok()).toBeTruthy()
+
+  // No GUANO_LAUNCHER_SECRET on this server at all: the bearer proof stands on
+  // its own, and the route must exist for it even with the env absent.
+  const launcherToken = await deviceToken(srv, admin, 'launcher')
+  expect(launcherToken.startsWith('guanol_')).toBeTruthy()
+
+  const ctx = await pwRequest.newContext({
+    baseURL: `http://localhost:${srv.port}`,
+    extraHTTPHeaders: { authorization: `Bearer ${launcherToken}` },
+  })
+  const minted = await ctx.post('/api/auth/launcher-session', { data: {} })
+  expect(minted.status()).toBe(200)
+  expect((await minted.json()).email).toBe(EMAIL)
+  // the session it mints is indistinguishable from the one the secret mints
+  expect((await (await ctx.get('/api/auth/me')).json()).host).toBe('launcher')
+
+  // an AGENT token at this door is 403 BY NAME — the trap of the whole design:
+  // if it were accepted, an injected agent would trade its token for a cookie
+  // and stop being an agent in the server's eyes
+  const agentToken = await deviceToken(srv, admin, 'agent')
+  expect(agentToken.startsWith('guano_')).toBeTruthy()
+  expect(agentToken.startsWith('guanol_')).toBeFalsy()
+  const agent = await pwRequest.newContext({
+    baseURL: `http://localhost:${srv.port}`,
+    extraHTTPHeaders: { authorization: `Bearer ${agentToken}` },
+  })
+  const refused = await agent.post('/api/auth/launcher-session', { data: {} })
+  expect(refused.status()).toBe(403)
+  expect((await refused.json()).error).toBe('an agent token cannot open the editor')
+
+  // and a revoked launcher token stops working, which is what makes
+  // Reconnect-rather-than-login the right answer in the app
+  const listed = await admin.get('/api/tokens')
+  const row = (await listed.json()).tokens.find((t: { kind: string }) => t.kind === 'launcher')
+  expect(row).toBeTruthy()
+  expect((await admin.delete(`/api/tokens/${row.id}`)).ok()).toBeTruthy()
+  const dead = await ctx.post('/api/auth/launcher-session', { data: {} })
+  expect(dead.status()).toBe(403)
+  expect((await dead.json()).error).toContain('revoked')
+})
+
+test('a launcher token whose owner cannot build is refused', async () => {
+  const srv = await boot('launcher-session-role', 4410)
+  await srv.api.post('/api/auth/setup', {
+    data: { email: EMAIL, password: PASSWORD, projectName: 'Remote role' },
+  })
+  const admin = await bare(srv.port)
+  await admin.post('/api/auth/login', { data: { email: EMAIL, password: PASSWORD } })
+
+  const token = await deviceToken(srv, admin, 'launcher')
+  const ctx = await pwRequest.newContext({
+    baseURL: `http://localhost:${srv.port}`,
+    extraHTTPHeaders: { authorization: `Bearer ${token}` },
+  })
+  expect((await ctx.post('/api/auth/launcher-session', { data: {} })).status()).toBe(200)
+
+  // a second admin, so the first can be demoted (adminCount guards the last one)
+  const invite = await admin.post('/api/users/invite', {
+    data: { name: 'Second', email: 'second@example.com', role: 'admin' },
+  })
+  expect(invite.ok()).toBeTruthy()
+  const second = await bare(srv.port)
+  await second.post(`/api/invite/${(await invite.json()).token}/accept`, {
+    data: { password: 'second-admin-pw-1' },
+  })
+
+  const owner = (await (await second.get('/api/users')).json()).users.find(
+    (u: { email: string }) => u.email === EMAIL,
+  )
+  expect((await second.patch(`/api/users/${owner.id}`, { data: { role: 'contributor' } })).ok()).toBeTruthy()
+
+  // the role is read LIVE on every exchange, which is why the app re-exchanges
+  // rather than holding one session for thirty days
+  const refused = await ctx.post('/api/auth/launcher-session', { data: {} })
+  expect(refused.status()).toBe(403)
+  expect((await refused.json()).error).toContain('cannot build')
 })
 
 test('without the env the route does not exist', async () => {

@@ -4,6 +4,7 @@ import { apiJson } from '@/lib/api'
 export interface ApiTokenRow {
   id: string
   name: string
+  kind: 'agent' | 'launcher'
   createdAt: number
   lastUsedAt: number | null
 }

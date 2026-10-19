@@ -394,6 +394,101 @@ test('the publish bookkeeping blobs need a build role', async ({ baseURL }) => {
   await agent.dispose()
 })
 
+test('an agent token cannot open the editor, and a launcher token cannot drive the MCP', async ({
+  baseURL,
+}) => {
+  // THE security argument of launcher-only building, in one test.
+  //
+  // Builder capability needs a credential the desktop app holds; agents are
+  // fenced by the agent policy because they are judged by HOW they
+  // authenticated. So if the session exchange accepted any `guano_` token, an
+  // injected agent would trade its token for a cookie, stop being an agent in
+  // the server's eyes, and write Main with the policy off. The two kinds are
+  // therefore a PREFIX and not a field: `guanol_` and `guano_` are different
+  // types to every parser, and each door refuses the other BY NAME so the
+  // attempt is visible rather than merely unsuccessful.
+  //
+  // This test exists before the gates read `effectiveRole`, and it never goes
+  // away.
+  const admin = await adminContext(baseURL)
+
+  /** drive the device flow to completion and return the raw token */
+  const mint = async (kind: 'agent' | 'launcher') => {
+    const started = await pwRequest.newContext({ baseURL })
+    const begun = await started.post('/api/auth/device', { data: { name: `kinds ${kind}`, kind } })
+    expect(begun.ok()).toBeTruthy()
+    const { userCode, deviceCode } = await begun.json()
+    // the consent screen is told which sentence it is showing, because
+    // "Guano Launcher wants builder access" and "Claude wants to work on this
+    // site" must not be the same approval
+    expect((await (await admin.get(`/api/auth/device/${userCode}`)).json()).kind).toBe(kind)
+    expect((await admin.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
+    const got = await started.post('/api/auth/device/token', { data: { deviceCode } })
+    expect(got.ok()).toBeTruthy()
+    const { token } = await got.json()
+    await started.dispose()
+    return token as string
+  }
+
+  const agentToken = await mint('agent')
+  const launcherToken = await mint('launcher')
+  expect(agentToken.startsWith('guano_')).toBeTruthy()
+  expect(launcherToken.startsWith('guanol_')).toBeTruthy()
+  // disjoint strings, which is the whole mechanism: a launcher token cannot be
+  // READ as an agent bearer, let alone resolve as one
+  expect(launcherToken.startsWith('guano_')).toBeFalsy()
+
+  const asAgent = await pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { authorization: `Bearer ${agentToken}` },
+  })
+  const asLauncher = await pwRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { authorization: `Bearer ${launcherToken}` },
+  })
+
+  // door one: the editor's session exchange. The agent token is NAMED.
+  const atEditor = await asAgent.post('/api/auth/launcher-session', { data: {} })
+  expect(atEditor.status()).toBe(403)
+  expect((await atEditor.json()).error).toBe('an agent token cannot open the editor')
+
+  // door two: the API the MCP server drives. The launcher token is NAMED at
+  // every path, not merely unauthorized — the one useful thing to say about it
+  // is that the credential is real and at the wrong door.
+  for (const path of ['/api/auth/me', `/api/store/${MAIN}`, '/api/tokens', '/api/media']) {
+    const res = await asLauncher.get(path)
+    expect(res.status(), path).toBe(403)
+    expect((await res.json()).error, path).toContain('only opens the editor')
+  }
+  // a write, too — the gate is above the method split
+  const wrote = await asLauncher.put(`/api/store/${MAIN}`, { data: '{"pages":[]}' })
+  expect(wrote.status()).toBe(403)
+
+  // health is above the gate, because the launcher probes it with no token
+  expect((await asLauncher.get('/api/health')).ok()).toBeTruthy()
+
+  // the launcher token does work at its own door, so the refusals above are
+  // about the DOOR and not about a dead credential
+  const opened = await asLauncher.post('/api/auth/launcher-session', { data: {} })
+  expect(opened.status()).toBe(200)
+
+  // and the agent token still works at its own door, same reasoning
+  expect((await asAgent.get('/api/auth/me')).ok()).toBeTruthy()
+
+  // clean up: these are real credentials on the shared suite server
+  const listed = (await (await admin.get('/api/tokens')).json()).tokens as {
+    id: string
+    name: string
+  }[]
+  for (const t of listed.filter((t) => t.name.startsWith('kinds '))) {
+    expect((await admin.delete(`/api/tokens/${t.id}`)).ok()).toBeTruthy()
+  }
+
+  await asAgent.dispose()
+  await asLauncher.dispose()
+  await admin.dispose()
+})
+
 test('a malformed percent-escape is a bad request, not an internal error', async ({ baseURL }) => {
   // `decodeURIComponent` throws on a lone escape, which reached the global
   // catch: an unauthenticated GET answered "internal error (ref …)" and logged

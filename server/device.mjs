@@ -69,7 +69,7 @@ function sameSecret(a, b) {
  * which is the whole point — so it is rate-limited by the caller and capped
  * here.
  */
-export function startDevice({ name, ip } = {}) {
+export function startDevice({ name, ip, kind } = {}) {
   sweep()
   if (pending.size >= MAX_PENDING) {
     return { error: 'too many pending authorizations — wait for them to expire and try again' }
@@ -85,6 +85,13 @@ export function startDevice({ name, ip } = {}) {
   const deviceCode = randomBytes(32).toString('hex')
   pending.set(code, {
     deviceCode,
+    // WHICH KIND of token this authorization will mint, decided by the client
+    // that started it and carried through to the consent screen — because
+    // "Guano Launcher wants builder access" and "Claude wants to work on this
+    // site" are different sentences, and a human approving one must not be
+    // approving the other. Anything but the launcher is an agent, so an older
+    // CLI that sends no kind is unchanged.
+    kind: kind === 'launcher' ? 'launcher' : 'agent',
     name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 60) : 'guano connect',
     // The name is the REQUESTER's to choose, so it is a label and never
     // evidence. The address is ours, and it is what lets the admin tell their
@@ -107,6 +114,7 @@ export function describeDevice(code) {
   return {
     userCode: String(code).toUpperCase(),
     name: rec.name,
+    kind: rec.kind ?? 'agent',
     ip: rec.ip,
     createdAt: rec.createdAt,
     expiresAt: rec.expiresAt,

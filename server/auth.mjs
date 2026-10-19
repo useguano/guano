@@ -35,7 +35,11 @@ export const ROLES = ['admin', 'editor', 'contributor', 'reviewer']
 /** admin and editor build pages; a contributor edits content; a reviewer
  * only reads and comments. Every "is this a build-capable account" gate reads
  * this rather than naming the roles it is NOT, so a role added later is
- * refused by default instead of falling through. */
+ * refused by default instead of falling through.
+ *
+ * Pass it `effectiveRole(req, user)` and NEVER `user.role`: the account's role
+ * says what it may do from the launcher, the request's effective role says
+ * what it may do here. See `effectiveRole` below. */
 export const isBuildRole = (role) => role === 'admin' || role === 'editor'
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex')
@@ -527,6 +531,45 @@ export function sessionVia(req) {
   return session?.via === 'launcher' ? 'launcher' : null
 }
 
+/**
+ * True when this request authenticated as an MCP agent (an agent-kind bearer)
+ * rather than a human at a browser. Mirrors `requestUser`'s precedence — a
+ * session cookie wins when both are present — so the two can never disagree
+ * about who is calling. This is the signal the agent policy gates on.
+ */
+export const isAgentRequest = (req) =>
+  !sessionUser(req) && (req.headers.authorization ?? '').startsWith(`Bearer ${TOKEN_KINDS.agent}`)
+
+/**
+ * May this REQUEST build, if its account can?
+ *
+ * Two kinds of caller may: a session the desktop launcher minted
+ * (`via: 'launcher'` — two proofs, one route, nothing else mints it), and an
+ * agent bearer, which is not capped here because it has its own gate in the
+ * agent policy and is judged by how it authenticated. Everything else is a
+ * browser, and *a browser session is never a builder session*.
+ */
+export const isBuilderRequest = (req) => sessionVia(req) === 'launcher' || isAgentRequest(req)
+
+/**
+ * The role this REQUEST may act with: the account's own when the request can
+ * build, otherwise capped at `contributor` — so an admin signed in to their
+ * own deployed instance in Safari is content-only at every gate, and a
+ * reviewer stays a reviewer (they are below a contributor, not above).
+ *
+ * EVERY "may this account build" gate reads `isBuildRole(effectiveRole(req,
+ * user))`, never `isBuildRole(user.role)`. A route written later must do the
+ * same; that is why this sentence sits beside `isBuildRole` rather than in a
+ * doc nobody opens mid-edit. The Build surface lives in the desktop launcher,
+ * and the rule is enforced HERE, not by hiding UI — a test that only checks
+ * the chrome tests nothing.
+ */
+export const effectiveRole = (req, user) => {
+  if (!hasValidRole(user)) return null
+  if (isBuilderRequest(req)) return user.role
+  return isBuildRole(user.role) ? 'contributor' : user.role
+}
+
 /** The account a launcher session is minted for: one instance has one owner,
  * and that is the admin who set it up. Oldest wins so a second admin added
  * later never takes the desktop app's seat. */
@@ -648,8 +691,8 @@ export async function acceptInvite(token, password) {
 
 // ---------- API tokens (bearer credential for the MCP server & CI) ----------
 
-// { id, tokenHash, userId, name, createdAt, lastUsedAt, pendingFirstAdmin? }
-// Raw token format `guano_<48 hex>`, shown EXACTLY once at creation. Only the
+// { id, tokenHash, userId, name, kind, createdAt, lastUsedAt, pendingFirstAdmin? }
+// Raw token format `<prefix><48 hex>`, shown EXACTLY once at creation. Only the
 // sha256 hash is stored — a leaked api-tokens.json can't be replayed. The
 // owning user's role is read LIVE at auth time (findUserById), so demotion or
 // deletion takes effect on the very next request. Mirrors the invite pattern.
@@ -664,9 +707,34 @@ let apiTokens = readJson(API_TOKENS_FILE) ?? []
 const persistApiTokens = () =>
   persist(API_TOKENS_FILE, JSON.stringify(apiTokens), 'api tokens')
 
+/**
+ * The two token KINDS, as prefixes rather than a field.
+ *
+ * An agent token is `guano_…` and a launcher token is `guanol_…`, and they are
+ * different TYPES to every parser: `apiTokenUser` reads the agent prefix and
+ * nothing else, `launcherTokenUser` reads the launcher prefix and nothing
+ * else. The two strings are disjoint — `'guanol_'.startsWith('guano_')` is
+ * false, because what follows `guano` is `l` and not `_` — so neither resolves
+ * where the other belongs. Not "is refused": cannot be read.
+ *
+ * WHY A PREFIX. Agents are gated by the agent policy (`allowMainWrites`,
+ * `allowPublish`) because they are judged by HOW they authenticated. If the
+ * `/api/auth/launcher-session` exchange accepted any `guano_` token, an
+ * injected agent would trade its token for a cookie, stop being an agent in
+ * the server's eyes, and write Main with the policy off. `kind` is stored too,
+ * for the admin's token list, but the prefix is the enforcement — a field is a
+ * check someone can forget.
+ */
+export const TOKEN_KINDS = { agent: 'guano_', launcher: 'guanol_' }
+
+/** A record written before kinds existed carries no `kind`; every one of them
+ *  is `guano_`-prefixed, so absent means agent. */
+const kindOf = (t) => (t.kind === 'launcher' ? 'launcher' : 'agent')
+
 const apiTokenView = (t) => ({
   id: t.id,
   name: t.name,
+  kind: kindOf(t),
   createdAt: t.createdAt,
   lastUsedAt: t.lastUsedAt,
 })
@@ -699,14 +767,17 @@ export async function bindPendingTokens(userId) {
 }
 
 /** create a token for a user; returns { token: raw (shown once), record }.
- *  `userId: null` makes a PENDING record (see above). */
-export async function createApiToken(userId, name) {
-  const raw = 'guano_' + randomBytes(24).toString('hex') // 48 hex chars
+ *  `userId: null` makes a PENDING record (see above). `kind` picks the prefix,
+ *  and the prefix is what every parser downstream judges it by. */
+export async function createApiToken(userId, name, { kind = 'agent' } = {}) {
+  const resolved = kind === 'launcher' ? 'launcher' : 'agent'
+  const raw = TOKEN_KINDS[resolved] + randomBytes(24).toString('hex') // 48 hex chars
   const token = {
     id: randomBytes(12).toString('hex'),
     tokenHash: sha256(raw), // raw is returned once, never stored
     userId,
     name: typeof name === 'string' ? name.slice(0, 100) : '',
+    kind: resolved,
     createdAt: Date.now(),
     lastUsedAt: null,
     ...(userId == null ? { pendingFirstAdmin: true } : {}),
@@ -752,17 +823,23 @@ function destroyUserApiTokens(userId) {
 // throttle lastUsedAt persistence — every authed API call would otherwise fsync
 const LAST_USED_THROTTLE = 60 * 1000
 
-/** resolve a raw bearer token to its live owning user, or null. Updates
- *  lastUsedAt (throttled). A deleted or role-less owner → null (token dead). */
-export function apiTokenUser(rawToken) {
+/**
+ * Resolve a raw bearer token of ONE kind to its live owning user, or null.
+ * Updates lastUsedAt (throttled). A deleted or role-less owner → null (token
+ * dead). The `want` kind is checked twice, against the prefix and against the
+ * record, so a stored `kind` that somehow disagreed with the string could only
+ * ever refuse — never widen.
+ */
+function tokenUser(rawToken, want) {
   const raw = String(rawToken ?? '')
-  if (!raw.startsWith('guano_')) return null
+  if (!raw.startsWith(TOKEN_KINDS[want])) return null
   const hash = sha256(raw)
   // compare every candidate; no early break so a match's position can't be
   // timed (the set is tiny, so scanning all of it is negligible)
   let match = null
   for (const t of apiTokens) if (timingSafeEqualStr(t.tokenHash, hash)) match = t
   if (!match || match.userId == null) return null // pending → nobody yet
+  if (kindOf(match) !== want) return null
   const user = findUserById(match.userId)
   if (!hasValidRole(user)) return null // deleted / de-roled → dead token
   const now = Date.now()
@@ -772,6 +849,14 @@ export function apiTokenUser(rawToken) {
   }
   return user
 }
+
+/** the owner of an AGENT token (`guano_…`) — the MCP server's credential, and
+ *  the only kind `requestUser` can read */
+export const apiTokenUser = (rawToken) => tokenUser(rawToken, 'agent')
+
+/** the owner of a LAUNCHER token (`guanol_…`) — read by exactly one route,
+ *  `POST /api/auth/launcher-session`, and by nothing else anywhere */
+export const launcherTokenUser = (rawToken) => tokenUser(rawToken, 'launcher')
 
 // ---------- rate limiting (per key, in-memory fixed window) ----------
 

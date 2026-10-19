@@ -727,6 +727,18 @@ export async function main(args = [], opts = {}) {
       // The escape hatch, and the only option on a headless box: a token the
       // human made in that instance's editor. Being signed in there to create
       // it is the same proof the device flow asks for, done by hand.
+      // A launcher token (`guanol_…`) is named rather than lumped in with
+      // nonsense: it IS a Guano credential, it is simply the other kind, and
+      // the server would refuse it by name on the first call anyway. Saying so
+      // here saves the round trip and the confusion.
+      if (/^guanol_/.test(given)) {
+        console.error(
+          '✗ that is a launcher token, which opens the editor and cannot drive the MCP.\n' +
+            '  Make an agent token in that instance\'s editor under My account → API tokens,\n' +
+            '  or run `guano connect --url <host>` with no --token and approve it in the browser.',
+        )
+        process.exit(1)
+      }
       if (!/^guano_[0-9a-f]{16,}$/.test(given)) {
         console.error(
           `✗ --token does not look like a Guano API token (expected guano_… ): "${given.slice(0, 12)}…"\n` +

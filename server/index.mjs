@@ -152,6 +152,11 @@ import {
   SEEN_FIELDS,
   setSeenAt,
   isBuildRole,
+  effectiveRole,
+  isAgentRequest,
+  isBuilderRequest,
+  launcherTokenUser,
+  TOKEN_KINDS,
   userProfile,
   verifyLogin,
   makeCredentials,
@@ -473,27 +478,25 @@ const isEmail = (v) => typeof v === 'string' && /.+@.+\..+/.test(v)
  * Returns null when neither authenticates. The token resolves to its owner
  * with a LIVE role, so every existing role gate keeps working unchanged.
  * PUBLISH_TOKEN (CI, no `guano_` prefix) is handled separately in handlePost.
+ *
+ * `Bearer guano_` AND NOTHING ELSE. This line is the enforcement that keeps
+ * the two token kinds apart: a `guanol_` launcher token cannot be READ here,
+ * let alone resolve — not "is refused", cannot be read — so an injected agent
+ * has no path from its own credential to a builder session. The mirror of this
+ * line lives on `/api/auth/launcher-session`, which parses `guanol_` alone.
+ * → `server/auth.mjs` TOKEN_KINDS.
  */
 function requestUser(req) {
   const session = sessionUser(req)
   if (session) return session
   const auth = req.headers.authorization ?? ''
-  if (!auth.startsWith('Bearer guano_')) return null
+  if (!auth.startsWith(`Bearer ${TOKEN_KINDS.agent}`)) return null
   const ip = clientIp(req)
   if (!apiTokenAllowed(ip)) return null
   const user = apiTokenUser(auth.slice('Bearer '.length))
   if (!user) recordApiTokenFailure(ip)
   return user
 }
-
-/**
- * True when this request authenticated as an MCP agent (a `guano_` bearer)
- * rather than a human at a browser. Mirrors requestUser's precedence — a
- * session cookie wins when both are present — so the two can never disagree
- * about who is calling. This is the signal the agent policy gates on.
- */
-const isAgentRequest = (req) =>
-  !sessionUser(req) && (req.headers.authorization ?? '').startsWith('Bearer guano_')
 
 /**
  * Sliding-window rate limiter, one counter per id. Like the media uploader's
@@ -569,6 +572,31 @@ const safeDecode = (value) => {
 const isLoopbackSocket = (req) =>
   ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)
 
+/**
+ * Was this request made over https, or to this machine?
+ *
+ * The node server speaks plain http and sits behind a TLS proxy in every
+ * deployment that has TLS at all, so the socket cannot answer — the only
+ * evidence is `x-forwarded-proto`, and that is evidence exactly when
+ * TRUST_PROXY says a proxy set it. Untrusted, the answer is NO, which refuses
+ * and never widens; the refusal names TRUST_PROXY so the operator is not left
+ * guessing. The loopback exception is `guano connect --url`'s rule verbatim: a
+ * credential that never leaves the machine needs no transport to protect it,
+ * and without it the e2e suite could not exchange a token at all.
+ *
+ * One caller: the launcher-token exchange, where a credential rides on every
+ * request rather than being spent once.
+ */
+const isSecureOrLocal = (req) => {
+  if (isLoopbackSocket(req)) return true
+  if (!TRUST_PROXY) return false
+  const proto = String(req.headers['x-forwarded-proto'] ?? '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+  return proto === 'https'
+}
+
 // a code typed by a human, so the limit is per address and generous
 const setupAllowed = slidingLimiter(10, 15 * 60_000)
 
@@ -623,11 +651,20 @@ async function handleAuth(req, res, path) {
     const policy = isAgentRequest(req) ? { agentPolicy: await readAgentPolicy() } : null
     // The human-readable half of the identity, authed-only: `guano mcp` turns a
     // mismatch into "this entry was connected to <name>, but <other> answered".
+    // `role` is the ACCOUNT's and `effectiveRole` is this REQUEST's, and
+    // `canBuild` is computed from the second one here rather than derived in
+    // the SPA from the first — one source for the answer, which is what lets
+    // `useViewMode` pin a browser-signed-in admin to Play with no new client
+    // logic. The SPA pinning itself is a CONSEQUENCE of this field, never the
+    // enforcement: that lives at the gates (→ `effectiveRole` in auth.mjs).
+    const acting = effectiveRole(req, user)
     return send(
       res,
       200,
       JSON.stringify({
         ...userProfile(user),
+        effectiveRole: acting,
+        canBuild: isBuildRole(acting),
         serverVersion: APP_VERSION,
         instance: { id: instance?.id ?? null, name: instance?.name ?? '' },
         // Which chrome the editor should draw: a session minted by the
@@ -705,6 +742,48 @@ async function handleAuth(req, res, path) {
     //
     // Absent env = no route at all, which is what keeps every ordinary deploy
     // exactly as it was.
+    // ONE claim — *I am this person's launcher, for this instance* — and now
+    // two proofs of it, which mint the one same kind of session. Nothing else
+    // anywhere mints `via: 'launcher'`.
+    //
+    // PROOF TWO, for an instance this app did not spawn (a VPS, another Mac):
+    // a `guanol_` launcher token, obtained once through the device flow where
+    // a human approved it in this instance's own /admin. It parses the
+    // LAUNCHER prefix and nothing else — the mirror of requestUser's
+    // `guano_`-only line, and the reason an injected agent has no path from
+    // its own credential to a builder session. An agent token here is 403 BY
+    // NAME rather than falling through as unrecognised, because "that
+    // credential is real but at the wrong door" is the only useful thing to
+    // say about it.
+    const auth = req.headers.authorization ?? ''
+    if (auth.startsWith(`Bearer ${TOKEN_KINDS.launcher}`)) {
+      if (!isSecureOrLocal(req)) {
+        return fail(
+          res,
+          403,
+          'a launcher token may only be exchanged over https (behind a TLS proxy, set TRUST_PROXY=1)',
+        )
+      }
+      // Reachable from anywhere, unlike the secret proof below, so it takes a
+      // limiter: the same one setup uses, for the same reason.
+      const limit = setupAllowed(req.socket.remoteAddress ?? '?')
+      if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'attempts')
+      const owner = launcherTokenUser(auth.slice('Bearer '.length))
+      if (!owner) return fail(res, 403, 'that launcher token is unknown or revoked')
+      // The owner must still build. A demotion takes effect on the next
+      // exchange, which is why the app re-exchanges on a 401 rather than
+      // holding one session for thirty days.
+      if (!isBuildRole(owner.role)) {
+        return fail(res, 403, 'that account cannot build; the editor needs admin or editor')
+      }
+      return send(res, 200, JSON.stringify(userProfile(owner)), 'application/json', {
+        'set-cookie': sessionCookieHeader(createSession(owner.id, { via: 'launcher' })),
+      })
+    }
+    if (auth.startsWith(`Bearer ${TOKEN_KINDS.agent}`)) {
+      return fail(res, 403, 'an agent token cannot open the editor')
+    }
+    // PROOF ONE, unchanged: the spawn secret, loopback only.
     const LAUNCHER_SECRET = process.env.GUANO_LAUNCHER_SECRET
     if (!LAUNCHER_SECRET || LAUNCHER_SECRET.length < 32) return fail(res, 404, 'not found')
     // `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours
@@ -795,12 +874,13 @@ async function handleAuth(req, res, path) {
     if (!limit.ok) return tooManyRequests(res, limit.retryAfterSeconds, 'authorization requests')
     const body = await readBody(req, MAX_AUTH_BODY)
     let name = ''
+    let kind = ''
     try {
-      ;({ name } = JSON.parse(body ?? '{}') ?? {})
+      ;({ name, kind } = JSON.parse(body ?? '{}') ?? {})
     } catch {
       /* a name is a label; a bad body just means the default */
     }
-    const started = startDevice({ name, ip: clientIp(req) })
+    const started = startDevice({ name, kind, ip: clientIp(req) })
     if (started.error) return fail(res, 429, started.error)
     return send(
       res,
@@ -858,13 +938,6 @@ async function handleAuth(req, res, path) {
       } catch {
         /* no policy is a valid answer: grant nothing extra */
       }
-      // The same two onboarding switches the local flow applies, chosen here
-      // in a UI that explains them rather than passed as a CLI flag — which is
-      // also why a remote `connect` needs no --main/--publish.
-      const patch = onboardingPolicy(policy)
-      const agentPolicy = Object.keys(patch).length
-        ? await writeAgentPolicy(patch)
-        : await readAgentPolicy()
       // Check the code BEFORE minting. approveDevice can still answer
       // "expired" or "already used", and the raw token was dropped on that
       // path while a live hashed record stayed in api-tokens.json — counting
@@ -873,7 +946,23 @@ async function handleAuth(req, res, path) {
       const describing = describeDevice(code)
       if (!describing) return fail(res, 409, 'that code has expired or was never issued')
       if (describing.approved) return fail(res, 409, 'that code has already been used')
-      const { token } = await createApiToken(user.id, describing.name || 'guano connect')
+      // The same two onboarding switches the local flow applies, chosen here
+      // in a UI that explains them rather than passed as a CLI flag — which is
+      // also why a remote `connect` needs no --main/--publish. A LAUNCHER
+      // authorization touches none of it: the agent policy governs agents, and
+      // approving the desktop app must not be a way to move those two switches
+      // for the agents already connected to this instance.
+      const forAgent = describing.kind !== 'launcher'
+      const patch = forAgent ? onboardingPolicy(policy) : {}
+      const agentPolicy = Object.keys(patch).length
+        ? await writeAgentPolicy(patch)
+        : await readAgentPolicy()
+      // The kind was fixed when the authorization STARTED and shown on the
+      // consent screen, so it is read back from the record and never from this
+      // request: the human approved one sentence, and this mints that one.
+      const { token } = await createApiToken(user.id, describing.name || 'guano connect', {
+        kind: describing.kind,
+      })
       const granted = approveDevice(code, {
         token,
         email: user.email,
@@ -3414,6 +3503,26 @@ const server = createServer(async (req, res) => {
     // string compare rather than a walk down the whole chain. After the public
     // forms namespace, which stays the first thing read.
     if (path === '/api/health' && req.method === 'GET') return await handleHealth(res)
+    // A launcher token opens the editor and does nothing else. It is already
+    // unreadable as an agent bearer (requestUser parses `guano_` alone), so
+    // without this it would simply 401 as an unknown credential — and the one
+    // thing worth knowing, that the credential is real but at the wrong door,
+    // would be invisible. Named, so the attempt is visible rather than merely
+    // unsuccessful: this is the sentence the MCP server's boot `whoami` prints.
+    //
+    // A SESSION COOKIE WINS when both are present, exactly as it does in
+    // `requestUser` and `isAgentRequest` — the refusal is about a launcher
+    // token used AS the credential, and a caller that already holds a session
+    // is whoever that session says. Health sits above all of it, because the
+    // launcher probes health with no token at all.
+    if (
+      path.startsWith('/api/') &&
+      path !== '/api/auth/launcher-session' &&
+      (req.headers.authorization ?? '').startsWith(`Bearer ${TOKEN_KINDS.launcher}`) &&
+      !sessionUser(req)
+    ) {
+      return fail(res, 403, 'a launcher token cannot drive the API; it only opens the editor')
+    }
     // CSRF defense-in-depth (on top of the SameSite=Lax cookie): every
     // mutating API request must be same-origin. Non-browser clients send no
     // Origin header and pass — the CI bearer publish keeps working.

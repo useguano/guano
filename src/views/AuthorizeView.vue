@@ -11,7 +11,12 @@ import LoadingUI from '@/components/ui/LoadingUI.vue'
 const route = useRoute()
 
 const code = ref(String(route.query.code ?? '').toUpperCase())
-const request = ref<{ userCode: string; name: string; expiresAt: number } | null>(null)
+const request = ref<{
+  userCode: string
+  name: string
+  kind?: 'agent' | 'launcher'
+  expiresAt: number
+} | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const busy = ref(false)
@@ -30,6 +35,8 @@ const SWITCHES = [
     hint: 'It can put the project on the live origin itself.',
   },
 ]
+
+const forLauncher = computed(() => request.value?.kind === 'launcher')
 
 const normalized = computed(() => code.value.trim().toUpperCase())
 
@@ -89,7 +96,7 @@ onMounted(look)
       <p class="text-xs text-muted-foreground">
         {{
           done === 'approved'
-            ? 'Go back to the terminal — it has the token and is finishing up. You can close this tab.'
+            ? 'Go back to the app that asked — it has the token and is finishing up. You can close this tab.'
             : 'Nothing was granted. You can close this tab.'
         }}
       </p>
@@ -102,7 +109,11 @@ onMounted(look)
         <h1 class="text-xl font-semibold text-foreground">Authorize a client</h1>
         <p v-if="request" class="text-sm text-muted-foreground">
           <span class="font-medium text-foreground">{{ request.name }}</span>
-          is asking to connect to this project.
+          {{
+            forLauncher
+              ? 'is asking for builder access to this project.'
+              : 'is asking to connect to this project.'
+          }}
         </p>
         <p v-else class="text-sm text-muted-foreground">
           Enter the code shown in your terminal.
@@ -121,12 +132,16 @@ onMounted(look)
         <p class="mb-1 text-center font-mono text-sm tracking-widest text-muted-foreground">
           {{ request.userCode }}
         </p>
-        <p class="mb-2 text-xs text-muted-foreground">
+        <p v-if="forLauncher" class="mb-2 text-xs text-muted-foreground">
+          It will open this project's editor on that Mac, with everything your own account can do —
+          structure, settings, publishing. Revoke it any time in Settings → MCP.
+        </p>
+        <p v-else class="mb-2 text-xs text-muted-foreground">
           It will be able to read and edit this project's content through the API. Choose what else
           it may do — you can change these later in Settings → MCP.
         </p>
         <div
-          v-for="s in SWITCHES"
+          v-for="s in forLauncher ? [] : SWITCHES"
           :key="s.id"
           class="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2.5"
         >
@@ -149,7 +164,7 @@ onMounted(look)
       </ButtonUI>
       <template v-else>
         <ButtonUI class="mt-4" variant="default" :disabled="busy" @click="send('approve')">
-          {{ busy ? 'Connecting…' : 'Approve' }}
+          {{ busy ? 'Connecting…' : forLauncher ? 'Grant builder access' : 'Approve' }}
         </ButtonUI>
         <ButtonUI variant="ghost" :disabled="busy" @click="send('deny')">Deny</ButtonUI>
       </template>
