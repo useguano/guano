@@ -40,7 +40,7 @@ export const tooltip: Directive<TooltipEl, TooltipValue> = {
         state.timer = window.setTimeout(() => {
           state.timer = null
           if (!state.text || state.suppressed) return
-          el.setAttribute('aria-describedby', 'guano-tooltip')
+          el.setAttribute('aria-describedby', 'superbird-tooltip')
           show(el, state.text, state.side)
         }, SHOW_DELAY)
       },

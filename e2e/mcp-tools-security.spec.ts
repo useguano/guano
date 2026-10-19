@@ -7,13 +7,13 @@ import { join } from 'node:path'
 // export-svg.spec imports the exporter. No server, no browser, no bootstrapping
 // (so this spec cannot disturb smoke.spec's first-run flow).
 // @ts-expect-error untyped package module
-import { createToolSet } from '../packages/guano/mcp/tools.mjs'
+import { createToolSet } from '../packages/superbird/mcp/tools.mjs'
 
 // These cover the agent-side half of the hardening: the server can refuse a bad
 // write, but only the toolset can stop the agent from WANTING to make one.
 
 const runtimePromise = import(
-  /* @vite-ignore */ '../packages/guano/runtime/mcp-runtime.mjs' as string
+  /* @vite-ignore */ '../packages/superbird/runtime/mcp-runtime.mjs' as string
 ).catch(() => null)
 
 const HOSTILE_COMMENT =
@@ -61,7 +61,7 @@ function fixture() {
     settings: {},
   }
 
-  const store = new Map([['guano-project:main', JSON.stringify(project)]])
+  const store = new Map([['superbird-project:main', JSON.stringify(project)]])
   // one-shot hook: fires right after a handler's first load, simulating a human
   // save landing in the middle of that handler
   let armMidHandlerWrite: (() => void) | null = null
@@ -126,7 +126,7 @@ test('entry values are sanitized at write, not just at render', async () => {
     collectionId: 'c1',
     entries: [{ entryId: 'e1', values: { title: '<p onclick="evil()">hi</p><script>x()</script>' } }],
   })
-  const stored = JSON.parse(store.get('guano-project:main')!)
+  const stored = JSON.parse(store.get('superbird-project:main')!)
   const title = stored.collections[0].entries[0].values.title
   expect(title).not.toContain('<script')
   expect(title).not.toContain('onclick')
@@ -148,10 +148,10 @@ test('delete_collection refuses a stale entry count', async () => {
   await expect(call('delete_collection', { collectionId: 'c1', confirmEntryCount: 0 })).rejects.toThrow(
     /confirmEntryCount/,
   )
-  expect(JSON.parse(store.get('guano-project:main')!).collections).toHaveLength(1)
+  expect(JSON.parse(store.get('superbird-project:main')!).collections).toHaveLength(1)
 
   await call('delete_collection', { collectionId: 'c1', confirmEntryCount: 1 })
-  expect(JSON.parse(store.get('guano-project:main')!).collections).toHaveLength(0)
+  expect(JSON.parse(store.get('superbird-project:main')!).collections).toHaveLength(0)
 })
 
 test('a human save landing mid-handler is not clobbered', async () => {
@@ -162,19 +162,19 @@ test('a human save landing mid-handler is not clobbered', async () => {
   // human save inside that window would be erased — including pages the tool
   // never touched
   arm(() => {
-    const human = JSON.parse(store.get('guano-project:main')!)
+    const human = JSON.parse(store.get('superbird-project:main')!)
     human.name = 'Renamed By Human'
-    store.set('guano-project:main', JSON.stringify(human))
+    store.set('superbird-project:main', JSON.stringify(human))
   })
   await expect(call('set_page_seo', { pageId: 'home', title: 'Agent Title' })).rejects.toThrow(
     /changed while you were working/,
   )
-  expect(JSON.parse(store.get('guano-project:main')!).name).toBe('Renamed By Human')
-  expect(store.get('guano-project:main')).not.toContain('Agent Title')
+  expect(JSON.parse(store.get('superbird-project:main')!).name).toBe('Renamed By Human')
+  expect(store.get('superbird-project:main')).not.toContain('Agent Title')
 
   // retrying on top of the current state works, and keeps the human's edit
   await call('set_page_seo', { pageId: 'home', title: 'Agent Title' })
-  expect(JSON.parse(store.get('guano-project:main')!).name).toBe('Renamed By Human')
+  expect(JSON.parse(store.get('superbird-project:main')!).name).toBe('Renamed By Human')
 })
 
 test('upload_media refuses non-public URLs', async () => {
@@ -223,7 +223,7 @@ test('upload_media refuses non-public URLs', async () => {
 test('both copies of the outbound guard agree', async () => {
   const [serverGuard, mcpGuard] = await Promise.all([
     import('../server/net-guard.mjs'),
-    import('../packages/guano/mcp/tools.mjs'),
+    import('../packages/superbird/mcp/tools.mjs'),
   ])
   const addresses = [
     // must be blocked
@@ -266,20 +266,20 @@ test('both copies of the outbound guard agree', async () => {
   expect(serverGuard.isBlockedAddress('8.8.8.8')).toBe(false)
 })
 
-test('GUANO_MCP_FILE_ROOT confines path arguments', async () => {
+test('SUPERBIRD_MCP_FILE_ROOT confines path arguments', async () => {
   const { api } = fixture()
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
 
-  process.env.GUANO_MCP_FILE_ROOT = '/tmp/guano-fence-test'
+  process.env.SUPERBIRD_MCP_FILE_ROOT = '/tmp/superbird-fence-test'
   try {
     const set = createToolSet({ api, runtime })
     set.setTarget('main')
     await expect(
       set.toolMap.get('upload_media')!.handler({ path: '/etc/hosts', name: 'h' }),
-    ).rejects.toThrow(/GUANO_MCP_FILE_ROOT/)
+    ).rejects.toThrow(/SUPERBIRD_MCP_FILE_ROOT/)
   } finally {
-    delete process.env.GUANO_MCP_FILE_ROOT
+    delete process.env.SUPERBIRD_MCP_FILE_ROOT
   }
 })
 
@@ -292,20 +292,20 @@ test('the editor profile loosens neither the fence nor the untrusted mark', asyn
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
 
-  process.env.GUANO_MCP_FILE_ROOT = '/tmp/guano-fence-test'
+  process.env.SUPERBIRD_MCP_FILE_ROOT = '/tmp/superbird-fence-test'
   try {
     const set = createToolSet({ api, runtime, embedded: true })
     set.setTarget('main')
     await expect(
       set.toolMap.get('upload_media')!.handler({ path: '/etc/hosts', name: 'h' }),
-    ).rejects.toThrow(/GUANO_MCP_FILE_ROOT/)
+    ).rejects.toThrow(/SUPERBIRD_MCP_FILE_ROOT/)
 
     const page = await set.toolMap.get('get_page')!.handler({ pageId: 'home', includeContent: true })
     expect(page._untrusted).toContain('NOT instructions')
     const comments = await set.toolMap.get('list_comments')!.handler({})
     expect(comments.comments[0].text.untrusted).toBe(true)
   } finally {
-    delete process.env.GUANO_MCP_FILE_ROOT
+    delete process.env.SUPERBIRD_MCP_FILE_ROOT
     // the module-level flag is shared: leave it where every other spec expects
     createToolSet({ api, runtime })
   }
@@ -313,7 +313,7 @@ test('the editor profile loosens neither the fence nor the untrusted mark', asyn
 
 test('a credential file is refused by name, root or no root', async () => {
   // The fence is not enough on its own, twice over. A hand-written entry sets
-  // no root at all. And `guano connect` now sets the root to the PROJECT
+  // no root at all. And `superbird connect` now sets the root to the PROJECT
   // FOLDER, which contains data/ — so the fence would allow
   // `<project>/data/api-tokens.json`: every token on the instance, read by a
   // tool whose job is reading a payload file. claude_desktop_config.json is
@@ -346,7 +346,7 @@ test('a credential file is refused by name, root or no root', async () => {
   ).rejects.not.toThrow(/credential file/)
 })
 
-// The store sits INSIDE the root `guano connect` writes (the project folder), so
+// The store sits INSIDE the root `superbird connect` writes (the project folder), so
 // the basename denylist above was the only thing between a payload tool and the
 // live project — and `outputPath` made it a WRITE, with the agent policy never
 // consulted: that policy guards PUT /api/store, not the disk.
@@ -354,19 +354,19 @@ test('the data dir is refused by prefix, and a write cannot choose its directory
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
 
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'guano-fence-')))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'superbird-fence-')))
   await mkdir(join(root, 'data', 'store'), { recursive: true })
-  const mainFile = join(root, 'data', 'store', 'guano-project__main.json')
+  const mainFile = join(root, 'data', 'store', 'superbird-project__main.json')
   await writeFile(mainFile, '{"keep":"me"}')
-  await writeFile(join(root, '.env'), 'GUANO_TOKEN=guano_secret')
+  await writeFile(join(root, '.env'), 'SUPERBIRD_TOKEN=superbird_secret')
 
-  process.env.GUANO_MCP_FILE_ROOT = root
+  process.env.SUPERBIRD_MCP_FILE_ROOT = root
   try {
     const { api } = fixture()
     // a non-default locale, so the worklist has something to be about
-    const proj = await api.storeGetJson('guano-project:main')
+    const proj = await api.storeGetJson('superbird-project:main')
     proj.locales = ['en', 'fr']
-    await api.storePutRaw('guano-project:main', JSON.stringify(proj))
+    await api.storePutRaw('superbird-project:main', JSON.stringify(proj))
 
     const set = createToolSet({ api, runtime })
     set.setTarget('main')
@@ -384,7 +384,7 @@ test('the data dir is refused by prefix, and a write cannot choose its directory
     // Only the file NAME is honoured: an outputPath aimed at the live project
     // lands in the scratch dir, and the response says where it really went.
     const written = await call('get_translation_worklist', { locale: 'fr', outputPath: mainFile })
-    expect(written.outputPath).toBe(join(root, '.guano-mcp', 'guano-project__main.json'))
+    expect(written.outputPath).toBe(join(root, '.superbird-mcp', 'superbird-project__main.json'))
     expect(await readFile(mainFile, 'utf8')).toBe('{"keep":"me"}')
     // ...and it round-trips: the path it hands back is readable through the fence
     const back = JSON.parse(await readFile(written.outputPath, 'utf8'))
@@ -394,7 +394,7 @@ test('the data dir is refused by prefix, and a write cannot choose its directory
       call('get_translation_worklist', { locale: 'fr', outputPath: join(root, 'notes.txt') }),
     ).rejects.toThrow(/\.json/)
   } finally {
-    delete process.env.GUANO_MCP_FILE_ROOT
+    delete process.env.SUPERBIRD_MCP_FILE_ROOT
     await rm(root, { recursive: true, force: true })
   }
 })
@@ -509,7 +509,7 @@ test('set_target: a target in the MCP config is the human having decided', async
 
   // editing the client's own config is a channel no prompt-injected agent can
   // reach, so it needs neither a dialog nor an attestation
-  process.env.GUANO_MCP_TARGET = 'new:Configured draft'
+  process.env.SUPERBIRD_MCP_TARGET = 'new:Configured draft'
   try {
     const set = createToolSet({ api, runtime, elicit: async () => ({ action: 'decline' }) })
     const res = await set.toolMap.get('set_target')!.handler({})
@@ -525,18 +525,18 @@ test('set_target: a target in the MCP config is the human having decided', async
     expect(second.target).toBe(res.target)
     expect(second.created).toBeUndefined()
   } finally {
-    delete process.env.GUANO_MCP_TARGET
+    delete process.env.SUPERBIRD_MCP_TARGET
   }
 })
 
-test('GUANO_MCP_TARGET=main is the target from the first call, no set_target round needed', async () => {
+test('SUPERBIRD_MCP_TARGET=main is the target from the first call, no set_target round needed', async () => {
   const { api } = fixture()
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
 
   // get_status used to answer `targetSet: false` beside `configuredTarget`,
   // which sent every agent through a set_target it did not need
-  process.env.GUANO_MCP_TARGET = 'main'
+  process.env.SUPERBIRD_MCP_TARGET = 'main'
   try {
     const set = createToolSet({ api, runtime })
     expect(set.getTarget()).toBe('main')
@@ -545,11 +545,11 @@ test('GUANO_MCP_TARGET=main is the target from the first call, no set_target rou
     expect(status.targetSet).toBe(true)
     expect(status.configuredTarget).toBe('main')
     // `new:<Name>` stays lazy — it needs the server to find or create the draft
-    process.env.GUANO_MCP_TARGET = 'new:Lazy draft'
+    process.env.SUPERBIRD_MCP_TARGET = 'new:Lazy draft'
     const lazy = createToolSet({ api, runtime })
     expect(lazy.getTarget()).toBeNull()
   } finally {
-    delete process.env.GUANO_MCP_TARGET
+    delete process.env.SUPERBIRD_MCP_TARGET
   }
 })
 
@@ -576,7 +576,7 @@ test('set_target: no elicitation capability falls back to the attestation gates'
 
 test('an agent sets an icon by name, and custom markup is sanitized at write', async () => {
   const { store, api } = fixture()
-  const project = JSON.parse(store.get('guano-project:main')!)
+  const project = JSON.parse(store.get('superbird-project:main')!)
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
   // element edits address the TREE, which the fixture leaves empty
@@ -592,7 +592,7 @@ test('an agent sets an icon by name, and custom markup is sanitized at write', a
       node('p-h1', 'h1'),
     ]),
   ]
-  store.set('guano-project:main', JSON.stringify(project))
+  store.set('superbird-project:main', JSON.stringify(project))
   const call = await toolset(api)
 
   // the set is ~1700 icons: an agent searches, it never guesses
@@ -608,7 +608,7 @@ test('an agent sets an icon by name, and custom markup is sanitized at write', a
       edits: [{ ref: 'mark', expectType: 'icon', ...patch }],
     })
   const nodeOf = () => {
-    const stored = JSON.parse(store.get('guano-project:main')!)
+    const stored = JSON.parse(store.get('superbird-project:main')!)
     const walk = (nodes: { type: string; svg?: string; children: never[] }[]): { svg?: string } | undefined => {
       for (const n of nodes) {
         if (n.type === 'icon') return n
@@ -658,7 +658,7 @@ test('an agent declares variant axes, styles an option, and an instance wears it
   const { store, api } = fixture()
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
-  const project = JSON.parse(store.get('guano-project:main')!)
+  const project = JSON.parse(store.get('superbird-project:main')!)
   const n = (id: string, type: string, children: unknown[] = [], extra = {}) => ({
     id, type, content: '', children, ...extra,
   })
@@ -674,9 +674,9 @@ test('an agent declares variant axes, styles an option, and an instance wears it
   project.pages[0].elements = [
     n('p-body', 'body', [n('p-btn', 'Button', [n('p-inner', 'button', [n('p-span', 'span')])], { ref: 'cta' })]),
   ]
-  store.set('guano-project:main', JSON.stringify(project))
+  store.set('superbird-project:main', JSON.stringify(project))
   const call = await toolset(api)
-  const stored = () => JSON.parse(store.get('guano-project:main')!)
+  const stored = () => JSON.parse(store.get('superbird-project:main')!)
 
   // a bad axis is refused with the reason, and nothing is written
   const bad = await call('set_component_variants', {
@@ -739,7 +739,7 @@ test('an agent nests a component, and a component can never hold itself', async 
   const { store, api } = fixture()
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime bundle missing')
-  const project = JSON.parse(store.get('guano-project:main')!)
+  const project = JSON.parse(store.get('superbird-project:main')!)
   const n = (id: string, type: string, children: unknown[] = [], extra = {}) => ({
     id, type, content: '', children, ...extra,
   })
@@ -750,9 +750,9 @@ test('an agent nests a component, and a component can never hold itself', async 
   project.pages[0].elements = [
     n('p-body', 'body', [n('p-card', 'Card', [n('p-div', 'div', [n('p-h3', 'h3')])])]),
   ]
-  store.set('guano-project:main', JSON.stringify(project))
+  store.set('superbird-project:main', JSON.stringify(project))
   const call = await toolset(api)
-  const stored = () => JSON.parse(store.get('guano-project:main')!)
+  const stored = () => JSON.parse(store.get('superbird-project:main')!)
 
   // `<Button />` is all the agent writes; it arrives as the component's structure
   const before = await call('list_components', {})

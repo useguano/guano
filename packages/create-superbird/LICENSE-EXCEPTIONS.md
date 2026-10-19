@@ -1,14 +1,14 @@
 # Licensing
 
-Guano is licensed under the **GNU Affero General Public License v3.0**
+Superbird is licensed under the **GNU Affero General Public License v3.0**
 (AGPL-3.0-only) — see [LICENSE](LICENSE) — with the exceptions below.
 
 ## Your exported sites are yours
 
-The static sites Guano exports are **your content, not ours**. The AGPL applies
-to Guano itself (the editor, the server, the MCP tools), never to the HTML,
+The static sites Superbird exports are **your content, not ours**. The AGPL applies
+to Superbird itself (the editor, the server, the MCP tools), never to the HTML,
 CSS, media, or data it produces for you. No license obligation of any kind
-attaches to a site you build and publish with Guano.
+attaches to a site you build and publish with Superbird.
 
 ## The embedded runtimes are MIT
 
@@ -49,8 +49,8 @@ SOFTWARE.
 
 ## In plain terms
 
-- **Self-hosting Guano** (for yourself or for clients): no obligations.
-- **Publishing sites built with Guano**: no obligations, ever.
-- **Modifying Guano and offering it to others over a network** (e.g. a hosted
-  Guano service): you must make your modified source available to those users,
+- **Self-hosting Superbird** (for yourself or for clients): no obligations.
+- **Publishing sites built with Superbird**: no obligations, ever.
+- **Modifying Superbird and offering it to others over a network** (e.g. a hosted
+  Superbird service): you must make your modified source available to those users,
   per the AGPL.

@@ -56,7 +56,7 @@ async function pickClasses(page: Page) {
  *  is a sidecar file now, so this reads its global rather than the page source */
 const publishedEffectClasses = (page: Page) =>
   page.evaluate(() => {
-    const man = (window as unknown as { __guanoFx?: { fx?: Record<string, string> } }).__guanoFx
+    const man = (window as unknown as { __superbirdFx?: { fx?: Record<string, string> } }).__superbirdFx
     return Object.values(man?.fx ?? {}).join(' ')
   })
 
@@ -266,8 +266,8 @@ test('a click is aimed with a verb, never an engine', async ({ page }) => {
   // both halves of the one effect landed on the body, aimed the same way
   const landed = await page.evaluate(() => {
     const man = (window as unknown as {
-      __guanoFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
-    }).__guanoFx ?? {}
+      __superbirdFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
+    }).__superbirdFx ?? {}
     const entry = man.els?.[Number(document.body.getAttribute('data-fx'))] ?? {}
     return { classes: entry.c ?? [], motion: entry.m ?? [] }
   })
@@ -311,8 +311,8 @@ test('one effect wears both engines, and binds as one action', async ({ page }) 
   // halves fired at different moments would simply be broken
   const landed = await page.evaluate(() => {
     const man = (window as unknown as {
-      __guanoFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
-    }).__guanoFx ?? {}
+      __superbirdFx?: { els?: { c?: unknown[]; m?: unknown[] }[] }
+    }).__superbirdFx ?? {}
     const entry = man.els?.[Number(document.body.getAttribute('data-fx'))] ?? {}
     return { classes: entry.c ?? [], motion: entry.m ?? [] }
   })
@@ -344,7 +344,7 @@ test('an effect that predates the pairing can still gain the other engine', asyn
   // and the four fixture elements already using it gained the timeline too —
   // a half that applied only to the next placement would be the silent no-op
   const moved = await page.evaluate(() => {
-    const man = (window as unknown as { __guanoFx?: { els?: { m?: unknown[] }[] } }).__guanoFx ?? {}
+    const man = (window as unknown as { __superbirdFx?: { els?: { m?: unknown[] }[] } }).__superbirdFx ?? {}
     return (man.els ?? []).filter((e) => e.m?.length).length
   })
   expect(moved).toBeGreaterThan(0)

@@ -691,7 +691,7 @@ test.describe('a modal interaction', () => {
 
   test('opening locks the page, traps focus, and closing gives all of it back', async ({ page }) => {
     await page.goto('/')
-    const htmlAttr = () => page.evaluate(() => document.documentElement.hasAttribute('data-guano-modal'))
+    const htmlAttr = () => page.evaluate(() => document.documentElement.hasAttribute('data-superbird-modal'))
     const scrollY = () => page.evaluate(() => window.scrollY)
 
     expect(await htmlAttr()).toBe(false)

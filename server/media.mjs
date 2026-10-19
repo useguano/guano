@@ -603,7 +603,7 @@ async function scanUsage(id) {
   let files = []
   try {
     files = (await readdir(STORE_DIR)).filter(
-      (f) => f.startsWith('guano-project__') && f.endsWith('.json'),
+      (f) => f.startsWith('superbird-project__') && f.endsWith('.json'),
     )
   } catch {
     /* no store yet */
@@ -613,7 +613,7 @@ async function scanUsage(id) {
       const text = await readFile(join(STORE_DIR, file), 'utf8')
       const count = text.split(needle).length - 1
       if (count > 0) {
-        branches.push({ branchId: file.slice('guano-project__'.length, -'.json'.length), count })
+        branches.push({ branchId: file.slice('superbird-project__'.length, -'.json'.length), count })
         total += count
       }
     } catch {
@@ -625,7 +625,7 @@ async function scanUsage(id) {
 
 // ---------- 🔒 /api/media ----------
 
-/** `user` is resolved by the caller (session cookie OR `guano_` bearer token —
+/** `user` is resolved by the caller (session cookie OR `superbird_` bearer token —
  *  index.mjs passes requestUser) so the MCP server can reach the library too */
 export async function handleMedia(req, res, path, query, user) {
   if (!user) return fail(res, 401, 'unauthorized')

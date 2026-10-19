@@ -92,7 +92,7 @@ test.describe('the effects manifest ships as a sidecar', () => {
   test('the html carries a reference, never the manifest', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
     // the island it replaced is gone, and so is every attribute it replaced
-    expect(html).not.toContain('application/json" id="guano-fx"')
+    expect(html).not.toContain('application/json" id="superbird-fx"')
     expect(html).not.toContain('"els":')
     for (const dead of ['data-int=', 'data-anim=', 'data-tgt=', 'data-atgt=']) {
       expect(html).not.toContain(dead)
@@ -116,7 +116,7 @@ test.describe('the effects manifest ships as a sidecar', () => {
   test('the file exists and assigns the global the runtimes read', async () => {
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
     const body = await readFile(join(SITE, SIDECAR.exec(html)![1]!), 'utf8')
-    expect(body.startsWith('window.__guanoFx=')).toBe(true)
+    expect(body.startsWith('window.__superbirdFx=')).toBe(true)
     const man = JSON.parse(body.slice(body.indexOf('=') + 1))
     expect(man.fx).toEqual({ s0: 'flex' })
     expect(man.rm).toEqual({ s0: 'hidden' })

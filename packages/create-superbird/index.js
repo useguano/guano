@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// @useguano/create: scaffold a project dir that runs Guano via npm scripts,
+// @superbird-app/create: scaffold a project dir that runs Superbird via npm scripts,
 // install it, and tell you how to reach it. Zero dependencies — prompts with
 // node:readline.
 //
-//   npm create @useguano [dir] [--no-install] [--connect [--main] [--publish]
+//   npm create @superbird-app [dir] [--no-install] [--connect [--main] [--publish]
 //                        [--config <claude config path>]]
 //
 // THIS IS THE SERVER INSTALLER. Decided 2026-10-18 with launcher-only
-// building: a VPS runs this, and the Build surface is reached from Guano
+// building: a VPS runs this, and the Build surface is reached from Superbird
 // Launcher on a Mac over the approval that instance grants it. So the Claude
 // questions are no longer ASKED — a server has no Claude on it, the editor's
-// own AI panel is Guano's main integration and needs no wiring up, and a
+// own AI panel is Superbird's main integration and needs no wiring up, and a
 // prompt that every server install answers "no" to is a prompt that teaches
 // people to stop reading prompts.
 //
@@ -55,8 +55,8 @@ if (!dir) {
 // Connect Claude? NOT ASKED any more — opt in with `--connect`.
 //
 // This command is how a server is installed, and a server has no Claude on
-// it: the editor's own AI panel is Guano's main integration, and the Build
-// surface is reached from Guano Launcher over the approval the instance
+// it: the editor's own AI panel is Superbird's main integration, and the Build
+// surface is reached from Superbird Launcher over the approval the instance
 // grants it. A question every server install answers "no" to is a question
 // people stop reading. `--no-connect` is still accepted and still means no,
 // so an existing script keeps working.
@@ -118,7 +118,7 @@ if ((await readdir(target)).length) {
  */
 async function pickPort(first = 4174, tries = 40) {
   // One port per site: the preview is served by the same server under
-  // /_guano/preview, so there is no second port to keep free above it.
+  // /_superbird/preview, so there is no second port to keep free above it.
   for (let port = first; port < first + tries; port += 1) {
     if (await free(port)) return port
   }
@@ -145,20 +145,20 @@ const files = {
         version: '0.0.0',
         type: 'module',
         scripts: {
-          dev: 'guano dev',
-          start: 'guano start',
-          build: 'guano build',
-          connect: 'guano connect',
+          dev: 'superbird dev',
+          start: 'superbird start',
+          build: 'superbird build',
+          connect: 'superbird connect',
         },
         dependencies: {
-          '@useguano/guano': '^0.1.0',
+          '@superbird-app/superbird': '^0.1.0',
         },
       },
       null,
       2,
     ) + '\n',
 
-  'guano.config.js': `// Guano reads its configuration from environment variables today
+  'superbird.config.js': `// Superbird reads its configuration from environment variables today
 // (see .env.example). This file is reserved for future options.
 export default {}
 `,
@@ -166,7 +166,7 @@ export default {}
   // A real .env, not just the example: the port is this project's identity on
   // the machine, and leaving it to the 4174 default is what makes two projects
   // fight over one address.
-  '.env': `# This project's own port. Keep it — two Guano sites on one machine
+  '.env': `# This project's own port. Keep it — two Superbird sites on one machine
 # must not share one, or whichever starts first answers for both and the
 # other's MCP token is refused with a 401.
 PORT=${port}
@@ -175,11 +175,11 @@ PORT=${port}
 # on the setup screen, so nobody is asked to name the same thing twice. Only
 # read before the first admin account exists; edit the name in the editor
 # after that.
-GUANO_PROJECT_NAME=${displayName}
+SUPERBIRD_PROJECT_NAME=${displayName}
 `,
 
   '.env.example': `PORT=${port}
-# GUANO_DATA_DIR=./data     # users, media, drafts, the published site — back this up
+# SUPERBIRD_DATA_DIR=./data     # users, media, drafts, the published site — back this up
 # COOKIE_SECURE=1           # set 0 only for plain-HTTP LAN setups
 # PUBLISH_TOKEN=            # optional: token for CI publishes
 # MEDIA_QUOTA=2147483648    # media library ceiling in bytes
@@ -193,7 +193,7 @@ dist-site/
 
   'README.md': `# ${name}
 
-A [Guano](https://www.npmjs.com/package/@useguano/guano) site.
+A [Superbird](https://www.npmjs.com/package/@superbird-app/superbird) site.
 
 \`\`\`sh
 npm run start
@@ -205,7 +205,7 @@ code**, which the server prints in its own log the first time it starts. It is
 what stands in for being at the machine — without it, the first stranger to
 reach a fresh instance would become its admin.
 
-**Then add this server in Guano Launcher** (Home → Servers → Add a server…)
+**Then add this server in Superbird Launcher** (Home → Servers → Add a server…)
 and build from there. Pages, components, settings and publishing live in the
 Mac app; what this instance serves is the site, its forms, and the content
 view for anyone you invite. Approving the app once in your browser is what
@@ -217,16 +217,16 @@ builder needs a Mac**, and once a project is on a server there is no offline
 building.
 
 Your published site is served at http://localhost:${port}/, and this project
-runs on port ${port} (set in \`.env\`). Each Guano site on a machine needs its
+runs on port ${port} (set in \`.env\`). Each Superbird site on a machine needs its
 own, so two of them never answer for one address.
 
 - \`npm run dev\` — the same server with dev logging
 - \`npm run start\` — production server (\`NODE_ENV=production\`)
 - \`npm run build\` — export the site as static files to \`./dist-site\`
-- \`npm run connect\` — point Claude Code or Claude Desktop at this site over MCP. Not needed for the editor's own AI panel, which is Guano's main integration and needs no wiring up. (Writes Claude Code's \`~/.claude.json\` and Claude Desktop's config; quit Desktop first; \`--main\` / \`--publish\` grant the agent permissions, or it asks.)
+- \`npm run connect\` — point Claude Code or Claude Desktop at this site over MCP. Not needed for the editor's own AI panel, which is Superbird's main integration and needs no wiring up. (Writes Claude Code's \`~/.claude.json\` and Claude Desktop's config; quit Desktop first; \`--main\` / \`--publish\` grant the agent permissions, or it asks.)
 - everything lives in \`./data\` — **backing up = copying that directory**
 
-See the @useguano/guano package README for deploy notes and environment variables.
+See the @superbird-app/superbird package README for deploy notes and environment variables.
 `,
 }
 
@@ -237,7 +237,7 @@ console.log(`Scaffolded ${name} in ${target}`)
 
 let installed = false
 if (install) {
-  console.log('Installing guano…')
+  console.log('Installing superbird…')
   // npm itself (not `npx`/the create shim) so a failure here is npm's own
   // message; a non-zero exit is reported and the next steps include install.
   const r = spawnSync('npm', ['install'], { cwd: target, stdio: 'inherit', shell: process.platform === 'win32' })
@@ -246,23 +246,23 @@ if (install) {
 }
 
 // ---- connect Claude, through the installed package ----
-// GUANO_CREATE_LOCAL_PKG is a dev-only escape hatch: with --no-install there
-// is no node_modules, so a repo checkout names its own packages/guano here.
+// SUPERBIRD_CREATE_LOCAL_PKG is a dev-only escape hatch: with --no-install there
+// is no node_modules, so a repo checkout names its own packages/superbird here.
 let connected = false
 if (connect) {
-  const pkgDir = existsSync(join(target, 'node_modules', '@useguano', 'guano'))
-    ? join(target, 'node_modules', '@useguano', 'guano')
-    : process.env.GUANO_CREATE_LOCAL_PKG
+  const pkgDir = existsSync(join(target, 'node_modules', '@superbird-app', 'superbird'))
+    ? join(target, 'node_modules', '@superbird-app', 'superbird')
+    : process.env.SUPERBIRD_CREATE_LOCAL_PKG
   if (!pkgDir) {
-    console.error('\nClaude not connected: guano is not installed yet — run `npm run connect` inside the project later.')
+    console.error('\nClaude not connected: superbird is not installed yet — run `npm run connect` inside the project later.')
   } else {
     try {
       // the package resolves its data dir from this env at import time
       const dataDir = join(target, 'data')
       await mkdir(dataDir, { recursive: true, mode: 0o700 })
-      process.env.GUANO_DATA_DIR = dataDir
-      // The port we just picked and wrote into .env. `bin/guano.js` loads that
-      // file for a CLI `guano connect`, but this call imports connect directly
+      process.env.SUPERBIRD_DATA_DIR = dataDir
+      // The port we just picked and wrote into .env. `bin/superbird.js` loads that
+      // file for a CLI `superbird connect`, but this call imports connect directly
       // — so without this it saw no PORT, fell back to the 4174 default and
       // baked `http://localhost:4174` into the entry of a project whose .env
       // says 4180. Every scaffolded project claimed one address, and whichever
@@ -300,7 +300,7 @@ prints in its own log the first time it starts — look for "the form asks for
 this code". It is what stands in for being at the machine: without it, the
 first stranger to reach a fresh instance would become its admin.
 
-Then add this server in Guano Launcher (Home → Servers → Add a server…) and
+Then add this server in Superbird Launcher (Home → Servers → Add a server…) and
 build from there. Pages, components, settings and publishing live in the app;
 this instance serves the site, its forms, and the content view for anyone you
 invite.

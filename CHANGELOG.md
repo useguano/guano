@@ -62,7 +62,7 @@ Everything below came out of one agent session building a site over MCP.
   the cookie in the same response, so an agent can look at its own preview.
 - `get_page {elements: "refs"}` ignored `includeInteractions`; an instance
   part is addressable by its HTML tag (`p`) as well as its type (`paragraph`);
-  a `count` track no longer needs a placeholder `to`; `GUANO_MCP_TARGET` is
+  a `count` track no longer needs a placeholder `to`; `SUPERBIRD_MCP_TARGET` is
   honoured at startup instead of only after a `set_target` round trip.
 
 ### Added
@@ -70,13 +70,13 @@ Everything below came out of one agent session building a site over MCP.
 - **`delay` on an animation binding** (ms), so one "pop-in" serves every beat
   of a sequence instead of a copy per offset. Every trigger but scrub; the
   forward play only. In the binding options and in `bindAnimations`.
-- **Setup-time agent onboarding.** `npm create @useguano` asks whether to
+- **Setup-time agent onboarding.** `npm create @superbird-app` asks whether to
   connect Claude Desktop and the two permissions a connected agent needs —
   edit the live project, publish — and does the connect before the server has
   ever run. The token is pending until `/admin` creates the admin, which binds
   it; the setup form shows the chosen permissions instead of asking again.
-  `guano connect` gained `--main` / `--publish` / `--yes` / `--offline`, works
-  before setup, and sets `GUANO_MCP_TARGET=main` when Main is allowed.
+  `superbird connect` gained `--main` / `--publish` / `--yes` / `--offline`, works
+  before setup, and sets `SUPERBIRD_MCP_TARGET=main` when Main is allowed.
 - `GET /api/health`, reporting `degraded` and `stopping` so a load balancer can
   drain an instance before it closes.
 - Graceful shutdown with separate deadlines for requests and for long work.
@@ -89,6 +89,13 @@ Everything below came out of one agent session building a site over MCP.
 
 ### Changed
 
+- **Renamed Guano to Superbird.** Packages `@superbird-app/superbird` and
+  `@superbird-app/create`, CLI `superbird`, env vars `SUPERBIRD_*`, state dirs
+  `.superbird*`, URL namespace `/_superbird/*`, cookies `superbird_session` /
+  `superbird_preview` / `superbird_site`, token prefixes `superbird_` (agent) and
+  `superbirdl_` (launcher), MCP server key `superbird` with `mcp__superbird__*`
+  tools, and bundle id `com.superbird.launcher` in the desktop launcher. No
+  migration: wipe the data dir and re-add projects in the launcher.
 - The one-way v2 schema migration finishes before the server accepts requests.
 - Dialogs are real dialogs: named, announced, focus moved in and trapped,
   returned on close.

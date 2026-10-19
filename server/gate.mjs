@@ -1,7 +1,7 @@
 // The private-site gate page.
 //
 // Served in front of the live site when Settings → General → Private site is
-// on, until a visitor posts the right password to /_guano/unlock. Its own
+// on, until a visitor posts the right password to /_superbird/unlock. Its own
 // module because it carries the logo and a stylesheet: it is a standalone
 // document with no Tailwind, no bundle and no request budget, so everything it
 // needs is inline.
@@ -91,7 +91,7 @@ export const gatePage = (next, wrong) => `<!doctype html><html lang="en"><head><
   .err svg{width:.875rem;height:.875rem;flex-shrink:0}
 </style></head><body>
 <span class="logo" aria-hidden="true">${LOGO}</span>
-<form method="post" action="/_guano/unlock">
+<form method="post" action="/_superbird/unlock">
   <div class="intro">
     <h1>This site is private</h1>
     <p>Enter the password to continue.</p>

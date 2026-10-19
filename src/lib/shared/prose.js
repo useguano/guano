@@ -21,7 +21,7 @@ export const PROSE_CSS = `@layer components{
 }`
 
 /**
- * `dark:` is CLASS-based in Guano, not `prefers-color-scheme`.
+ * `dark:` is CLASS-based in Superbird, not `prefers-color-scheme`.
  *
  * An interaction can only ADD classes (and evict the base classes they
  * conflict with), which gives a toggle exactly two states — so a media query

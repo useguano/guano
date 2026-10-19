@@ -33,13 +33,13 @@
 // byte-identical is what the app renders from them TODAY.
 //
 // MEDIA is part of the referee. A `/media/<id>` reference is resolved by
-// `export-media.mjs` out of `$GUANO_DATA_DIR/media`, so a referee that read the
+// `export-media.mjs` out of `$SUPERBIRD_DATA_DIR/media`, so a referee that read the
 // live data dir compared against whatever happened to be on this machine: the
 // baseline's 305 extracted files came from one dev store, and `check` on a
 // fresh clone diffed every one of them as missing — a failure that looks
 // exactly like the bug it exists to catch. So `build` (and `media`) snapshots
 // the referenced bytes into `.corpus/media/`, and every export points
-// GUANO_DATA_DIR at `.corpus`. An input that references an id the
+// SUPERBIRD_DATA_DIR at `.corpus`. An input that references an id the
 // snapshot does not hold REFUSES to run rather than exporting a hole.
 
 import { createHash } from 'node:crypto'
@@ -53,12 +53,12 @@ const ROOT = resolve(HERE, '..')
 const CORPUS = join(ROOT, '.corpus')
 const INPUTS = join(CORPUS, 'inputs')
 
-const RUNTIME = join(ROOT, 'packages/guano/runtime/mcp-runtime.mjs')
+const RUNTIME = join(ROOT, 'packages/superbird/runtime/mcp-runtime.mjs')
 
 // where `media` reads from by default: whatever data dir the caller points at,
-// else the repo's own. Captured BEFORE exportInto repoints GUANO_DATA_DIR at
+// else the repo's own. Captured BEFORE exportInto repoints SUPERBIRD_DATA_DIR at
 // the snapshot.
-const DATA_DIR_DEFAULT = process.env.GUANO_DATA_DIR || join(ROOT, 'server', 'data')
+const DATA_DIR_DEFAULT = process.env.SUPERBIRD_DATA_DIR || join(ROOT, 'server', 'data')
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex')
 
@@ -97,11 +97,11 @@ async function storeProjects() {
   for (const file of (await readdir(dir)).sort()) {
     // keys map to filenames by ':' → '__'; merge bases are full project copies
     // and carry the same structure, so they are corpus members in their own right
-    if (!/^guano-(project|base)__.+\.json$/.test(file)) continue
+    if (!/^superbird-(project|base)__.+\.json$/.test(file)) continue
     const raw = JSON.parse(await readFile(join(dir, file), 'utf8'))
     const project = raw?.pages ? raw : raw?.value
     if (!project?.pages?.length) continue
-    out.push([`store-${file.replace(/\.json$/, '').replace(/^guano-/, '')}`, project])
+    out.push([`store-${file.replace(/\.json$/, '').replace(/^superbird-/, '')}`, project])
   }
   return out
 }
@@ -283,8 +283,8 @@ async function requireMedia() {
 async function exportInto(outRoot) {
   await requireMedia()
   // the snapshot IS the data dir for the export — set before the import,
-  // because server/util.mjs reads GUANO_DATA_DIR at module load
-  process.env.GUANO_DATA_DIR = CORPUS
+  // because server/util.mjs reads SUPERBIRD_DATA_DIR at module load
+  process.env.SUPERBIRD_DATA_DIR = CORPUS
   const { exportSite } = await import(join(ROOT, 'server/export.mjs'))
   const rt = await import(RUNTIME)
   // the referee is the MIGRATED input's render: the saved inputs are v1 blobs

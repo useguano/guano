@@ -901,7 +901,7 @@ if (Object.keys(lib).length || siteFx) {
       'wheel',
       (event) => {
         if (event.ctrlKey) return
-        if (document.documentElement.hasAttribute('data-guano-modal')) return
+        if (document.documentElement.hasAttribute('data-superbird-modal')) return
         if (insideNestedScroller(event.target as Element | null, document.body, event.deltaY)) return
         event.preventDefault()
         scroller.wheel(wheelDeltaPx(event.deltaY, event.deltaMode, window.innerHeight))
@@ -985,8 +985,8 @@ if (Object.keys(lib).length || siteFx) {
    * that changed the store, before the frame is painted, which is what keeps
    * the row from flashing its final state on the way in.
    */
-  const previousRescan = (window as unknown as Record<string, unknown>).__guanoFxRescan
-  ;(window as unknown as Record<string, unknown>).__guanoFxRescan = function () {
+  const previousRescan = (window as unknown as Record<string, unknown>).__superbirdFxRescan
+  ;(window as unknown as Record<string, unknown>).__superbirdFxRescan = function () {
     if (typeof previousRescan === 'function') (previousRescan as () => void)()
     staggerCache = new WeakMap()
     prune()

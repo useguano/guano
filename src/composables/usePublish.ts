@@ -14,11 +14,11 @@ import {
 import { downloadBlob, filenameFrom } from '@/lib/download'
 import type { PublishMethod } from '@/types/editor'
 
-export const PUBLISHED_BASELINE_KEY = 'guano-published-baseline'
+export const PUBLISHED_BASELINE_KEY = 'superbird-published-baseline'
 
 const publishedSnapshot = ref<string | null>(null)
 
-export const PUBLISHED_INFO_KEY = 'guano-published-info'
+export const PUBLISHED_INFO_KEY = 'superbird-published-info'
 const publishedInfo = ref<{
   publishedAt: number
   routes: number

@@ -197,7 +197,7 @@ const context = computed(() => {
   const address = node ? (node.ref ? `ref="${node.ref}"` : `data-id="${node.id}"`) : null
   const label = `${page.name}${node ? ` · ${node.ref ? `#${node.ref}` : node.type}` : ''}`
   const prompt =
-    `Context from the Guano editor: the person is looking at the page ` +
+    `Context from the Superbird editor: the person is looking at the page ` +
     `"${page.name}" (pageId: ${page.id}, path: ${page.path})` +
     (node ? `, with the <${node.type}> element ${address} selected.` : '.')
   return { label, prompt }

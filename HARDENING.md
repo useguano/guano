@@ -63,7 +63,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
 - [x] **A-2 Atomic primitives.** `server/util.mjs`: move `swapDir` in **with
       rollback**, add `withStagingDir`, `sweepStaleDirs` and
       `sweepOrphanTmpFiles` (both **age-gated**, default 60 min). Unique tmp name
-      in `writeAtomic` plus an `fsync`, opt out with `GUANO_FSYNC=0`.
+      in `writeAtomic` plus an `fsync`, opt out with `SUPERBIRD_FSYNC=0`.
       The sweep regex must never match `store.pre-v2` — that is the only way back
       from the one-way migration.
 - [x] **A-3 Self-cleaning swaps.** `server/export.mjs` adopts `withStagingDir`;
@@ -114,7 +114,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
 ## Phase 2 — Security boundaries
 
 - [x] **S-1 Store keys.** Known-key allowlist for every role, and an
-      authoritative merge for `guano-branches` so a contributor cannot restamp
+      authoritative merge for `superbird-branches` so a contributor cannot restamp
       `createdBy` and delete other people's drafts. Put the DELETE branch inside
       `withStoreKeyLock` — it is the one store mutation outside it today.
       *Gates: `store-roles`, `store-agent-security`.*
@@ -136,7 +136,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
       *Gate: extend `store-preview` — anonymous access to that port is currently
       unasserted.*
 - [x] **S-5 SSRF.** Replace the string prefix checks in `server/net-guard.mjs`
-      and the deliberate duplicate in `packages/guano/mcp/tools.mjs` with
+      and the deliberate duplicate in `packages/superbird/mcp/tools.mjs` with
       `node:net` BlockList, covering IPv4-mapped, NAT64 and site-local v6.
       *Gate: add the literals to the refusal list in `mcp-tools-security`.*
 - [x] **S-6 Role gates.** Publish-config and site-password become admin-only,
@@ -213,7 +213,7 @@ keepalive flush is impossible anyway, because keepalive caps a request body at
       build, then Playwright. `check:corpus` runs only when `.corpus/inputs` is
       present, since it is local and gitignored.
 - [x] **I-3 Docs.** Fix the package README's claims of a bundled component
-      library, `npm create @useguano` and the two MCP tools that do not exist, and the
+      library, `npm create @superbird-app` and the two MCP tools that do not exist, and the
       seven real tools it omits. Drop "DSL editor" from the package description.
       Document `STORE_QUOTA`, `PORT_STRICT` and everything
       this branch adds. State that HSTS is the proxy's job and that

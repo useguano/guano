@@ -257,7 +257,7 @@ async function connectAuthenticated({ host, port, user, password }) {
 }
 
 /** the name we greet with — never a bare IP, which some servers reject */
-const hostnameFor = (host) => (/^[\d.]+$/.test(host) ? '[127.0.0.1]' : 'guano')
+const hostnameFor = (host) => (/^[\d.]+$/.test(host) ? '[127.0.0.1]' : 'superbird')
 
 /**
  * Connect and authenticate, then hang up. This is "Send test email" without
@@ -292,7 +292,7 @@ export async function sendMail(
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
     'Content-Transfer-Encoding: 8bit',
-    `Message-ID: <${Date.now().toString(36)}.${Math.random().toString(36).slice(2)}@guano>`,
+    `Message-ID: <${Date.now().toString(36)}.${Math.random().toString(36).slice(2)}@superbird>`,
   ]
   const body = prepareBody(text)
 

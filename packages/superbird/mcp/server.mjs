@@ -1,4 +1,4 @@
-// Guano MCP server (stdio). Exposes a running Guano instance to AI agents over
+// Superbird MCP server (stdio). Exposes a running Superbird instance to AI agents over
 // the Model Context Protocol. It talks to the instance through the authed HTTP
 // API (mcp/api.mjs) and reuses the editor's own DSL logic bundled into
 // runtime/mcp-runtime.mjs, so structure edits carry node identity and state
@@ -26,7 +26,7 @@ try {
   runtime = await import(RUNTIME_URL.href)
 } catch {
   console.error(
-    `guano mcp: runtime bundle missing at ${fileURLToPath(RUNTIME_URL)}\n` +
+    `superbird mcp: runtime bundle missing at ${fileURLToPath(RUNTIME_URL)}\n` +
       `Build it with \`npm run build:mcp-runtime\` (it ships prebuilt in the npm package).`,
   )
   process.exit(1)
@@ -35,15 +35,15 @@ try {
 /**
  * ONE entry, several projects.
  *
- * `guano connect` used to write a `guano-<slug>` entry per project. Claude
+ * `superbird connect` used to write a `superbird-<slug>` entry per project. Claude
  * Desktop launches every entry it has at startup, so each project you were not
  * running that minute failed its handshake and raised its own "could not
  * connect" alert — the normal state of a machine with four sites on it. A map
- * in one entry (GUANO_PROJECTS) means one process, one toolset, one tool list,
+ * in one entry (SUPERBIRD_PROJECTS) means one process, one toolset, one tool list,
  * and nothing to fail for a project that is simply not up.
  *
  * With no map configured this falls back to the single-project env client, so a
- * hand-written GUANO_URL/GUANO_TOKEN entry keeps working untouched.
+ * hand-written SUPERBIRD_URL/SUPERBIRD_TOKEN entry keeps working untouched.
  */
 const router = createProjectRouter()
 const multi = router.configured().count > 0
@@ -109,7 +109,7 @@ const routedApi = multi
       // call has resolved one — and `syncProject` runs BEFORE the handler, so
       // on the first call of a session the key was null and the configured
       // target read as ''. In the panel that is the whole session: no
-      // GUANO_MCP_TARGET, so `target` stayed null and the first
+      // SUPERBIRD_MCP_TARGET, so `target` stayed null and the first
       // project-touching call refused with "the editor has not told the agent
       // which branch is open — reopen the AI panel", while the second
       // succeeded. The handbook tells the model to treat that refusal as an
@@ -119,7 +119,7 @@ const routedApi = multi
       // this is, and the target the editor wrote for it, are both in the config
       // file. Reading them there costs no round trip and cannot be wrong.
       projectKey: () => resolvedSlug ?? soleSlug(),
-      // per project, not one GUANO_MCP_TARGET for the whole entry: pinning
+      // per project, not one SUPERBIRD_MCP_TARGET for the whole entry: pinning
       // Main for a landing page must not pin it for a client's live site
       configuredTarget: () => {
         const slug = resolvedSlug ?? soleSlug()
@@ -129,12 +129,12 @@ const routedApi = multi
   : { ...api, base: api.BASE }
 
 /**
- * The ONE signal, written only by `guano connect --config <file> --embedded`:
+ * The ONE signal, written only by `superbird connect --config <file> --embedded`:
  * this process is the editor's own AI panel, not an outside client. It decides
  * the tool profile, the instructions, and what a write with no target says.
  * → docs/mcp.md (Embedded mode)
  */
-const EMBEDDED = process.env.GUANO_MCP_EMBEDDED === '1'
+const EMBEDDED = process.env.SUPERBIRD_MCP_EMBEDDED === '1'
 
 const { tools, toolMap } = createToolSet({
   api: routedApi,
@@ -143,7 +143,7 @@ const { tools, toolMap } = createToolSet({
   // `use_project`: switching sites from inside the conversation, which is the
   // only place anybody actually wants to do it. The agent never DECIDES — the
   // human answers an elicitation dialog, the same consent channel set_target
-  // uses — but asking the human to quit to a terminal for `guano use` was a
+  // uses — but asking the human to quit to a terminal for `superbird use` was a
   // worse answer to "work on the other site" than it looked on paper.
   // Absent for a single-project entry, where there is nothing to switch to.
   projects: multi
@@ -189,7 +189,7 @@ const { tools, toolMap } = createToolSet({
 // handbook (~100 KB): a client that injects instructions pays for them on every
 // turn, and get_guide serves the rest a section at a time, on demand.
 const server = new Server(
-  { name: 'guano', version: MCP_VERSION },
+  { name: 'superbird', version: MCP_VERSION },
   (() => {
     const instructions = guideInstructions(EMBEDDED)
     return { capabilities: { tools: {} }, ...(instructions ? { instructions } : {}) }
@@ -226,14 +226,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 /**
  * The wrong-project diagnosis.
  *
- * Several projects on one machine all default to port 4174, so GUANO_URL names
+ * Several projects on one machine all default to port 4174, so SUPERBIRD_URL names
  * an address, not a project — whichever instance booted first owns it. A token
  * is minted into ONE data dir, so reaching the wrong instance is answered with
  * a 401 that looks exactly like a revoked token, and because this process then
  * exits before the MCP handshake the client can only report "not connected".
  * That is a whole afternoon with nothing anywhere naming the cause.
  *
- * `guano connect` bakes GUANO_INSTANCE into the entry, so a mismatch is
+ * `superbird connect` bakes SUPERBIRD_INSTANCE into the entry, so a mismatch is
  * checkable before the token is even presented. Returns a message to die with,
  * or null when there is nothing to object to — an older instance reports no
  * `instance` at all and must keep working.
@@ -244,10 +244,10 @@ async function instanceMismatch(client = api, expected = api.INSTANCE) {
   if (!h || typeof h.instance !== 'string' || !h.instance) return null
   if (h.instance === expected) return null
   return (
-    `the server at ${client.base ?? api.BASE} is a DIFFERENT Guano project than this entry was ` +
+    `the server at ${client.base ?? api.BASE} is a DIFFERENT Superbird project than this entry was ` +
     `connected to (expected instance ${expected.slice(0, 8)}, got ${h.instance.slice(0, 8)}).\n` +
     '  Another project is listening on that port, so its token would be refused.\n' +
-    '  Start the right project, or re-run `guano connect` in it to re-point this entry.'
+    '  Start the right project, or re-run `superbird connect` in it to re-point this entry.'
   )
 }
 
@@ -277,33 +277,33 @@ async function greet(client, { expectInstance = api.INSTANCE } = {}) {
     if (wrong) throw new Error(wrong)
     const user = await client.whoami()
     const label = user.instance?.name ? ` — project "${user.instance.name}"` : ''
-    console.error(`guano mcp: connected to ${client.base} as ${user.email} (${user.role})${label}`)
+    console.error(`superbird mcp: connected to ${client.base} as ${user.email} (${user.role})${label}`)
   } catch (e) {
     // not running: no credential is in question, so there is nothing to refuse.
     // Serve, and let the first tool call say which project to start.
     if (e?.status === 0 || e?.noProject) {
-      console.error(`guano mcp: ${e.message}`)
+      console.error(`superbird mcp: ${e.message}`)
       console.error(
-        'guano mcp: serving anyway — start the project and the next tool call picks it up, ' +
+        'superbird mcp: serving anyway — start the project and the next tool call picks it up, ' +
           'with no restart.',
       )
       return
     }
-    console.error(`guano mcp: ${e.message}`)
+    console.error(`superbird mcp: ${e.message}`)
     // A 401 here is nearly always a token minted against a different data dir:
     // the instance check above only fires for an entry carrying
-    // GUANO_INSTANCE, and one written before that existed carries none.
+    // SUPERBIRD_INSTANCE, and one written before that existed carries none.
     if (e?.needsSetup) {
       console.error(
-        `guano mcp: ${client.base} has no admin account yet, so this token is still PENDING.\n` +
+        `superbird mcp: ${client.base} has no admin account yet, so this token is still PENDING.\n` +
           '  Open /admin, create the first account, and the token binds to it automatically —\n' +
-          '  there is no need to run `guano connect` again.',
+          '  there is no need to run `superbird connect` again.',
       )
     } else if (e?.status === 401) {
       console.error(
-        `guano mcp: the instance at ${client.base} does not recognise this token. It was most\n` +
-          '  likely minted by a DIFFERENT Guano project that was holding that port, or it\n' +
-          '  has been revoked. Run `guano connect` in the project you meant to edit (quit\n' +
+        `superbird mcp: the instance at ${client.base} does not recognise this token. It was most\n` +
+          '  likely minted by a DIFFERENT Superbird project that was holding that port, or it\n' +
+          '  has been revoked. Run `superbird connect` in the project you meant to edit (quit\n' +
           '  Claude Desktop first) — it re-mints the token and re-points this entry.',
       )
     }
@@ -316,21 +316,21 @@ export async function main() {
     const conf = router.configured()
     const r = await router.resolve()
     console.error(
-      `guano mcp: ${conf.count} project${conf.count === 1 ? '' : 's'} configured ` +
+      `superbird mcp: ${conf.count} project${conf.count === 1 ? '' : 's'} configured ` +
         `(${router.list().map((p) => p.slug).join(', ')})` +
         (conf.pinned ? ` — pinned to ${conf.pinned}` : ''),
     )
     if (conf.dropped.length) {
-      console.error(`guano mcp: ignored malformed GUANO_PROJECTS entries: ${conf.dropped.join(', ')}`)
+      console.error(`superbird mcp: ignored malformed SUPERBIRD_PROJECTS entries: ${conf.dropped.join(', ')}`)
     }
     // Resolving is never fatal here. Nothing running is the normal state of a
     // machine with several sites on it, and a client that dies for it is the
     // alert this design exists to remove.
-    if (r.error) console.error(`guano mcp: no live project yet — ${r.error}`)
+    if (r.error) console.error(`superbird mcp: no live project yet — ${r.error}`)
     else {
       const live = await router.current().catch(() => null)
       if (live) {
-        console.error(`guano mcp: working on "${live.slug}" at ${live.api.base}`)
+        console.error(`superbird mcp: working on "${live.slug}" at ${live.api.base}`)
         await greet(live.api, { expectInstance: live.instance })
       }
     }
@@ -340,9 +340,9 @@ export async function main() {
   // The tools take local paths for bulk payloads, which is a read-anything
   // primitive whenever an agent can be talked into a path — and its output
   // lands in a project that may get published. A root confines it.
-  if (!process.env.GUANO_MCP_FILE_ROOT) {
+  if (!process.env.SUPERBIRD_MCP_FILE_ROOT) {
     console.error(
-      'guano mcp: GUANO_MCP_FILE_ROOT is not set — path arguments can read any file this ' +
+      'superbird mcp: SUPERBIRD_MCP_FILE_ROOT is not set — path arguments can read any file this ' +
         'user can. Set it to the directory holding your payloads to confine them.',
     )
   }
@@ -352,10 +352,10 @@ export async function main() {
     const caps = server.getClientCapabilities() ?? {}
     const client = server.getClientVersion()
     console.error(
-      `guano mcp: client ${client?.name ?? '?'} ${client?.version ?? ''} — elicitation ` +
+      `superbird mcp: client ${client?.name ?? '?'} ${client?.version ?? ''} — elicitation ` +
         `${caps.elicitation ? 'supported (set_target shows a dialog)' : 'NOT declared (set_target asks in chat)'}`,
     )
   }
   await server.connect(new StdioServerTransport())
-  console.error('guano mcp: ready (stdio)')
+  console.error('superbird mcp: ready (stdio)')
 }

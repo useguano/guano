@@ -36,7 +36,7 @@ const node = (type: string, children: ElementNode[] = [], extra: Partial<Element
 
 /** every exported file, hashed — the same comparison scripts/corpus.mjs makes */
 async function exported(project: Project): Promise<Record<string, string>> {
-  const dir = mkdtempSync(join(tmpdir(), 'guano-migrate-'))
+  const dir = mkdtempSync(join(tmpdir(), 'superbird-migrate-'))
   try {
     await exportSite(JSON.parse(JSON.stringify(project)), dir)
     const { readdirSync, statSync } = await import('node:fs')

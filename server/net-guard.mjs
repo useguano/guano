@@ -14,7 +14,7 @@
 // custom agent that pins the checked address; this raises the bar a long way
 // without that machinery.
 //
-// NOTE: packages/guano/mcp/tools.mjs carries the same guard for
+// NOTE: packages/superbird/mcp/tools.mjs carries the same guard for
 // `upload_media {url}`. It is deliberately NOT shared: the MCP package is
 // packed with `server/` beside it (`../server/…`) while in the repo it sits
 // three levels up, and a static import cannot do that dual-path fallback. If

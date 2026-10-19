@@ -45,7 +45,7 @@ NAVLESS Account consequence, and the host bridge.
   tagged: `broadcastStoreEvent(key, isAgentRequest(req) ? 'agent' : 'human')`.
 - `src/composables/useLiveSync.ts:75` throws the human ones away:
   `if (event.type !== 'store-write' || event.source !== 'agent') return`.
-- The SSE client object already carries `guanoUserRole`
+- The SSE client object already carries `superbirdUserRole`
   (`server/index.mjs:1274`), so identity is attached server-side.
 - `PUT /api/store/:key` already takes `If-Match` under a per-key lock and
   answers 412 rather than overwriting (`docs/server.md`). The browser
@@ -149,7 +149,7 @@ two topologies settled on 2026-09-06:
 
 ### (b) Move the studio to a server — recommended first
 
-The graduation the topology note already anticipates: *"laptop-local Guano is
+The graduation the topology note already anticipates: *"laptop-local Superbird is
 valid until a client needs to log in."*
 
 **The migration is already built, and it is not SSH.**
@@ -157,7 +157,7 @@ valid until a client needs to log in."*
 Settings → Snapshots (`docs/export.md:131`). The package is a zip of `store/` +
 `media/`. So:
 
-1. Stand up Guano on the server (SSH, once).
+1. Stand up Superbird on the server (SSH, once).
 2. Hit its `/admin/setup`, create the admin.
 3. Snapshot on the laptop → upload on the server.
 
@@ -226,8 +226,8 @@ survives here is why the three alternatives lost.
 
 ### Realignment, 2026-10-18 — DONE
 
-**The embedded AI panel is Guano's main AI integration.** The external client
-path (`guano connect` into Claude Desktop or a Claude Code terminal) stays
+**The embedded AI panel is Superbird's main AI integration.** The external client
+path (`superbird connect` into Claude Desktop or a Claude Code terminal) stays
 supported, but it is secondary: it pushes people into another app, and
 everything it needs — `use_project`, `set_target` dialogs, the pin file, the
 attestation fallback — exists only because an outside client knows nothing
@@ -235,7 +235,7 @@ about what the person is looking at. The panel knows the project, the branch,
 the page and the selected element, and never asks for any of them.
 
 Shipped the same day, in nine commits. One signal
-(`GUANO_MCP_EMBEDDED=1`, written only by `guano connect --config … --embedded`),
+(`SUPERBIRD_MCP_EMBEDDED=1`, written only by `superbird connect --config … --embedded`),
 a target that follows the branch the editor has loaded, and a smaller tool
 profile. What set it off was one screenshot of a first turn on a fresh
 project: the agent called `set_target` and picked Main *itself* (print mode
@@ -257,13 +257,13 @@ Three ways to put a model behind a chat box were weighed:
    the same harness as a library. Cleaner than parsing a CLI, but it is a
    second integration surface for the same thing, and it still needs the
    person's Claude credentials. Not for step 1; nothing below precludes it.
-3. Our own loop on the Anthropic SDK with the guano tools attached. Rejected:
+3. Our own loop on the Anthropic SDK with the superbird tools attached. Rejected:
    it makes every user bring an API key to a self-hosted AGPL tool, and makes
    context management, compaction and the permission model ours to own.
 
 **Why (1) is cheap here and not elsewhere:** the project is already an MCP
-server the person's Claude Code can reach — `guano connect` mints the token and
-writes the entry (`packages/guano/mcp/connect.mjs`), and `mcp/server.mjs:317`
+server the person's Claude Code can reach — `superbird connect` mints the token and
+writes the entry (`packages/superbird/mcp/connect.mjs`), and `mcp/server.mjs:317`
 speaks stdio to whichever client launches it. The chat needs a *client*, and
 the person has one installed. What exists today supplies the tools; this
 section supplies the box.
@@ -366,15 +366,15 @@ Flags that decide the panel's shape (all from `claude --help` on this build):
   in print mode. `host` means the process that holds the pipes answers a
   `control_request` on stdin; `none` means anything that would have prompted
   is denied. **Step 1 runs with `none`** and pre-approves the one toolset it
-  wants: `--allowedTools "mcp__guano__*"`. The server-side agent policy is the
+  wants: `--allowedTools "mcp__superbird__*"`. The server-side agent policy is the
   real boundary (`docs/server.md`, Agent policy), so a tool call the panel
   never prompts for is a tool call the server still refuses when it should.
 - **`--restricted`** removes Bash and the other code-running tools and
   confines the file tools to the working directories. **Not enough on its own
   — see trap 4.** Add `--disallowedTools Read Edit Write MultiEdit NotebookEdit
-  Glob Grep` on top, so what is left is the guano toolset and the web tools.
+  Glob Grep` on top, so what is left is the superbird toolset and the web tools.
 - **`--mcp-config <file> --strict-mcp-config`** — only this server, from a
-  file the launcher owns. The entry comes from `guano connect --config <that
+  file the launcher owns. The entry comes from `superbird connect --config <that
   file>`, never from Swift (launcher `CLAUDE.md`: never write an MCP config
   from Swift). Confirmed in `connect.mjs:71`: an explicit `--config` target is
   `needsQuit: false`, so **the Claude-Desktop-is-running refusal does not
@@ -391,8 +391,8 @@ Flags that decide the panel's shape (all from `claude --help` on this build):
   and effort preferences apply, no project-level hooks or `CLAUDE.md`s are
   loaded from a folder a site owner did not write.
 - **`--append-system-prompt`** — three sentences: this chat sits inside the
-  Guano editor; the human is looking at the canvas and sees every write land;
-  publishing is the human's button, not a tool (and `mcp__guano__publish` is in
+  Superbird editor; the human is looking at the canvas and sees every write land;
+  publishing is the human's button, not a tool (and `mcp__superbird__publish` is in
   `--disallowedTools` so the model cannot try).
 
 ### Where it lives
@@ -425,8 +425,8 @@ replayed into; see trap 8).
 
 ### The bridge, extended
 
-`src/lib/hostBridge.ts` posts `{type}` objects out through the `guano`
-`WKScriptMessageHandler` and the host calls back on `window.__guanoHost`.
+`src/lib/hostBridge.ts` posts `{type}` objects out through the `superbird`
+`WKScriptMessageHandler` and the host calls back on `window.__superbirdHost`.
 Four messages out, two callbacks in:
 
 | page → host | host does |
@@ -439,8 +439,8 @@ Four messages out, two callbacks in:
 
 | host → page | |
 |---|---|
-| `__guanoHost.agentEvent(obj)` | one parsed JSONL line, or one of the two synthetic ones above |
-| `__guanoHost.agentExit({code, reason})` | the process went away; the composer disables with the reason |
+| `__superbirdHost.agentEvent(obj)` | one parsed JSONL line, or one of the two synthetic ones above |
+| `__superbirdHost.agentExit({code, reason})` | the process went away; the composer disables with the reason |
 
 `EditorSession.swift:224` only accepts a message from the **main frame of the
 project's own origin**, and that must stay exactly as it is: the canvas renders
@@ -487,7 +487,7 @@ write to arrive as the contributor.
 (`server/index.mjs:1685`), and for a token request `user` is **the token's
 owner**. So:
 
-- a token owned by an **admin** — which is what `guano connect` mints — gives a
+- a token owned by an **admin** — which is what `superbird connect` mints — gives a
   contributor's turn the admin's full structural power, governed only by the
   admin-set agent policy. **This is the hole, and it is open today** for any
   client holding that token.
@@ -501,7 +501,7 @@ owner to BE the driver, which is the same rule pointed the right way.
 
 **Three things it needs, none of them the panel's UI:**
 
-1. **A per-driver token.** `guano connect` mints one token for the connecting
+1. **A per-driver token.** `superbird connect` mints one token for the connecting
    user and writes one entry per project. A contributor's panel needs a
    contributor-owned token — either a `--config` file per (project, person), or
    a short-lived token the server mints for the session user when the panel
@@ -532,7 +532,7 @@ decision on the record, not work in flight.
 
 The one piece worth doing BEFORE then, because it is a live hole rather than a
 future feature: an agent token's writes are governed by its owner's role, and
-`guano connect` hands out an admin's. Minting per driver — or at minimum
+`superbird connect` hands out an admin's. Minting per driver — or at minimum
 refusing a contributor-driven turn on an admin token — is server work that
 stands on its own.
 
@@ -555,12 +555,12 @@ stands on its own.
    ran `env -u CLAUDECODE`.
 4. **The project folder contains `data/`.** `--restricted` confines the file
    tools to the working directory — which is the project, which holds
-   `data/store/guano-project__main.json`, every token and `agent-policy.json`.
+   `data/store/superbird-project__main.json`, every token and `agent-policy.json`.
    A confined `Edit` on the store is a write that bypasses the whole agent
    policy. That is why the file tools are *disallowed*, not merely confined,
    and why the MCP server itself never touches the data dir
    (`docs/mcp.md`, the fence). Do not relax this for convenience.
-5. **No elicitation in print mode.** The guano server's consent dialogs
+5. **No elicitation in print mode.** The superbird server's consent dialogs
    (`set_target`, `use_project`, `publish`) are MCP elicitation; a headless
    client declares none, so `set_target` falls to the ask-in-chat attestation
    path (`tools.mjs` ~5955, `docs/server.md`) and `use_project` refuses. Both
@@ -583,7 +583,7 @@ stands on its own.
    render it in the turn, re-enable the composer, keep the session. A process
    *exit* is different and comes through `agentExit`.
 10. **Kill order.** SIGTERM first, like the server — a turn mid-write is a
-    tool call the guano server will finish or refuse on its own; what must not
+    tool call the superbird server will finish or refuse on its own; what must not
     happen is a SIGKILL that leaves the child's MCP server orphaned holding
     the token file open.
 
@@ -614,14 +614,14 @@ stands on its own.
    ⌘-shortcut registered in `useEditorShortcuts.ts` next to ⌘E
    (`useEditorShortcuts.ts:47`, `buildOnly`), key chosen after checking the
    four registration sites (`docs/ui.md`, Shortcuts) for a free one. **e2e:**
-   `addInitScript` installs a fake `window.webkit.messageHandlers.guano` that
+   `addInitScript` installs a fake `window.webkit.messageHandlers.superbird` that
    records posts, and the test feeds the recorded probe transcript through
-   `window.__guanoHost.agentEvent` line by line, asserting the bubbles, the
+   `window.__superbirdHost.agentEvent` line by line, asserting the bubbles, the
    tool row, the single rendering of the replayed question, and that the
    button is absent until `ready`. Shippable alone: without a host the button
    does not exist.
 2. **Launcher.** `ClaudeCLILocator` (trap 1); writable stdin on `ChildProcess`
-   (trap 2); `guano connect --config <app-support>/mcp/<slug>.json` at
+   (trap 2); `superbird connect --config <app-support>/mcp/<slug>.json` at
    first use and whenever the project's port or token changes (connect owns
    staleness — `ConnectionListParser` already reads its verdicts); `AgentSession`
    with the spawn line assembled from the flags above; the bridge handlers in
@@ -660,7 +660,7 @@ away and `docs/agent-panel.md` carries all of it.
    that already works, and it answers the question users actually ask.
 3. **§5 step 2** (steps 0 and 1 are done — the builder half is in, behind a
    faked host). What is left is the launcher: one process, one config file
-   written by `guano connect --config`, and the replay on reload.
+   written by `superbird connect --config`, and the replay on reload.
 4. **§3 step 1, presence only.** Then stop and watch before committing to the
    rest of Option A.
 5. Everything else, on evidence.

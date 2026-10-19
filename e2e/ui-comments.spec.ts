@@ -20,8 +20,8 @@ import { openEditor } from './fixtures/session'
 // Named to sort AFTER smoke.spec, which owns the first-run flow.
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
-const KEY = 'guano-project%3Amain'
-const RAW_KEY = 'guano-project:main'
+const KEY = 'superbird-project%3Amain'
+const RAW_KEY = 'superbird-project:main'
 
 // the fixture's frames and its one real page
 const TABLET = 'b096da25-0789-4796-a4d6-6ecc85c75367'

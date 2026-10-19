@@ -8,7 +8,7 @@ import { becomeBuilder, becomeBuilderByApproval } from './fixtures/session'
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const CONTRIB = { email: 'contrib@example.com', password: 'contrib-pass-1' }
-const PROJECT_KEY = 'guano-project:main'
+const PROJECT_KEY = 'superbird-project:main'
 
 async function login(ctx: APIRequestContext, creds: { email: string; password: string }) {
   return ctx.post('/api/auth/login', { data: creds })
@@ -72,7 +72,7 @@ test('contributor store permissions: PUT unchanged ok, sensitive PUT and DELETE 
   // --- contributor DELETE of any store key → 403 (S2 fix) ---
   res = await contribCtx.delete(`/api/store/${PROJECT_KEY}`)
   expect(res.status()).toBe(403)
-  res = await contribCtx.delete('/api/store/guano-branches')
+  res = await contribCtx.delete('/api/store/superbird-branches')
   expect(res.status()).toBe(403)
 
   // --- the project blob is still there, and admins can still delete keys ---
@@ -83,9 +83,9 @@ test('contributor store permissions: PUT unchanged ok, sensitive PUT and DELETE 
   expect(after[PROJECT_KEY]).toBeTruthy()
   // a draft key, because the store now refuses a key outside the product's
   // own set — see 'the draft index is not a way to take over someone's draft'
-  res = await admin.put('/api/store/guano-project:scratch-role-spec', { data: '{"pages":[]}' })
+  res = await admin.put('/api/store/superbird-project:scratch-role-spec', { data: '{"pages":[]}' })
   expect(res.ok()).toBeTruthy()
-  res = await admin.delete('/api/store/guano-project:scratch-role-spec')
+  res = await admin.delete('/api/store/superbird-project:scratch-role-spec')
   expect(res.status()).toBe(200)
 
   // and an invented key is refused for an admin too
@@ -99,7 +99,7 @@ test('contributor store permissions: PUT unchanged ok, sensitive PUT and DELETE 
  * The draft index is not a way to take over someone else's draft.
  *
  * `ownsDraft` — the gate on DELETE — reads `createdBy` out of the
- * `guano-branches` blob. That blob was not a project key, so the store's
+ * `superbird-branches` blob. That blob was not a project key, so the store's
  * server-authoritative content merge did not apply to it and a contributor's
  * PUT was written verbatim. So the sequence below used to work end to end:
  * rewrite the index with your own id stamped on an admin's draft, then delete
@@ -134,8 +134,8 @@ test("the draft index is not a way to take over someone's draft", async ({ baseU
   }
 
   const me = (await (await admin.get('/api/auth/me')).json()) as { id: string }
-  const KEY = 'guano-branches'
-  const DRAFT = 'guano-project:admins-draft'
+  const KEY = 'superbird-branches'
+  const DRAFT = 'superbird-project:admins-draft'
 
   // an admin's draft, stamped with the admin's id, and a real blob behind it
   expect((await admin.put(`/api/store/${DRAFT}`, { data: '{"pages":[]}' })).ok()).toBeTruthy()
@@ -196,9 +196,9 @@ test("the draft index is not a way to take over someone's draft", async ({ baseU
     string
   >)[PROJECT_KEY]!
   expect(
-    (await contribCtx.put('/api/store/guano-project:contrib-draft', { data: main })).ok(),
+    (await contribCtx.put('/api/store/superbird-project:contrib-draft', { data: main })).ok(),
   ).toBeTruthy()
-  expect((await contribCtx.delete('/api/store/guano-project:contrib-draft')).status()).toBe(200)
+  expect((await contribCtx.delete('/api/store/superbird-project:contrib-draft')).status()).toBe(200)
 
   await admin.delete(`/api/store/${DRAFT}`)
   await admin.dispose()

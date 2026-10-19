@@ -1,4 +1,4 @@
-// `guano connect` — one-command MCP setup for Claude Code and Claude Desktop.
+// `superbird connect` — one-command MCP setup for Claude Code and Claude Desktop.
 //
 // Does everything the manual dance did: mints an API token (proving instance
 // ownership via a nonce file in the data dir — no password, no copy-paste),
@@ -14,7 +14,7 @@
 //
 // It runs BEFORE setup too: with no admin account the token is PENDING and the
 // server binds it to the first admin at /admin setup, which is how
-// `npm create @useguano` connects Claude at scaffold time (`--offline` skips
+// `npm create @superbird-app` connects Claude at scaffold time (`--offline` skips
 // the network — a server on the default port may be another project's).
 //
 // It also settles the two agent permissions a connected instance needs
@@ -24,7 +24,7 @@
 // `--publish` set them; with neither flag and a terminal, the two questions
 // are asked (default No); `--yes` skips the questions and leaves the policy
 // as it is. The person running this holds the data dir, which is the same
-// ownership the nonce already proves. When Main is allowed, GUANO_MCP_TARGET
+// ownership the nonce already proves. When Main is allowed, SUPERBIRD_MCP_TARGET
 // is written into the client config too, so the agent never has to ask which
 // target to use.
 //
@@ -105,7 +105,7 @@ async function mintViaServer(base, dataDir, policy) {
     const res = await fetch(`${base}/api/auth/connect`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ nonce, name: 'guano connect (Claude Desktop)', policy }),
+      body: JSON.stringify({ nonce, name: 'superbird connect (Claude Desktop)', policy }),
     })
     const detail = await res.json().catch(() => null)
     if (!res.ok) throw new Error(detail?.error ?? `connect failed (${res.status})`)
@@ -129,7 +129,7 @@ async function mintDirect(dataDir, policy) {
     /* no account yet — pending token */
   }
   const admin = Array.isArray(users) ? users.find((u) => u.role === 'admin') : null
-  const raw = 'guano_' + randomBytes(24).toString('hex')
+  const raw = 'superbird_' + randomBytes(24).toString('hex')
   const file = join(dataDir, 'api-tokens.json')
   let tokens = []
   try {
@@ -141,14 +141,14 @@ async function mintDirect(dataDir, policy) {
     id: randomBytes(12).toString('hex'),
     tokenHash: createHash('sha256').update(raw).digest('hex'),
     userId: admin ? admin.id : null,
-    name: 'guano connect (Claude Desktop)',
+    name: 'superbird connect (Claude Desktop)',
     createdAt: Date.now(),
     lastUsedAt: null,
     ...(admin ? {} : { pendingFirstAdmin: true }),
   })
   await writeFile(file, JSON.stringify(tokens), { mode: 0o600 })
   // the policy module reads DATA_DIR from util.mjs, which main() has pinned to
-  // this same dir via GUANO_DATA_DIR
+  // this same dir via SUPERBIRD_DATA_DIR
   const { writeAgentPolicy, readAgentPolicy } = await import(
     pathToFileURL(join(ROOT, 'server', 'agent-policy.mjs')).href
   )
@@ -188,18 +188,18 @@ const onOff = (v) => (v ? 'on' : 'off')
  *
  * `util.mjs` derives it from its OWN location: under node_modules it is
  * `<cwd>/data`, otherwise `<its package root>/server/data`. Imported from
- * `packages/guano/`, that second branch resolves to
- * `packages/guano/server/data` — a directory a repo clone's `npm run serve`
+ * `packages/superbird/`, that second branch resolves to
+ * `packages/superbird/server/data` — a directory a repo clone's `npm run serve`
  * (which runs `server/index.mjs` from the repo root) never reads. The nonce
  * landed there, the server looked in `<repo>/server/data`, and connect died
- * with "nonce mismatch — run `guano connect` from the instance machine", which
+ * with "nonce mismatch — run `superbird connect` from the instance machine", which
  * is the one thing that was never wrong.
  *
- * So: an explicit GUANO_DATA_DIR wins, then whichever candidate actually
+ * So: an explicit SUPERBIRD_DATA_DIR wins, then whichever candidate actually
  * exists, and only then the packaged default.
  */
 export async function resolveDataDir() {
-  if (process.env.GUANO_DATA_DIR) return resolve(process.env.GUANO_DATA_DIR)
+  if (process.env.SUPERBIRD_DATA_DIR) return resolve(process.env.SUPERBIRD_DATA_DIR)
   const candidates = [join(process.cwd(), 'data'), join(process.cwd(), 'server', 'data')]
   for (const dir of candidates) {
     try {
@@ -215,7 +215,7 @@ export async function resolveDataDir() {
 
 /**
  * This project's identity and address, for naming the client entry and for the
- * mismatch check `guano mcp` runs at boot.
+ * mismatch check `superbird mcp` runs at boot.
  *
  * The DATA DIR is the authority, never the port. Probing a port first is the
  * bug this whole change exists to kill: with several projects on one machine
@@ -264,7 +264,7 @@ export async function readIdentity(candidate, dataDir) {
  *
  * Without this, a data dir that has never booted had no id, `readIdentity`
  * reached its "claim nothing about identity" branch and the client entry was
- * written with NO instance id. That is every project `npm create @useguano`
+ * written with NO instance id. That is every project `npm create @superbird-app`
  * connects, because it connects before the server has ever run: the router
  * then falls back to the token test against whatever holds the port, and the
  * day the entry's token goes stale the answer is a plain 401, reported as
@@ -312,7 +312,7 @@ async function probe(base) {
  *
  * Walking up one level is wrong on its own: a repo clone's data dir is
  * `<repo>/server/data`, whose parent is `server`, which named the entry
- * `guano-server` — true of every clone and so no name at all. Generic
+ * `superbird-server` — true of every clone and so no name at all. Generic
  * infrastructure segments are skipped until something project-shaped appears.
  */
 const GENERIC_DIRS = new Set(['data', 'server', 'app', 'src', 'dist', 'build', 'var', 'tmp', '.data'])
@@ -328,10 +328,10 @@ function projectFolder(dataDir) {
 }
 
 /**
- * This project's slug inside the shared entry's GUANO_PROJECTS map.
+ * This project's slug inside the shared entry's SUPERBIRD_PROJECTS map.
  *
- * There have been three schemes. The bare key `guano` for every project, which
- * silently EVICTED the previous one. Then `guano-<slug>`, one mcpServers entry
+ * There have been three schemes. The bare key `superbird` for every project, which
+ * silently EVICTED the previous one. Then `superbird-<slug>`, one mcpServers entry
  * each — which fixed the eviction and introduced a worse nuisance: Claude
  * Desktop launches every entry it has at startup, so every project not running
  * that minute failed its handshake and raised its own "could not connect"
@@ -339,7 +339,7 @@ function projectFolder(dataDir) {
  * process, one toolset, one tool list, and nothing to fail for a project that
  * is simply not up.
  */
-export const ENTRY_KEY = 'guano'
+export const ENTRY_KEY = 'superbird'
 
 function projectSlug(projectName, dataDir) {
   const raw = projectName?.trim() || projectFolder(dataDir)
@@ -422,7 +422,7 @@ async function remoteIdentity(base) {
     process.exit(1)
   }
   if (!health || typeof health !== 'object') {
-    console.error(`✗ ${base} answered /api/health with something that is not a Guano instance`)
+    console.error(`✗ ${base} answered /api/health with something that is not a Superbird instance`)
     process.exit(1)
   }
   return {
@@ -473,7 +473,7 @@ async function authorizeDevice(base) {
     const res = await fetch(`${base}/api/auth/device`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'guano connect (Claude Desktop)' }),
+      body: JSON.stringify({ name: 'superbird connect (Claude Desktop)' }),
     })
     started = await res.json()
     if (!res.ok) throw new Error(started?.error ?? `could not start (${res.status})`)
@@ -481,7 +481,7 @@ async function authorizeDevice(base) {
     console.error(
       `✗ ${base} would not start an authorization (${e.message}).\n` +
         '  An older instance has no device flow — make a token in its editor under My account →\n' +
-        `  API tokens and pass it:  guano connect --url ${base} --token guano_…`,
+        `  API tokens and pass it:  superbird connect --url ${base} --token superbird_…`,
     )
     process.exit(1)
   }
@@ -529,7 +529,7 @@ async function authorizeDevice(base) {
       return body
     }
   }
-  console.error('\n✗ that code expired before it was approved — run `guano connect` again')
+  console.error('\n✗ that code expired before it was approved — run `superbird connect` again')
   process.exit(1)
 }
 
@@ -556,7 +556,7 @@ function openBrowser(url) {
  * A local project gets its own folder: that is where a payload would live, and
  * it is already the blast radius of everything else the entry can do. A REMOTE
  * project has no folder on this machine, and the fallback was `process.cwd()` —
- * so anyone who ran `guano connect --url` from their home directory handed the
+ * so anyone who ran `superbird connect --url` from their home directory handed the
  * agent read access to every document under it, uploadable to a site the remote
  * end controls. A remote connect gets a purpose-made directory instead.
  *
@@ -567,13 +567,13 @@ function openBrowser(url) {
 function fenceRoot(dataDir, remoteUrl) {
   const root = dataDir
     ? resolve(dataDir, '..')
-    : join(homedir(), '.guano', 'payloads', hostSlug(remoteUrl ?? ''))
+    : join(homedir(), '.superbird', 'payloads', hostSlug(remoteUrl ?? ''))
   const home = resolve(homedir())
   if (root === home || dirname(root) === root) {
     console.error(
       `✗ the agent's file root would be ${root}, which is your whole home directory (or the\n` +
         '  filesystem root). Every tool that takes a local path would reach everything under it.\n' +
-        '  Move the project into a folder of its own, or set GUANO_DATA_DIR to one.',
+        '  Move the project into a folder of its own, or set SUPERBIRD_DATA_DIR to one.',
     )
     process.exit(1)
   }
@@ -598,7 +598,7 @@ function hostSlug(base) {
 /** the project's own name, for the entry slug (no server needed) */
 async function readProjectName(dataDir) {
   try {
-    const blob = JSON.parse(await readFile(join(dataDir, 'store', 'guano-project__main.json'), 'utf8'))
+    const blob = JSON.parse(await readFile(join(dataDir, 'store', 'superbird-project__main.json'), 'utf8'))
     if (typeof blob?.name === 'string' && blob.name.trim()) return blob.name.trim()
   } catch {
     /* not seeded yet */
@@ -650,8 +650,8 @@ export async function main(args = [], opts = {}) {
   /**
    * The EMBEDDED pair, written only for the AI panel's own config file.
    *
-   * `--embedded` puts `GUANO_MCP_EMBEDDED=1` on the entry, which is the one
-   * signal `guano mcp` reads to drop `use_project` / `set_target` and refuse a
+   * `--embedded` puts `SUPERBIRD_MCP_EMBEDDED=1` on the entry, which is the one
+   * signal `superbird mcp` reads to drop `use_project` / `set_target` and refuse a
    * write with no target instead of asking for one. It is refused without
    * `--config` because the shared Claude configs are an OUTSIDE client's: an
    * embedded entry there would leave Claude Desktop unable to say which
@@ -686,17 +686,17 @@ export async function main(args = [], opts = {}) {
   // folder is the one connect was just run in
   if (remote) await mkdir(fileRoot, { recursive: true, mode: 0o700 })
   // Pin it for every server module loaded from here on. `util.mjs` reads
-  // GUANO_DATA_DIR once at import time and `agent-policy.mjs` derives its file
+  // SUPERBIRD_DATA_DIR once at import time and `agent-policy.mjs` derives its file
   // from that, so without this the token could be written to one dir and the
   // policy beside it to another — which is exactly what the clone layout did.
-  if (dataDir) process.env.GUANO_DATA_DIR = dataDir
-  // The address of THIS project, not of port 4174. An explicit GUANO_URL or
+  if (dataDir) process.env.SUPERBIRD_DATA_DIR = dataDir
+  // The address of THIS project, not of port 4174. An explicit SUPERBIRD_URL or
   // PORT is a contract and still wins; otherwise the port this data dir last
   // landed on is what the entry gets baked with, so a second project's config
   // never points at the first project's socket.
   const pinned = remote
     ? remoteUrl
-    : process.env.GUANO_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : '')
+    : process.env.SUPERBIRD_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : '')
   // Give this data dir an id BEFORE reading its identity, or a project that
   // has never booted gets an entry with none — see ensureLocalIdentity.
   if (dataDir) await ensureLocalIdentity(dataDir)
@@ -705,7 +705,7 @@ export async function main(args = [], opts = {}) {
     : await readIdentity((pinned || 'http://localhost:4174').replace(/\/+$/, ''), dataDir)
   const base = (pinned || identity.base).replace(/\/+$/, '')
   if (identity.strayPort && !pinned) {
-    console.log(`! another Guano project is on :4174 — this entry targets ${base} instead`)
+    console.log(`! another Superbird project is on :4174 — this entry targets ${base} instead`)
   }
 
   // 1. the agent permissions — asked before anything is written, so a ^C here
@@ -722,26 +722,26 @@ export async function main(args = [], opts = {}) {
   if (remote) {
     // env as well as the flag: the desktop launcher spawns this, and a token
     // on argv is readable by every process on the machine through `ps`
-    const given = opt('--token') ?? process.env.GUANO_CONNECT_TOKEN ?? ''
+    const given = opt('--token') ?? process.env.SUPERBIRD_CONNECT_TOKEN ?? ''
     if (given) {
       // The escape hatch, and the only option on a headless box: a token the
       // human made in that instance's editor. Being signed in there to create
       // it is the same proof the device flow asks for, done by hand.
-      // A launcher token (`guanol_…`) is named rather than lumped in with
-      // nonsense: it IS a Guano credential, it is simply the other kind, and
+      // A launcher token (`superbirdl_…`) is named rather than lumped in with
+      // nonsense: it IS a Superbird credential, it is simply the other kind, and
       // the server would refuse it by name on the first call anyway. Saying so
       // here saves the round trip and the confusion.
-      if (/^guanol_/.test(given)) {
+      if (/^superbirdl_/.test(given)) {
         console.error(
           '✗ that is a launcher token, which opens the editor and cannot drive the MCP.\n' +
             '  Make an agent token in that instance\'s editor under My account → API tokens,\n' +
-            '  or run `guano connect --url <host>` with no --token and approve it in the browser.',
+            '  or run `superbird connect --url <host>` with no --token and approve it in the browser.',
         )
         process.exit(1)
       }
-      if (!/^guano_[0-9a-f]{16,}$/.test(given)) {
+      if (!/^superbird_[0-9a-f]{16,}$/.test(given)) {
         console.error(
-          `✗ --token does not look like a Guano API token (expected guano_… ): "${given.slice(0, 12)}…"\n` +
+          `✗ --token does not look like a Superbird API token (expected superbird_… ): "${given.slice(0, 12)}…"\n` +
             '  Make one in that instance\'s editor under My account → API tokens.',
         )
         process.exit(1)
@@ -799,7 +799,7 @@ export async function main(args = [], opts = {}) {
 
   for (const target of targets) {
     // Read the config BEFORE building the entry: this project is one key in
-    // the shared entry's GUANO_PROJECTS map, so the other projects already in
+    // the shared entry's SUPERBIRD_PROJECTS map, so the other projects already in
     // it are part of what gets written back. Each client keeps its own map —
     // they were connected at different times and neither is the authority on
     // the other — so the fold, the slug and the entry are all per file.
@@ -823,7 +823,7 @@ export async function main(args = [], opts = {}) {
           ' is not valid JSON.\n' +
           '  Rewriting it would drop whatever else is in it — every other MCP server you have\n' +
           '  configured there. Fix the file (a trailing comma or a comment is usually it), or\n' +
-          '  move it aside, then run `guano connect` again. `--print` gives you the entry to\n' +
+          '  move it aside, then run `superbird connect` again. `--print` gives you the entry to\n' +
           '  paste in by hand.',
       )
       refusedAny = true
@@ -835,21 +835,21 @@ export async function main(args = [], opts = {}) {
     /**
      * Fold every legacy per-project entry into the map.
      *
-     * `guano-<slug>` entries are what Claude Desktop launches one process each
+     * `superbird-<slug>` entries are what Claude Desktop launches one process each
      * for, so leaving them in place would keep raising the alerts this is meant
      * to end — and they are unambiguously ours (the key, the command and the
-     * GUANO_URL all say so), unlike a sibling entry pointing at a port we cannot
-     * identify. The bare `guano` key is the one being taken over, so its own env
+     * SUPERBIRD_URL all say so), unlike a sibling entry pointing at a port we cannot
+     * identify. The bare `superbird` key is the one being taken over, so its own env
      * is folded in too.
      */
     const inherited = {}
     for (const [key, value] of Object.entries(servers)) {
-      if (key !== ENTRY_KEY && !key.startsWith('guano-')) continue
+      if (key !== ENTRY_KEY && !key.startsWith('superbird-')) continue
       const env = value?.env ?? {}
       // already a map? take every project in it
-      if (typeof env.GUANO_PROJECTS === 'string' && env.GUANO_PROJECTS) {
+      if (typeof env.SUPERBIRD_PROJECTS === 'string' && env.SUPERBIRD_PROJECTS) {
         try {
-          for (const [s, p] of Object.entries(JSON.parse(env.GUANO_PROJECTS))) {
+          for (const [s, p] of Object.entries(JSON.parse(env.SUPERBIRD_PROJECTS))) {
             // either address is enough to keep an entry: `dir` for a local
             // project, `url` for a remote one
             if (p && typeof p === 'object' && (typeof p.url === 'string' || typeof p.dir === 'string')) {
@@ -861,16 +861,16 @@ export async function main(args = [], opts = {}) {
         }
         continue
       }
-      if (typeof env.GUANO_URL !== 'string' || !env.GUANO_URL) continue
-      const legacySlug = key === ENTRY_KEY ? projectSlug('', '') : key.slice('guano-'.length)
+      if (typeof env.SUPERBIRD_URL !== 'string' || !env.SUPERBIRD_URL) continue
+      const legacySlug = key === ENTRY_KEY ? projectSlug('', '') : key.slice('superbird-'.length)
       inherited[legacySlug] = {
-        url: env.GUANO_URL.replace(/\/+$/, ''),
-        token: env.GUANO_TOKEN ?? '',
-        ...(env.GUANO_INSTANCE ? { instance: env.GUANO_INSTANCE } : {}),
-        ...(env.GUANO_MCP_TARGET ? { target: env.GUANO_MCP_TARGET } : {}),
+        url: env.SUPERBIRD_URL.replace(/\/+$/, ''),
+        token: env.SUPERBIRD_TOKEN ?? '',
+        ...(env.SUPERBIRD_INSTANCE ? { instance: env.SUPERBIRD_INSTANCE } : {}),
+        ...(env.SUPERBIRD_MCP_TARGET ? { target: env.SUPERBIRD_MCP_TARGET } : {}),
       }
     }
-    const foldedIn = Object.keys(servers).filter((k) => k !== ENTRY_KEY && k.startsWith('guano-'))
+    const foldedIn = Object.keys(servers).filter((k) => k !== ENTRY_KEY && k.startsWith('superbird-'))
     const named = await identifyInherited(inherited)
 
     // This project's own key. One INSTANCE is one key: an entry already
@@ -900,7 +900,7 @@ export async function main(args = [], opts = {}) {
         ...(dataDir ? { dir: dataDir } : {}),
         url: base,
         token: minted.token,
-        // Which project this token belongs to. `guano mcp` compares it against
+        // Which project this token belongs to. `superbird mcp` compares it against
         // /api/health before presenting the token, so another project squatting
         // the port is REFUSED by name instead of answering with a 401 that reads
         // as "the token is dead".
@@ -922,20 +922,20 @@ export async function main(args = [], opts = {}) {
       // entry written by hand there always carries it.
       ...(target.stdio ? { type: 'stdio' } : {}),
       command: process.execPath,
-      args: [join(ROOT, 'bin', 'guano.js'), 'mcp'],
+      args: [join(ROOT, 'bin', 'superbird.js'), 'mcp'],
       env: {
-        GUANO_PROJECTS: JSON.stringify(projects),
+        SUPERBIRD_PROJECTS: JSON.stringify(projects),
         // Confine the tools' local-path arguments. They are a read-anything —
         // and, through the worklist writer, a write-anything — primitive the
-        // moment an agent can be talked into a path, and `guano mcp` could only
+        // moment an agent can be talked into a path, and `superbird mcp` could only
         // WARN that this was unset. The project folder is the right default: it
         // is where a payload would live, and it is already the blast radius of
         // everything else this entry can do.
         // A remote project has no local data dir, and the directory connect
         // was run from is NOT a safe answer for it — see fenceRoot.
-        GUANO_MCP_FILE_ROOT: fileRoot,
+        SUPERBIRD_MCP_FILE_ROOT: fileRoot,
         // The one signal. → docs/instance.md, docs/mcp.md (Embedded mode)
-        ...(embedded ? { GUANO_MCP_EMBEDDED: '1' } : {}),
+        ...(embedded ? { SUPERBIRD_MCP_EMBEDDED: '1' } : {}),
       },
     }
 
@@ -967,7 +967,7 @@ export async function main(args = [], opts = {}) {
       }
       console.error(
         `\n✗ ${target.label} is running. Quit it completely first (it overwrites its config\n` +
-          '  on quit, which would silently undo this setup), then re-run `guano connect`.',
+          '  on quit, which would silently undo this setup), then re-run `superbird connect`.',
       )
       blockedByDesktop = true
       skip = true
@@ -1003,7 +1003,7 @@ export async function main(args = [], opts = {}) {
     let landed = false
     try {
       const back = JSON.parse(await readFile(target.path, 'utf8'))
-      landed = back?.mcpServers?.[ENTRY_KEY]?.env?.GUANO_PROJECTS === entry.env.GUANO_PROJECTS
+      landed = back?.mcpServers?.[ENTRY_KEY]?.env?.SUPERBIRD_PROJECTS === entry.env.SUPERBIRD_PROJECTS
     } catch {
       /* unreadable counts as not landed */
     }
@@ -1011,7 +1011,7 @@ export async function main(args = [], opts = {}) {
       console.error(
         `\n✗ ${target.label}'s config did not keep this write (${target.path}).\n` +
           '  It was almost certainly rewritten from memory by a running client — quit it\n' +
-          '  completely and run `guano connect` again.',
+          '  completely and run `superbird connect` again.',
       )
       blockedByDesktop = true
       continue
@@ -1040,7 +1040,7 @@ export async function main(args = [], opts = {}) {
     if (blockedByDesktop || refusedAny) process.exit(1)
     return
   }
-  console.log(`\nDone. Open ${writtenTo.join(' or ')} — guano is connected, working on "${slug}".`)
+  console.log(`\nDone. Open ${writtenTo.join(' or ')} — superbird is connected, working on "${slug}".`)
   console.log(`  Local files the agent may read: ${fileRoot} (and nothing outside it).`)
   if (writtenTo.includes('Claude Code')) {
     console.log('  A Claude Code session that is already open re-reads its config on restart.')

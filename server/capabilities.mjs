@@ -82,7 +82,7 @@ export const CAPABILITIES = {
           'content-type': 'application/json',
           ...(bag.FORWARD_AUTH ? { authorization: bag.FORWARD_AUTH } : {}),
         },
-        body: JSON.stringify({ test: true, from: 'guano' }),
+        body: JSON.stringify({ test: true, from: 'superbird' }),
         redirect: 'manual',
         signal: AbortSignal.timeout(10_000),
       })

@@ -14,25 +14,25 @@ const router = createRouter({
       path: '/invite/:token',
       name: 'invite',
       component: () => import('@/views/SetPasswordView.vue'),
-      meta: { title: 'Join — Guano' },
+      meta: { title: 'Join — Superbird' },
     },
     {
       path: '/authorize',
       name: 'authorize',
       component: () => import('@/views/AuthorizeView.vue'),
-      meta: { title: 'Authorize a client — Guano' },
+      meta: { title: 'Authorize a client — Superbird' },
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { title: 'Log in — Guano' },
+      meta: { title: 'Log in — Superbird' },
     },
     {
       path: '/setup',
       name: 'setup',
       component: () => import('@/views/SetupView.vue'),
-      meta: { title: 'Set up — Guano' },
+      meta: { title: 'Set up — Superbird' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -58,7 +58,7 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
-  document.title = (to.meta.title as string | undefined) ?? 'Guano'
+  document.title = (to.meta.title as string | undefined) ?? 'Superbird'
 })
 
 export default router

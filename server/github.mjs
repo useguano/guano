@@ -41,7 +41,7 @@ export async function pushSiteToGitHub(dir, { repo, branch, token }, message = '
           authorization: `Bearer ${token}`,
           accept: 'application/vnd.github+json',
           'x-github-api-version': '2022-11-28',
-          'user-agent': 'guano',
+          'user-agent': 'superbird',
           ...init?.headers,
         },
       })

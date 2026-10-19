@@ -3,17 +3,17 @@ import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { parseProjects } from '../packages/guano/mcp/projects.mjs'
+import { parseProjects } from '../packages/superbird/mcp/projects.mjs'
 import { boot, bootUnpinned, exitOf, instances } from './fixtures/server'
 
-// Instance identity: which Guano project a port is answering for.
+// Instance identity: which Superbird project a port is answering for.
 //
 // The bug this guards is worth stating in full, because every symptom of it
 // points somewhere else. Several projects on one machine all default to port
 // 4174, so the port names nothing — whichever instance boots first owns it. An
 // API token is minted into ONE data dir. So a client configured against
 // project A, reaching project B because B won the race, is answered with a 401
-// that is indistinguishable from a revoked token; `guano mcp` then exits
+// that is indistinguishable from a revoked token; `superbird mcp` then exits
 // before the MCP handshake, and the only thing the user is ever told is
 // "MCP server not connected" while the token sits there, valid, in a config
 // file pointing at a live and healthy server.
@@ -27,7 +27,7 @@ import { boot, bootUnpinned, exitOf, instances } from './fixtures/server'
 // lifecycle and auth-kdf have from the "must sort after smoke" rule.
 
 const REPO = resolve(import.meta.dirname, '..')
-const CLI = join(REPO, 'packages', 'guano', 'bin', 'guano.js')
+const CLI = join(REPO, 'packages', 'superbird', 'bin', 'superbird.js')
 
 test.afterEach(() => {
   for (const i of instances) i.stop()
@@ -52,7 +52,7 @@ function cli(args: string[], env: Record<string, string> = {}) {
 }
 
 /**
- * Run `guano mcp` and read what it says, with stdin held OPEN.
+ * Run `superbird mcp` and read what it says, with stdin held OPEN.
  *
  * It is a long-lived stdio server, so `cli()` cannot drive it: closing stdin
  * ends the transport before the handshake logging has flushed, which reads as
@@ -141,27 +141,27 @@ test('the MCP server refuses a different project instead of failing with a bare 
   // A client connected to some OTHER project, now reaching this one. The
   // refusal must name both ids: "not connected" is what this replaces.
   const wrong = cli(['mcp'], {
-    GUANO_URL: `http://localhost:${srv.port}`,
-    GUANO_INSTANCE: 'f'.repeat(32),
-    GUANO_TOKEN: 'guano_whatever',
+    SUPERBIRD_URL: `http://localhost:${srv.port}`,
+    SUPERBIRD_INSTANCE: 'f'.repeat(32),
+    SUPERBIRD_TOKEN: 'superbird_whatever',
   })
   expect(wrong.code).toBe(1)
-  expect(wrong.out).toContain('DIFFERENT Guano project')
+  expect(wrong.out).toContain('DIFFERENT Superbird project')
   expect(wrong.out).toContain('ffffffff')
   expect(wrong.out).toContain(real.slice(0, 8))
-  expect(wrong.out).toContain('guano connect')
+  expect(wrong.out).toContain('superbird connect')
 
   // A 401 before the first admin exists is a 401 for an entirely different
-  // reason: `guano connect` mints a PENDING token that the first account binds.
+  // reason: `superbird connect` mints a PENDING token that the first account binds.
   // Telling that user to re-run connect is the one thing that cannot help.
   const pending = cli(['mcp'], {
-    GUANO_URL: `http://localhost:${srv.port}`,
-    GUANO_INSTANCE: '',
-    GUANO_TOKEN: 'guano_whatever',
+    SUPERBIRD_URL: `http://localhost:${srv.port}`,
+    SUPERBIRD_INSTANCE: '',
+    SUPERBIRD_TOKEN: 'superbird_whatever',
   })
   expect(pending.code).toBe(1)
   expect(pending.out).toContain('still PENDING')
-  expect(pending.out).not.toContain('DIFFERENT Guano project')
+  expect(pending.out).not.toContain('DIFFERENT Superbird project')
 
   // With an admin in place the same bad token IS just a bad token, and an
   // entry written before instance ids existed carries none — so the 401 is all
@@ -171,18 +171,18 @@ test('the MCP server refuses a different project instead of failing with a bare 
   })
   expect(setup.ok()).toBeTruthy()
   const legacy = cli(['mcp'], {
-    GUANO_URL: `http://localhost:${srv.port}`,
-    GUANO_INSTANCE: '',
-    GUANO_TOKEN: 'guano_whatever',
+    SUPERBIRD_URL: `http://localhost:${srv.port}`,
+    SUPERBIRD_INSTANCE: '',
+    SUPERBIRD_TOKEN: 'superbird_whatever',
   })
   expect(legacy.code).toBe(1)
   expect(legacy.out).toContain('does not recognise this token')
-  expect(legacy.out).toContain('DIFFERENT Guano project')
+  expect(legacy.out).toContain('DIFFERENT Superbird project')
   expect(legacy.out).not.toContain('still PENDING')
 })
 
 test('connect folds every project into ONE entry, and evicts nobody', async () => {
-  // Three schemes, two bugs. The fixed key `guano` EVICTED the previous
+  // Three schemes, two bugs. The fixed key `superbird` EVICTED the previous
   // project silently. A key per project fixed that and introduced a nuisance:
   // Claude Desktop launches every entry it has at startup, so each project not
   // running that minute failed its handshake and raised its own "could not
@@ -199,21 +199,21 @@ test('connect folds every project into ONE entry, and evicts nobody', async () =
   mkdirSync(join(other, 'data'), { recursive: true })
   const cfg = join(srv.dataDir, 'client-config.json')
   // a pre-existing entry from an unrelated MCP server, which must survive, and
-  // a LEGACY per-project guano entry, which must be folded in rather than left
+  // a LEGACY per-project superbird entry, which must be folded in rather than left
   // to keep raising its own alert
   writeFileSync(
     cfg,
     JSON.stringify({
       mcpServers: {
         unrelated: { command: 'node' },
-        'guano-legacy': {
+        'superbird-legacy': {
           command: 'node',
           args: ['x'],
           env: {
-            GUANO_URL: 'http://localhost:4180',
-            GUANO_TOKEN: 'guano_legacytoken0000',
-            GUANO_INSTANCE: 'aaaa1111aaaa1111aaaa1111aaaa1111',
-            GUANO_MCP_TARGET: 'main',
+            SUPERBIRD_URL: 'http://localhost:4180',
+            SUPERBIRD_TOKEN: 'superbird_legacytoken0000',
+            SUPERBIRD_INSTANCE: 'aaaa1111aaaa1111aaaa1111aaaa1111',
+            SUPERBIRD_MCP_TARGET: 'main',
           },
         },
       },
@@ -221,22 +221,22 @@ test('connect folds every project into ONE entry, and evicts nobody', async () =
   )
 
   try {
-    const first = cli(['connect', '--yes', '--config', cfg], { GUANO_DATA_DIR: srv.dataDir })
+    const first = cli(['connect', '--yes', '--config', cfg], { SUPERBIRD_DATA_DIR: srv.dataDir })
     expect(first.code).toBe(0)
 
     // the second project has never run, so its entry is minted offline — the
     // scaffolder's path, and the one that used to clobber the first
     const second = cli(['connect', '--yes', '--offline', '--config', cfg], {
-      GUANO_DATA_DIR: join(other, 'data'),
+      SUPERBIRD_DATA_DIR: join(other, 'data'),
     })
     expect(second.code).toBe(0)
 
     const servers = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers
-    // ONE guano entry, whatever the project count — that is what stops Claude
+    // ONE superbird entry, whatever the project count — that is what stops Claude
     // Desktop starting a process per project
-    expect(Object.keys(servers).sort()).toEqual(['guano', 'unrelated'])
+    expect(Object.keys(servers).sort()).toEqual(['superbird', 'unrelated'])
 
-    const projects = JSON.parse(servers.guano.env.GUANO_PROJECTS)
+    const projects = JSON.parse(servers.superbird.env.SUPERBIRD_PROJECTS)
     // all three: the legacy one folded in, and both of the ones just connected
     expect(Object.keys(projects).sort()).toEqual(['legacy', 'site-a'].concat(
       Object.keys(projects).filter((s) => s !== 'legacy' && s !== 'site-a'),
@@ -245,7 +245,7 @@ test('connect folds every project into ONE entry, and evicts nobody', async () =
 
     // the legacy entry's token and target survived the fold — losing them
     // would disconnect a project this run never looked at
-    expect(projects.legacy.token).toBe('guano_legacytoken0000')
+    expect(projects.legacy.token).toBe('superbird_legacytoken0000')
     expect(projects.legacy.target).toBe('main')
 
     // each project carries its OWN identity, and nobody shares a token
@@ -255,10 +255,10 @@ test('connect folds every project into ONE entry, and evicts nobody', async () =
     const tokens = Object.values(projects).map((p: any) => p.token)
     expect(new Set(tokens).size).toBe(tokens.length)
 
-    // and the local-path primitive is confined by default: `guano mcp` could
+    // and the local-path primitive is confined by default: `superbird mcp` could
     // only warn that this was unset, which is also what the worklist WRITER
     // was bounded by
-    expect(servers.guano.env.GUANO_MCP_FILE_ROOT).toBeTruthy()
+    expect(servers.superbird.env.SUPERBIRD_MCP_FILE_ROOT).toBeTruthy()
   } finally {
     rmSync(other, { recursive: true, force: true })
   }
@@ -272,9 +272,9 @@ test('the MCP client serves when no project is running, instead of failing its h
   // ordinary state of a project you are not working on; it is not a
   // misconfiguration and must not read like one.
   const dead = await mcpProbe({
-    GUANO_PROJECTS: JSON.stringify({
-      landing: { url: 'http://localhost:59991', token: 'guano_aaaaaaaaaaaaaaaa' },
-      shop: { url: 'http://localhost:59992', token: 'guano_bbbbbbbbbbbbbbbb' },
+    SUPERBIRD_PROJECTS: JSON.stringify({
+      landing: { url: 'http://localhost:59991', token: 'superbird_aaaaaaaaaaaaaaaa' },
+      shop: { url: 'http://localhost:59992', token: 'superbird_bbbbbbbbbbbbbbbb' },
     }),
   })
   // it reached the handshake and stayed up, rather than exiting 1 on the probe
@@ -294,13 +294,13 @@ test('the live project is whichever one is running, with nothing configured', as
   const srv = await boot('router-live', 4397)
   const health = await (await srv.api.get('/api/health')).json()
   const out = await mcpProbe({
-    GUANO_PROJECTS: JSON.stringify({
-      down: { url: 'http://localhost:59993', token: 'guano_cccccccccccccccc' },
-      live: { url: `http://localhost:${srv.port}`, token: 'guano_dddddddddddddddd', instance: health.instance },
+    SUPERBIRD_PROJECTS: JSON.stringify({
+      down: { url: 'http://localhost:59993', token: 'superbird_cccccccccccccccc' },
+      live: { url: `http://localhost:${srv.port}`, token: 'superbird_dddddddddddddddd', instance: health.instance },
     }),
   })
   // the dead one is skipped and the running one is chosen, with no
-  // GUANO_MCP_PROJECT, no dialog and nothing for the agent to decide
+  // SUPERBIRD_MCP_PROJECT, no dialog and nothing for the agent to decide
   expect(out.out).toContain('working on "live"')
   expect(out.out).toContain('(down, live)')
   // The handshake is not asserted here: this instance has no admin yet, so the
@@ -320,28 +320,28 @@ test('two running projects are refused by name rather than guessed between', asy
   const ha = await (await a.api.get('/api/health')).json()
   const hb = await (await b.api.get('/api/health')).json()
   const out = await mcpProbe({
-    GUANO_PROJECTS: JSON.stringify({
-      alpha: { url: `http://localhost:${a.port}`, token: 'guano_eeeeeeeeeeeeeeee', instance: ha.instance },
-      beta: { url: `http://localhost:${b.port}`, token: 'guano_ffffffffffffffff', instance: hb.instance },
+    SUPERBIRD_PROJECTS: JSON.stringify({
+      alpha: { url: `http://localhost:${a.port}`, token: 'superbird_eeeeeeeeeeeeeeee', instance: ha.instance },
+      beta: { url: `http://localhost:${b.port}`, token: 'superbird_ffffffffffffffff', instance: hb.instance },
     }),
   })
   expect(out.out).toContain('2 projects are running')
   expect(out.out).toContain('alpha')
   expect(out.out).toContain('beta')
-  // `guano use` replaced the hand-edit-the-config hint (919c0fc); the refusal names
+  // `superbird use` replaced the hand-edit-the-config hint (919c0fc); the refusal names
   // the command that fixes it, which is the whole point of the pin
-  expect(out.out).toContain('guano use')
+  expect(out.out).toContain('superbird use')
   // still serving: an ambiguity is answered by the tool that needs a project,
   // not by killing the client
   expect(out.out).toContain('ready (stdio)')
 
   // ...and pinning one settles it with no probe at all
   const pinned = await mcpProbe({
-    GUANO_PROJECTS: JSON.stringify({
-      alpha: { url: `http://localhost:${a.port}`, token: 'guano_eeeeeeeeeeeeeeee', instance: ha.instance },
-      beta: { url: `http://localhost:${b.port}`, token: 'guano_ffffffffffffffff', instance: hb.instance },
+    SUPERBIRD_PROJECTS: JSON.stringify({
+      alpha: { url: `http://localhost:${a.port}`, token: 'superbird_eeeeeeeeeeeeeeee', instance: ha.instance },
+      beta: { url: `http://localhost:${b.port}`, token: 'superbird_ffffffffffffffff', instance: hb.instance },
     }),
-    GUANO_MCP_PROJECT: 'beta',
+    SUPERBIRD_MCP_PROJECT: 'beta',
   })
   expect(pinned.out).toContain('pinned to beta')
   expect(pinned.out).toContain('working on "beta"')
@@ -396,7 +396,7 @@ test('a remote instance is connected by approving a code in its own editor', asy
     await srv.api.post('/api/auth/device/token', { data: { deviceCode: started.deviceCode } })
   ).json()
   expect(granted.status).toBe('granted')
-  expect(granted.token).toMatch(/^guano_[0-9a-f]+$/)
+  expect(granted.token).toMatch(/^superbird_[0-9a-f]+$/)
   expect(granted.agentPolicy.allowMainWrites).toBe(true)
   expect(granted.projectName).toBe('Remote Site')
   expect(granted.instance).toBe((await (await srv.api.get('/api/health')).json()).instance)
@@ -417,14 +417,14 @@ test('a remote instance is connected by approving a code in its own editor', asy
 test('remote connect refuses plain http and an unusable token', async () => {
   // The token travels on every request; over plain http anything on the path
   // reads it. localhost is exempted because that is a loopback, not a network.
-  const http = cli(['connect', '--url', 'http://example.com', '--token', 'guano_' + '0'.repeat(32)])
+  const http = cli(['connect', '--url', 'http://example.com', '--token', 'superbird_' + '0'.repeat(32)])
   expect(http.code).toBe(1)
   expect(http.out).toContain('must be an https: address')
 
   const srv = await boot('remote-refuse', 4392)
   const bad = cli(['connect', '--url', `http://localhost:${srv.port}`, '--token', 'not-a-token'])
   expect(bad.code).toBe(1)
-  expect(bad.out).toContain('does not look like a Guano API token')
+  expect(bad.out).toContain('does not look like a Superbird API token')
 })
 
 test('a malformed client config is refused, never rewritten', async () => {
@@ -432,14 +432,14 @@ test('a malformed client config is refused, never rewritten', async () => {
   // machine — and every OTHER MCP server the user has. A parse failure used to
   // fall through to `{...null, mcpServers}`, replacing the lot with one entry.
   // One trailing comma gets you there.
-  const dir = mkdtempSync(join(tmpdir(), 'guano-cfg-'))
+  const dir = mkdtempSync(join(tmpdir(), 'superbird-cfg-'))
   try {
     const cfg = join(dir, 'claude_code_config.json')
     const malformed = '{\n  "mcpServers": {\n    "other": { "command": "node" },\n  }\n}\n'
     writeFileSync(cfg, malformed)
 
     // --offline: no server needed, and it still reaches the config writer
-    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    const env = { SUPERBIRD_DATA_DIR: join(dir, 'data') }
     const res = cli(['connect', '--yes', '--offline', '--config', cfg], env)
     expect(res.code).toBe(1)
     expect(res.out).toContain('is not valid JSON')
@@ -459,20 +459,20 @@ test('a malformed client config is refused, never rewritten', async () => {
     expect(ok.code).toBe(0)
     const back = JSON.parse(readFileSync(good, 'utf8'))
     expect(back.mcpServers.other).toBeTruthy()
-    expect(back.mcpServers.guano).toBeTruthy()
+    expect(back.mcpServers.superbird).toBeTruthy()
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
 })
 
-// The AI panel's own entry. `--embedded` is the ONE signal `guano mcp` reads
+// The AI panel's own entry. `--embedded` is the ONE signal `superbird mcp` reads
 // to stop asking which project and which branch, and `connect` is the only
 // thing allowed to write it — the launcher never writes an MCP config itself.
-test('the editor\u2019s entry carries GUANO_MCP_EMBEDDED and the branch it has open', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'guano-emb-'))
+test('the editor\u2019s entry carries SUPERBIRD_MCP_EMBEDDED and the branch it has open', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'superbird-emb-'))
   try {
     const cfg = join(dir, 'panel.json')
-    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    const env = { SUPERBIRD_DATA_DIR: join(dir, 'data') }
     const draft = 'b1f0c2d3-4e5f-4a6b-8c9d-0e1f2a3b4c5d'
 
     // --yes leaves the policy alone, so Main is NOT allowed: the target is
@@ -483,9 +483,9 @@ test('the editor\u2019s entry carries GUANO_MCP_EMBEDDED and the branch it has o
     )
     expect(res.code).toBe(0)
 
-    const entry = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.guano
-    expect(entry.env.GUANO_MCP_EMBEDDED).toBe('1')
-    const { projects } = parseProjects(entry.env.GUANO_PROJECTS)
+    const entry = JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.superbird
+    expect(entry.env.SUPERBIRD_MCP_EMBEDDED).toBe('1')
+    const { projects } = parseProjects(entry.env.SUPERBIRD_PROJECTS)
     const only = Object.values(projects)[0] as { target: string }
     expect(only.target).toBe(draft)
 
@@ -496,7 +496,7 @@ test('the editor\u2019s entry carries GUANO_MCP_EMBEDDED and the branch it has o
     )
     expect(back.code).toBe(0)
     const after = parseProjects(
-      JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.guano.env.GUANO_PROJECTS,
+      JSON.parse(readFileSync(cfg, 'utf8')).mcpServers.superbird.env.SUPERBIRD_PROJECTS,
     ).projects
     expect((Object.values(after)[0] as { target: string }).target).toBe('main')
   } finally {
@@ -505,9 +505,9 @@ test('the editor\u2019s entry carries GUANO_MCP_EMBEDDED and the branch it has o
 })
 
 test('--embedded without --config is refused, and so is a target that is neither', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'guano-emb2-'))
+  const dir = mkdtempSync(join(tmpdir(), 'superbird-emb2-'))
   try {
-    const env = { GUANO_DATA_DIR: join(dir, 'data') }
+    const env = { SUPERBIRD_DATA_DIR: join(dir, 'data') }
     // the shared Claude configs belong to an outside client; marking one
     // embedded would leave it unable to say which project it meant
     const bare = cli(['connect', '--yes', '--offline', '--embedded'], env)
@@ -529,18 +529,18 @@ test('--embedded without --config is refused, and so is a target that is neither
   }
 })
 
-test('guano mcp ignores a .env in whatever directory the client spawned it from', async () => {
-  // An MCP client spawns `guano mcp` with its own cwd — for Claude Code, the
+test('superbird mcp ignores a .env in whatever directory the client spawned it from', async () => {
+  // An MCP client spawns `superbird mcp` with its own cwd — for Claude Code, the
   // directory the session was opened in. Loading .env there let any cloned repo
-  // set GUANO_MCP_TARGET=main (skipping the set_target dialog) or
-  // GUANO_MCP_PROJECT (pinning which site the tools write to).
-  const dir = mkdtempSync(join(tmpdir(), 'guano-env-'))
+  // set SUPERBIRD_MCP_TARGET=main (skipping the set_target dialog) or
+  // SUPERBIRD_MCP_PROJECT (pinning which site the tools write to).
+  const dir = mkdtempSync(join(tmpdir(), 'superbird-env-'))
   try {
-    writeFileSync(join(dir, '.env'), 'GUANO_MCP_TARGET=main\nGUANO_MCP_PROJECT=theirs\n')
+    writeFileSync(join(dir, '.env'), 'SUPERBIRD_MCP_TARGET=main\nSUPERBIRD_MCP_PROJECT=theirs\n')
     const out = await new Promise<string>((done) => {
       const proc = spawn(process.execPath, [CLI, 'mcp'], {
         cwd: dir,
-        env: { ...process.env, GUANO_PROJECTS: JSON.stringify({ mine: { url: 'http://localhost:9', token: 'guano_x' } }) },
+        env: { ...process.env, SUPERBIRD_PROJECTS: JSON.stringify({ mine: { url: 'http://localhost:9', token: 'superbird_x' } }) },
         stdio: ['pipe', 'pipe', 'pipe'],
       })
       let seen = ''

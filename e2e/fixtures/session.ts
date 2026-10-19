@@ -44,12 +44,12 @@ export const LAUNCHER_SECRET = 'e2e-launcher-secret-0123456789abcdef'
  * The secret proof, over the suite server's loopback, which mints for the
  * instance's owner (`oldestAdmin()`). A spec that needs a builder session for
  * someone ELSE — a second builder, an editor with their own Mac — needs the
- * bearer proof instead: a `guanol_` token that account approved for itself
+ * bearer proof instead: a `superbirdl_` token that account approved for itself
  * through the device flow (see `store-agent-security.spec.ts`).
  */
 export async function becomeBuilder(ctx: APIRequestContext) {
   const res = await ctx.post('/api/auth/launcher-session', { data: { secret: LAUNCHER_SECRET } })
-  expect(res.status(), 'the suite server must carry GUANO_LAUNCHER_SECRET').toBe(200)
+  expect(res.status(), 'the suite server must carry SUPERBIRD_LAUNCHER_SECRET').toBe(200)
   return ctx
 }
 
@@ -58,7 +58,7 @@ export async function becomeBuilder(ctx: APIRequestContext) {
  * builder, an editor with their own Mac.
  *
  * The secret proof mints for `oldestAdmin()` alone, so this is the only way:
- * a `guanol_` launcher token that this account approved **for itself** through
+ * a `superbirdl_` launcher token that this account approved **for itself** through
  * the device flow. That is the whole path a second builder takes in real life,
  * which is why a LAUNCHER authorization needs a build role rather than an
  * admin — the token carries exactly the approver's own role, so admin-only was
@@ -92,7 +92,7 @@ export async function becomeBuilderByApproval(
   expect(got.ok(), await got.text()).toBeTruthy()
   const { token } = await got.json()
   await anon.dispose()
-  expect(String(token).startsWith('guanol_')).toBeTruthy()
+  expect(String(token).startsWith('superbirdl_')).toBeTruthy()
 
   const builder = await pwRequest.newContext({
     baseURL,
@@ -120,7 +120,7 @@ export async function launcherSession(page: Page) {
   let res = await mint()
   if (res.status() === 404) {
     throw new Error(
-      'the suite server has no GUANO_LAUNCHER_SECRET — playwright.config.ts must pass LAUNCHER_SECRET in webServer.env',
+      'the suite server has no SUPERBIRD_LAUNCHER_SECRET — playwright.config.ts must pass LAUNCHER_SECRET in webServer.env',
     )
   }
   if (res.status() === 409) {

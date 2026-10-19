@@ -52,10 +52,10 @@ test.describe('a form in the export', () => {
 
     html = await s.html()
     expect(html).toMatch(/<form[^>]*method="post"/)
-    expect(html).toMatch(/action="\/_guano\/forms\/[A-Za-z0-9-]+"/)
+    expect(html).toMatch(/action="\/_superbird\/forms\/[A-Za-z0-9-]+"/)
     // the id in the action is the form node's own, which is what the manifest
     // keys on — a mismatch would make every submission a 404
-    const action = /action="\/_guano\/forms\/([A-Za-z0-9-]+)"/.exec(html)![1]
+    const action = /action="\/_superbird\/forms\/([A-Za-z0-9-]+)"/.exec(html)![1]
     expect(html).toContain(`data-form="${action}"`)
     // the spam traps a static page can actually carry
     expect(html).toContain('name="_hp"')

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml } from './fixtures/mcpSession'
 
-// Three bugs found building a project-management prototype in Guano, each one a
+// Three bugs found building a project-management prototype in Superbird, each one a
 // write the tools accepted and a published page that was wrong.
 
 test.describe('an element default is an EDITOR placeholder', () => {

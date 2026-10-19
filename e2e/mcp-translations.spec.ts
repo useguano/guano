@@ -115,10 +115,10 @@ test.describe('SEO in the worklist', () => {
 
 test.describe('the worklist can go to disk', () => {
   // The caller names the FILE, never the directory: an outputPath was a
-  // write-anything primitive, and `<project>/data/store/guano-project__main.json`
+  // write-anything primitive, and `<project>/data/store/superbird-project__main.json`
   // put a worklist over the live project (→ docs/mcp.md).
   test('outputPath writes the items, and set_translations reads them back', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'guano-wl-'))
+    const dir = mkdtempSync(join(tmpdir(), 'superbird-wl-'))
     try {
       const s = await mcpSession()
       await s.call('update_settings', { addLocales: ['fr'] })
@@ -155,7 +155,7 @@ test.describe('the worklist can go to disk', () => {
       expect(after.missingTranslatable).toBe(0)
     } finally {
       rmSync(dir, { recursive: true, force: true })
-      rmSync(join(tmpdir(), '.guano-mcp', 'fr.json'), { force: true })
+      rmSync(join(tmpdir(), '.superbird-mcp', 'fr.json'), { force: true })
     }
   })
 })

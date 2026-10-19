@@ -22,7 +22,7 @@ import { openEditor } from './fixtures/session'
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const CONTRIB = { email: 'play-contrib@example.com', password: 'play-contrib-1' }
-const KEY = 'guano-project%3Amain'
+const KEY = 'superbird-project%3Amain'
 
 // The fixture nests each section's copy inside a pointer-events-none
 // decoration, so no real pointer reaches its headings: those gestures are
@@ -58,7 +58,7 @@ async function contributorPage(browser: Browser, admin: APIRequestContext, baseU
 
 async function storedHome(admin: APIRequestContext) {
   const body = (await (await admin.get(`/api/store?keys=${KEY}`)).json()) as Record<string, string>
-  const project = JSON.parse(body['guano-project:main']) as {
+  const project = JSON.parse(body['superbird-project:main']) as {
     pages: { elements: Node[] }[]
     components: { name: string; root: Node }[]
   }

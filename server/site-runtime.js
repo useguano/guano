@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT — see LICENSE-EXCEPTIONS.md (embedded in exported sites; deliberately not AGPL)
-// Guano static-site runtime (~4 KB): interactions.
+// Superbird static-site runtime (~4 KB): interactions.
 //
 // Interactions replay the editor's triggers by toggling Tailwind classes.
 // Semantics mirror src/composables/useInteraction.ts + useRenderNode.ts; key
@@ -27,7 +27,7 @@
 // this runs the global is set; a `fetch` would have made it serial.
 ;(function () {
   // ---------- interactions ----------
-  var man = window.__guanoFx
+  var man = window.__superbirdFx
   if (!man) return
   var els = man.els || []
   var fx = man.fx
@@ -231,7 +231,7 @@
         var doomed = []
         for (var i = 0; i < store.length; i++) {
           var k = store.key(i)
-          if (k && k.indexOf('guano-int:') === 0) doomed.push(k)
+          if (k && k.indexOf('superbird-int:') === 0) doomed.push(k)
         }
         for (var d = 0; d < doomed.length; d++) store.removeItem(doomed[d])
       } catch (e) {
@@ -245,7 +245,7 @@
     var store = storageFor(where)
     if (store) {
       try {
-        store.setItem('guano-int:' + key, on ? '1' : '0')
+        store.setItem('superbird-int:' + key, on ? '1' : '0')
       } catch (e) {
         /* quota — nothing to do */
       }
@@ -255,7 +255,7 @@
     var store = storageFor(where)
     if (!store) return null
     try {
-      var v = store.getItem('guano-int:' + key)
+      var v = store.getItem('superbird-int:' + key)
       return v === null ? null : v === '1'
     } catch (e) {
       return null
@@ -332,7 +332,7 @@
     // the attribute is both the state the motion runtime's wheel handler reads
     // (its inertia scroller writes window.scrollTo, so overflow:hidden alone
     // leaves the page moving under the panel) and a CSS hook for authors
-    h.setAttribute('data-guano-modal', '')
+    h.setAttribute('data-superbird-modal', '')
   }
   var unlockScroll = function () {
     var h = document.documentElement
@@ -341,7 +341,7 @@
       h.style.paddingRight = htmlStyle.paddingRight
       htmlStyle = null
     }
-    h.removeAttribute('data-guano-modal')
+    h.removeAttribute('data-superbird-modal')
   }
   var openModal = function (key) {
     if (openModals.indexOf(key) !== -1) return
@@ -399,7 +399,7 @@
   var scrimFor = function () {
     if (scrimEl) return scrimEl
     scrimEl = document.createElement('div')
-    scrimEl.setAttribute('data-guano-scrim', '')
+    scrimEl.setAttribute('data-superbird-scrim', '')
     scrimEl.setAttribute('class', (scrimc.base || '') + ' ' + (scrimc.off || ''))
     // a click on the backdrop closes whatever it is behind — the behaviour
     // every visitor already expects of a dimmed page
@@ -705,7 +705,7 @@
   // trigger is unwired and its class list is never recomputed: the reason this
   // file's index became incremental at all. `collect` skips what it has already
   // seen, so a rescan over an unchanged page does nothing.
-  window.__guanoFxRescan = function () {
+  window.__superbirdFxRescan = function () {
     var fresh = collect(document)
     if (fresh.length) {
       collectTargets(fresh)
@@ -720,7 +720,7 @@
 // ---------- forms ----------
 //
 // Its own IIFE: the interactions block above returns early when a page has no
-// `#guano-fx` manifest (or none with an `fx` table), and a page can carry a
+// `#superbird-fx` manifest (or none with an `fx` table), and a page can carry a
 // form with no interactions at all.
 //
 // PROGRESSIVE ENHANCEMENT is the point. The markup already posts natively, so

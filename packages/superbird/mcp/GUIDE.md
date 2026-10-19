@@ -1,6 +1,6 @@
-# Guano — AI Agent Handbook
+# Superbird — AI Agent Handbook
 
-You are connected to a **running Guano instance**: a self-hosted visual site builder.
+You are connected to a **running Superbird instance**: a self-hosted visual site builder.
 Humans edit it in a browser; you edit it through these tools. Both surfaces work on the
 same document, so everything here describes the real system — you never need to probe,
 guess, or reverse-engineer anything. If a capability is not in this handbook or the tool
@@ -64,7 +64,7 @@ some clients will not return in one result.
    then answer it without ever showing anything: that comes back as
    `reason: "dialog-unavailable"`, which is not a refusal — ask in chat and retry with
    `chosenByUser: true`, exactly as on a client with no dialog at all (the human can also
-   settle it before the session with `GUANO_MCP_TARGET=main | <draftId> | new:<Name>` in
+   settle it before the session with `SUPERBIRD_MCP_TARGET=main | <draftId> | new:<Name>` in
    the MCP config, which `get_status` reports as `configuredTarget`). Either way, base
    your recommendation on
    **`get_status`'s `mainIsEmpty`**, never on the project's name: recommend **Main**
@@ -144,18 +144,18 @@ rules 5 and 6.
 - **Your tools, in ONE call.** This harness hands you tool NAMES and makes you fetch
   each schema before you can call it — and it takes a whole list at once, which nothing
   tells you. So load the set the job needs in a single `ToolSearch`:
-  `select:mcp__guano__get_page,mcp__guano__set_page_html,mcp__guano__edit_structure,mcp__guano__edit_elements,mcp__guano__list_components,mcp__guano__create_component,mcp__guano__create_page,mcp__guano__update_settings,mcp__guano__get_guide,mcp__guano__suggest_next`.
+  `select:mcp__superbird__get_page,mcp__superbird__set_page_html,mcp__superbird__edit_structure,mcp__superbird__edit_elements,mcp__superbird__list_components,mcp__superbird__create_component,mcp__superbird__create_page,mcp__superbird__update_settings,mcp__superbird__get_guide,mcp__superbird__suggest_next`.
   That set covers a build and the edits after it. Add
-  `mcp__guano__update_component,mcp__guano__set_component_variants` for deeper component
-  work, `mcp__guano__upload_media,mcp__guano__list_icons` for media,
-  `mcp__guano__set_page_seo` for SEO. One call, not one per tool: each one is a round
+  `mcp__superbird__update_component,mcp__superbird__set_component_variants` for deeper component
+  work, `mcp__superbird__upload_media,mcp__superbird__list_icons` for media,
+  `mcp__superbird__set_page_seo` for SEO. One call, not one per tool: each one is a round
   trip the person waits through, and they are invisible in the transcript.
 - **The site is the whole of your world.** Its pages, components, collections, media and
-  settings, exactly as the guano tools expose them. You have no file system, no shell, no
-  browser, and no idea — and no need to know — where Guano, the server or the project
+  settings, exactly as the superbird tools expose them. You have no file system, no shell, no
+  browser, and no idea — and no need to know — where Superbird, the server or the project
   folder live on the machine. **Never ask for a path or a location.** A question about
-  Guano itself (what it can do, how a feature works) you answer from this handbook; a
-  question about Guano's source code, the server, the files or the machine is out of
+  Superbird itself (what it can do, how a feature works) you answer from this handbook; a
+  question about Superbird's source code, the server, the files or the machine is out of
   scope — say so in one sentence and offer what you can do with the site instead.
 
 ### Build first. Do not ask.
@@ -280,7 +280,7 @@ Generating a page's HTML and its edit batch to disk and passing two paths is the
 cheapest way to build a large page.
 
 **Where those paths may point.** The operator can confine every path argument to one
-directory (`GUANO_MCP_FILE_ROOT`), and `get_status` reports it as `fileRoot`. Your own
+directory (`SUPERBIRD_MCP_FILE_ROOT`), and `get_status` reports it as `fileRoot`. Your own
 scratch directory is usually OUTSIDE it, so write these files under `fileRoot` — or ask
 the operator to widen it. Check it once, before you generate a 40 KB file somewhere the
 tools will refuse to read. The instance's data directory is refused even when it sits
@@ -2408,7 +2408,7 @@ Pair it with a dismissal, because the flag does not add one:
 same overlay built from classes (`hidden` → `flex`), still opened by `action: "on"` and
 closed by `action: "off"`, still joinable by as many triggers as you like.
 
-`html[data-guano-modal]` is set while any modal is open, so a backdrop blur or a
+`html[data-superbird-modal]` is set while any modal is open, so a backdrop blur or a
 `filter` on the page behind it is one CSS rule away.
 
 **`scrim: true` adds the backdrop itself.** An overlay built from classes has no dimming
@@ -2424,7 +2424,7 @@ create_interactions {items: [{name: "sheet", toClasses: "block", scrim: true}]}
 It is a property of the EFFECT, like `modal` and `closeOn`, so any binding that drives the
 state gets it. Independent of `modal` — use both for a dialog, `scrim` alone for a sheet or
 a drawer. Two overlays open at once share one backdrop. The element is marked
-`data-guano-scrim`, so its look is one CSS rule away too.
+`data-superbird-scrim`, so its look is one CSS rule away too.
 
 ### Site-wide overlays: channels
 
@@ -2481,7 +2481,7 @@ unscoped, so the trigger outside the component and the buttons inside share the 
   route, absolute against the domain). Per-page overrides: `set_page_seo` (single, or
   `items: [...]` for every page/locale at once). **Overrides are used verbatim — the
   titleTemplate is NOT applied on top**, so a per-page or per-locale title needs its
-  own suffix ("Tarifs — Guano"). On a **collection template** page, the title/description may
+  own suffix ("Tarifs — Superbird"). On a **collection template** page, the title/description may
   contain `{field}` tokens — e.g. `set_page_seo {pageId, title: "{title} — Tonearm",
   description: "{dek}"}` — which resolve per entry (locale-aware) at export, so every entry
   route gets its own metadata; an empty/missing field falls back to the literal token.
@@ -3147,7 +3147,7 @@ is a capability the server runs, not something an agent writes into a page.
 
 ## Looking at your work
 
-`preview` renders the current target to a **separate site under `/_guano/preview/` on the
+`preview` renders the current target to a **separate site under `/_superbird/preview/` on the
 studio's own origin** and returns the urls. It touches nothing live, needs no publish
 permission, and includes DRAFT pages — which a publish drops and which are exactly what you
 need while building.
@@ -3158,14 +3158,14 @@ you the hero is sitting on top of the nav. Reading the markup is the fallback, n
 
 The url carries an **access token good for an hour**, because the preview renders
 unpublished work. The token hit serves the page directly AND sets a cookie for the page's
-own assets, so a fresh browser profile with no Guano session — which is what a browser tool
+own assets, so a fresh browser profile with no Superbird session — which is what a browser tool
 has — can open it and keep clicking.
 
 **Use a url exactly as returned.** The token is the last thing in it, so anything you add
 to the end — a route, a trailing `/`, an `#anchor` — lands inside the token value and the
 check fails with a 401 that reads as "expired". To reach another route, take one from
 `routeUrls` (every page) or `localeUrls`, or build it the way the response does: the path
-first, then the `?t=` query (`https://host/_guano/preview/docs?t=<token>` — never
+first, then the `?t=` query (`https://host/_superbird/preview/docs?t=<token>` — never
 `…?t=<token>/docs`). A trimmed url gets the same 401. Expired, just call `preview` again.
 
 **Use it after every page.** Publishing is the only other way to render anything, and it

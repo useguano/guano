@@ -1,9 +1,9 @@
-// The PUBLIC namespace: `/_guano/*`, the only unauthenticated endpoints in the
+// The PUBLIC namespace: `/_superbird/*`, the only unauthenticated endpoints in the
 // product, and the one place a browser on another origin is answered.
 //
 // WHY A SEPARATE PREFIX FROM /api: every mutating `/api` route is cookie-authed
 // and same-origin-checked (index.mjs). If a public endpoint lived under the
-// same prefix, one loosened guard would expose both. `/_guano/` is already the
+// same prefix, one loosened guard would expose both. `/_superbird/` is already the
 // private-site unlock's prefix, so visitors have exactly one namespace and the
 // preview server — which refuses `/api/*` wholesale — can serve its twins.
 //

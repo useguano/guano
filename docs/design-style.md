@@ -1,4 +1,4 @@
-# Guano design style — handoff for the desktop launcher
+# Superbird design style — handoff for the desktop launcher
 
 Extracted from `src/assets/main.css` and `src/components/ui/` of the builder.
 Stack it assumes: Tailwind 4 CSS-first (no config file), Geist Variable + Geist Mono, lucide icons.

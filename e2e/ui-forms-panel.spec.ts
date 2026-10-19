@@ -75,8 +75,8 @@ test('a form is turned on in the Data panel, and a real submission reaches the e
     children?: Node[]
   }
   const findForm = async (): Promise<{ project: { pages: { elements: Node[] }[] }; form: Node | null }> => {
-    const stored = await (await page.request.get('/api/store?keys=guano-project:main')).json()
-    const project = JSON.parse(stored['guano-project:main']) as { pages: { elements: Node[] }[] }
+    const stored = await (await page.request.get('/api/store?keys=superbird-project:main')).json()
+    const project = JSON.parse(stored['superbird-project:main']) as { pages: { elements: Node[] }[] }
     // the FIRST form on the FIRST page: the same node the Layers row above
     // addressed. Taking the last form found anywhere read a different node.
     const first = (nodes: Node[]): Node | null => {
@@ -113,7 +113,7 @@ test('a form is turned on in the Data panel, and a real submission reaches the e
   expect(input).toBeTruthy()
   input!.attributes = { ...(input!.attributes ?? {}), name: 'email', type: 'email' }
   expect(
-    (await page.request.put('/api/store/guano-project%3Amain', { data: project })).ok(),
+    (await page.request.put('/api/store/superbird-project%3Amain', { data: project })).ok(),
   ).toBeTruthy()
   await page.reload()
   await expect(page.getByRole('button', { name: 'Pages', exact: true })).toBeVisible({
@@ -126,12 +126,12 @@ test('a form is turned on in the Data panel, and a real submission reaches the e
 
   // --- the published page carries the endpoint and the hidden state block ---
   const html = await (await page.request.get('/')).text()
-  expect(html).toContain(`action="/_guano/forms/${form.id}"`)
+  expect(html).toContain(`action="/_superbird/forms/${form.id}"`)
   expect(html).toContain('name="_hp"')
   expect(html).toContain('data-form-success hidden')
 
   // --- a real visitor submits ---
-  const res = await page.request.post(`/_guano/forms/${form.id}`, {
+  const res = await page.request.post(`/_superbird/forms/${form.id}`, {
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       accept: 'application/json',

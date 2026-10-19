@@ -1584,7 +1584,7 @@ var RESERVED_DATA_ATTRS = /* @__PURE__ */ new Set([
 	"data-atgt",
 	"data-slider",
 	"data-channel",
-	"data-guano-theme",
+	"data-superbird-theme",
 	"data-node-id",
 	"data-id",
 	"data-ref",

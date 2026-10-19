@@ -9,15 +9,13 @@ import { fileURLToPath } from 'node:url'
 import { log } from './log.mjs'
 
 // Runtime data location, single source for index/auth/media/export-media.
-// GUANO_DATA_DIR wins (SB_DATA_DIR is the deprecated pre-rename name —
-// index.mjs warns). An npm-installed package must never write user data
-// inside node_modules (wiped on reinstall), so when this file lives under
-// one the default is <cwd>/data; a repo clone keeps server/data. Absolute
-// either way — the exporter's write-path backstop rejects relative dirs.
+// An npm-installed package must never write user data inside node_modules
+// (wiped on reinstall), so when this file lives under one the default is
+// <cwd>/data; a repo clone keeps server/data. Absolute either way — the
+// exporter's write-path backstop rejects relative dirs.
 const PKG_ROOT = fileURLToPath(new URL('..', import.meta.url))
 export const DATA_DIR =
-  process.env.GUANO_DATA_DIR ||
-  process.env.SB_DATA_DIR ||
+  process.env.SUPERBIRD_DATA_DIR ||
   (PKG_ROOT.split(sep).includes('node_modules')
     ? join(process.cwd(), 'data')
     : join(PKG_ROOT, 'server', 'data'))
@@ -40,9 +38,9 @@ export const fail = (res, status, error) => send(res, status, JSON.stringify({ e
 // fsync costs a few ms per write and buys durability across a power loss or a
 // VM kill: without it the rename can land pointing at a file whose bytes never
 // left the page cache, i.e. a zero-length project. Autosave is debounced, so
-// the cost is paid at most twice a second. GUANO_FSYNC=0 opts out for anyone
+// the cost is paid at most twice a second. SUPERBIRD_FSYNC=0 opts out for anyone
 // who would rather have the throughput.
-const FSYNC = process.env.GUANO_FSYNC !== '0'
+const FSYNC = process.env.SUPERBIRD_FSYNC !== '0'
 
 // A per-process counter, because two overlapping writers sharing one
 // `${file}.tmp` meant the loser's rename hit a path the winner had already
@@ -128,7 +126,7 @@ export async function withStagingDir(target, fn) {
 }
 
 /** how old a staging directory must be before a boot sweep will remove it */
-export const STALE_AGE_MS = Number(process.env.GUANO_STALE_AGE_MS) || 60 * 60 * 1000
+export const STALE_AGE_MS = Number(process.env.SUPERBIRD_STALE_AGE_MS) || 60 * 60 * 1000
 
 /** embedded `Date.now()` from a `<base>.tmp-<ts>` name, else the dir's mtime,
  * else 0 (meaning "ancient", so it gets swept) */
@@ -145,7 +143,7 @@ async function ageOf(full, stamp) {
 /** remove stale `<base>.tmp-<ts>` / `<base>.old-<ts>` directories left behind
  * by a swap that was killed mid-flight.
  *
- * AGE-GATED, and that is not an optimisation. Two guano processes CAN share one
+ * AGE-GATED, and that is not an optimisation. Two superbird processes CAN share one
  * data dir — it is the documented port-walk scenario (see the PORT WAS BUSY
  * warning in index.mjs), where an older instance keeps serving from its own
  * heap. An unconditional sweep would delete the staging directory of a publish

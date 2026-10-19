@@ -85,7 +85,7 @@ test('every chip the AI panel offers is a named button', async ({ page }) => {
     const posts: unknown[] = []
     Object.defineProperty(window, '__hostPosts', { value: posts })
     Object.defineProperty(window, 'webkit', {
-      value: { messageHandlers: { guano: { postMessage: (m: unknown) => posts.push(m) } } },
+      value: { messageHandlers: { superbird: { postMessage: (m: unknown) => posts.push(m) } } },
     })
   })
   await openEditor(page)
@@ -95,8 +95,8 @@ test('every chip the AI panel offers is a named button', async ({ page }) => {
   )
   const feed = (lines: unknown[]) =>
     page.evaluate((batch) => {
-      const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } })
-        .__guanoHost
+      const host = (window as unknown as { __superbirdHost: { agentEvent: (e: unknown) => void } })
+        .__superbirdHost
       for (const line of batch) host.agentEvent(line)
     }, lines)
 

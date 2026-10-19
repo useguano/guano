@@ -1,4 +1,4 @@
-// Guano server: auth, editor storage, publishing, static site.
+// Superbird server: auth, editor storage, publishing, static site.
 // POST /api/auth/setup|login|logout, GET /api/auth/me — session cookie
 // GET/PUT/DELETE /api/store[...]  🔒 the editor's persistence (per key)
 // /api/media[...]                 🔒 media library (see media.mjs)
@@ -169,9 +169,6 @@ import {
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 // data location resolution (env overrides, install-aware default) lives in
 // util.mjs — one home for index/auth/media/export-media
-if (!process.env.GUANO_DATA_DIR && process.env.SB_DATA_DIR) {
-  log.warn('SB_DATA_DIR is deprecated — use GUANO_DATA_DIR')
-}
 const SNAPSHOT = join(DATA_DIR, 'published.json')
 const SITE = join(DATA_DIR, 'site')
 // The PREVIEW export: the same exporter, a different directory, served by THIS
@@ -189,7 +186,7 @@ const PREVIEW = join(DATA_DIR, 'preview')
 // one workflow it exists for ("open it and look") could never run. The URLs are
 // rewritten to the mount instead (`mountSite`), which costs one pass over the
 // exported HTML and buys the studio's own origin, scheme and certificate.
-const PREVIEW_MOUNT = '/_guano/preview'
+const PREVIEW_MOUNT = '/_superbird/preview'
 const MEDIA_DIR = join(DATA_DIR, 'media')
 // server-managed publish config — the GitHub token lives here, NEVER in the
 // /api/store project blob (which any authed user can read)
@@ -207,14 +204,14 @@ const REDIRECTS_MANIFEST = join(DATA_DIR, 'redirects.json')
 const PREVIEW_REDIRECTS_MANIFEST = join(DATA_DIR, 'redirects.preview.json')
 const FORMS_DIR = join(DATA_DIR, 'forms')
 const DIST = join(ROOT, 'dist')
-// The version of the `guano` package this server belongs to, surfaced on
+// The version of the `superbird` package this server belongs to, surfaced on
 // /api/auth/me. The MCP process is spawned by the agent's client and does NOT
 // restart when this server does, so comparing the two is the only way an agent
 // can tell its tool surface is stale. Read the package the MCP ships in (in an
 // installed copy this IS the same package.json).
 const APP_VERSION = (() => {
   for (const p of [
-    join(ROOT, 'packages', 'guano', 'package.json'),
+    join(ROOT, 'packages', 'superbird', 'package.json'),
     join(ROOT, 'package.json'),
   ]) {
     try {
@@ -380,7 +377,7 @@ async function readPublishConfig() {
   }
 }
 
-// ---------- 🌐 the PUBLIC namespace: /_guano/* ----------
+// ---------- 🌐 the PUBLIC namespace: /_superbird/* ----------
 //
 // Deliberately outside /api, which is cookie-authed and same-origin-checked
 // wholesale. Visitors reach exactly this prefix, so a guard regression on one
@@ -466,24 +463,24 @@ const handlePreviewFormPost = createFormsHandler({
 })
 
 /** is this a public form route? */
-const isFormPath = (path) => path.startsWith('/_guano/forms/')
+const isFormPath = (path) => path.startsWith('/_superbird/forms/')
 
 // ---------- auth endpoints ----------
 
 const isEmail = (v) => typeof v === 'string' && /.+@.+\..+/.test(v)
 
 /**
- * The ACCOUNT for a request: session cookie first, then a `guano_` API-token
+ * The ACCOUNT for a request: session cookie first, then a `superbird_` API-token
  * bearer (the MCP server's credential), rate-limited per IP on failure.
  * Returns null when neither authenticates. The token resolves to its owner
  * with a LIVE role, so a demotion takes effect on the very next request.
- * PUBLISH_TOKEN (CI, no `guano_` prefix) is handled separately in handlePost.
+ * PUBLISH_TOKEN (CI, no `superbird_` prefix) is handled separately in handlePost.
  *
- * `Bearer guano_` AND NOTHING ELSE. This line is the enforcement that keeps
- * the two token kinds apart: a `guanol_` launcher token cannot be READ here,
+ * `Bearer superbird_` AND NOTHING ELSE. This line is the enforcement that keeps
+ * the two token kinds apart: a `superbirdl_` launcher token cannot be READ here,
  * let alone resolve — not "is refused", cannot be read — so an injected agent
  * has no path from its own credential to a builder session. The mirror of this
- * line lives on `/api/auth/launcher-session`, which parses `guanol_` alone.
+ * line lives on `/api/auth/launcher-session`, which parses `superbirdl_` alone.
  * → `server/auth.mjs` TOKEN_KINDS.
  *
  * TWO CALLERS, and they are the whole list: `/api/auth/me`, which has to
@@ -621,7 +618,7 @@ const isLoopbackSocket = (req) =>
  * evidence is `x-forwarded-proto`, and that is evidence exactly when
  * TRUST_PROXY says a proxy set it. Untrusted, the answer is NO, which refuses
  * and never widens; the refusal names TRUST_PROXY so the operator is not left
- * guessing. The loopback exception is `guano connect --url`'s rule verbatim: a
+ * guessing. The loopback exception is `superbird connect --url`'s rule verbatim: a
  * credential that never leaves the machine needs no transport to protect it,
  * and without it the e2e suite could not exchange a token at all.
  *
@@ -654,16 +651,16 @@ async function handleAuth(req, res, path) {
   if (path === '/api/auth/me' && req.method === 'GET') {
     if (needsSetup()) {
       // A policy answered BEFORE the first account (the scaffolder's questions,
-      // `guano connect --offline`) is shown to the setup form so it does not
+      // `superbird connect --offline`) is shown to the setup form so it does not
       // ask again. Nothing here anyone could not set: with no users, whoever
       // reaches this instance is about to become its admin.
       const preset = (await agentPolicyPreset()) ? await readAgentPolicy() : null
       // ...and the name they gave the project in the terminal, written to .env
-      // by `npm create @useguano` and loaded by the CLI. Nobody should be asked
+      // by `npm create @superbird-app` and loaded by the CLI. Nobody should be asked
       // to name the same thing twice. Trimmed and capped because it reaches a
       // form field, and read ONLY while there is no admin — after that the name
       // lives in the project blob and is edited in the editor.
-      const scaffolded = String(process.env.GUANO_PROJECT_NAME ?? '').trim().slice(0, 60)
+      const scaffolded = String(process.env.SUPERBIRD_PROJECT_NAME ?? '').trim().slice(0, 60)
       return send(
         res,
         401,
@@ -679,7 +676,7 @@ async function handleAuth(req, res, path) {
         }),
       )
     }
-    // session cookie or a `guano_` API-token bearer — the MCP server calls this
+    // session cookie or a `superbird_` API-token bearer — the MCP server calls this
     // on boot to fail fast on a bad URL/token and to learn who it is
     // requestAccount, not requestUser: this response carries BOTH roles, so
     // it needs the uncapped one. Everything else on the server wants the cap.
@@ -692,7 +689,7 @@ async function handleAuth(req, res, path) {
     // switch. Not a secret — the refusals state it anyway — and WRITING the
     // policy stays admin + session cookie (handleAgentPolicy).
     const policy = isAgentRequest(req) ? { agentPolicy: await readAgentPolicy() } : null
-    // The human-readable half of the identity, authed-only: `guano mcp` turns a
+    // The human-readable half of the identity, authed-only: `superbird mcp` turns a
     // mismatch into "this entry was connected to <name>, but <other> answered".
     // `role` is the ACCOUNT's and `effectiveRole` is this REQUEST's, and
     // `canBuild` is computed from the second one here rather than derived in
@@ -782,10 +779,10 @@ async function handleAuth(req, res, path) {
     // exists to prevent.
     //
     // PROOF TWO, for an instance this app did not spawn (a VPS, another Mac):
-    // a `guanol_` launcher token, obtained once through the device flow where
+    // a `superbirdl_` launcher token, obtained once through the device flow where
     // a human approved it in this instance's own /admin. It parses the
     // LAUNCHER prefix and nothing else — the mirror of requestUser's
-    // `guano_`-only line, and the reason an injected agent has no path from
+    // `superbird_`-only line, and the reason an injected agent has no path from
     // its own credential to a builder session. An agent token here is 403 BY
     // NAME rather than falling through as unrecognised, because "that
     // credential is real but at the wrong door" is the only useful thing to
@@ -834,7 +831,7 @@ async function handleAuth(req, res, path) {
     // Absent env = no route for this proof, which is what keeps every ordinary
     // deploy exactly as it was. A token-bearing request never reaches here, so
     // a deployed instance still answers proof two with no secret set.
-    const LAUNCHER_SECRET = process.env.GUANO_LAUNCHER_SECRET
+    const LAUNCHER_SECRET = process.env.SUPERBIRD_LAUNCHER_SECRET
     if (!LAUNCHER_SECRET || LAUNCHER_SECRET.length < 32) return fail(res, 404, 'not found')
     // `req.socket.remoteAddress`, never `clientIp(req)`: clientIp honours
     // X-Forwarded-For under TRUST_PROXY, so a header could claim loopback.
@@ -869,7 +866,7 @@ async function handleAuth(req, res, path) {
     })
   }
   if (path === '/api/auth/connect' && req.method === 'POST') {
-    // local-trust bootstrap for `guano connect`: the CLI writes a random nonce
+    // local-trust bootstrap for `superbird connect`: the CLI writes a random nonce
     // into DATA_DIR and sends it here — being able to write the data dir IS
     // ownership of the instance, so no session/token is needed. Loopback only,
     // single-use nonce (deleted on every attempt, match or not).
@@ -895,14 +892,14 @@ async function handleAuth(req, res, path) {
       return fail(
         res,
         403,
-        `nonce mismatch — this server reads its data dir at ${DATA_DIR}, so \`guano connect\` ` +
+        `nonce mismatch — this server reads its data dir at ${DATA_DIR}, so \`superbird connect\` ` +
           'must write the nonce THERE. Run it on this machine with ' +
-          `GUANO_DATA_DIR=${DATA_DIR}, or against the instance that owns the dir it did write.`,
+          `SUPERBIRD_DATA_DIR=${DATA_DIR}, or against the instance that owns the dir it did write.`,
       )
     }
     // with no admin yet this mints a PENDING token, bound at setup
     const minted = await bootstrapConnectToken(typeof name === 'string' ? name : '')
-    // `guano connect --main --publish` (or its prompts): the person at the
+    // `superbird connect --main --publish` (or its prompts): the person at the
     // instance's own keyboard, holding the data dir, is the owner — the same
     // trust the nonce already stands on — so the two onboarding switches are
     // applied here too. A key left out is left alone; only booleans count.
@@ -910,7 +907,7 @@ async function handleAuth(req, res, path) {
     const agentPolicy = Object.keys(patch).length ? await writeAgentPolicy(patch) : await readAgentPolicy()
     return send(res, 200, JSON.stringify({ ...minted, agentPolicy }))
   }
-  // ---------- device authorization: `guano connect --url <remote>` ----------
+  // ---------- device authorization: `superbird connect --url <remote>` ----------
   //
   // The local flow proves authority with a nonce file in the data dir, on a
   // loopback-only route. From another machine neither is possible, so the
@@ -1043,7 +1040,7 @@ async function handleAuth(req, res, path) {
       // The kind was fixed when the authorization STARTED and shown on the
       // consent screen, so it is read back from the record and never from this
       // request: the human approved one sentence, and this mints that one.
-      const { token } = await createApiToken(user.id, describing.name || 'guano connect', {
+      const { token } = await createApiToken(user.id, describing.name || 'superbird connect', {
         kind: describing.kind,
       })
       const granted = approveDevice(code, {
@@ -1383,8 +1380,8 @@ async function handleTokens(req, res, path) {
 
 const STORE_DIR = join(DATA_DIR, 'store')
 // `_` is deliberately NOT allowed. Keys map to filenames by `:` → `__`, so an
-// underscore makes that mapping non-injective — `guano-project__main` would
-// land on Main's file while sliding past every `startsWith('guano-project:')`
+// underscore makes that mapping non-injective — `superbird-project__main` would
+// land on Main's file while sliding past every `startsWith('superbird-project:')`
 // guard below (the contributor merge and the secret redaction), and even
 // `a_:b` / `a:_b` would collide. Barring `_` keeps key and file in lockstep, so
 // a guard can never disagree with the blob it protects. No real key uses one.
@@ -1396,7 +1393,7 @@ const storeFile = (key) => join(STORE_DIR, key.replaceAll(':', '__') + '.json')
  * welcome). Best-effort — '' when there's nothing stored yet. */
 async function currentProjectName() {
   try {
-    const name = JSON.parse(await readFile(storeFile('guano-project:main'), 'utf8'))?.name
+    const name = JSON.parse(await readFile(storeFile('superbird-project:main'), 'utf8'))?.name
     return typeof name === 'string' ? name : ''
   } catch {
     return ''
@@ -1412,12 +1409,12 @@ async function currentProjectName() {
  * it back off `content-disposition` rather than naming the file itself.
  */
 async function exportFilename() {
-  const base = slugify(await currentProjectName()) || 'guano'
+  const base = slugify(await currentProjectName()) || 'superbird'
   return `${base}_${randomBytes(4).toString('hex')}.zip`
 }
 
 /**
- * Seed `guano-project:main` when a fresh instance has none.
+ * Seed `superbird-project:main` when a fresh instance has none.
  *
  * Until now the project blob was written only by the browser
  * (usePersistence.load()), so a brand-new install had NOTHING on Main until an
@@ -1440,11 +1437,11 @@ async function ensureProjectSeeded(name) {
     let createProject
     try {
       // the DOM-free editor-logic bundle, in either layout: the repo
-      // (packages/guano/runtime/) or the npm package, where prepack copies
+      // (packages/superbird/runtime/) or the npm package, where prepack copies
       // server/ in next to runtime/. Imported lazily so startup doesn't pay
       // for it, and never fatal — a missing bundle means no seed, not a dead
       // server (the browser still writes the blob as it always did).
-      const mod = await import(new URL('../packages/guano/runtime/mcp-runtime.mjs', import.meta.url)).catch(
+      const mod = await import(new URL('../packages/superbird/runtime/mcp-runtime.mjs', import.meta.url)).catch(
         () => import(new URL('../runtime/mcp-runtime.mjs', import.meta.url)),
       )
       ;({ createProject } = mod)
@@ -1492,16 +1489,16 @@ async function readFileOrNull(path) {
   }
 }
 
-const isProjectKey = (key) => key.startsWith('guano-project:')
-const MAIN_PROJECT_KEY = 'guano-project:main'
-const BRANCHES_META_KEY = 'guano-branches'
+const isProjectKey = (key) => key.startsWith('superbird-project:')
+const MAIN_PROJECT_KEY = 'superbird-project:main'
+const BRANCHES_META_KEY = 'superbird-branches'
 
 /**
  * The keys the product actually uses — an allowlist for WRITES.
  *
  * STORE_KEY_RE constrains the characters, not the name, so any well-formed
  * name could be created and written verbatim. That is how a contributor
- * reached `guano-branches`: the content merge ran only for project blob keys,
+ * reached `superbird-branches`: the content merge ran only for project blob keys,
  * and everything else went straight to disk. Unknown keys are now refused for
  * every role, so there is no corner of the store outside the schema left for a
  * writer to park authorization data in.
@@ -1511,18 +1508,18 @@ const BRANCHES_META_KEY = 'guano-branches'
  */
 const KNOWN_STORE_KEYS = new Set([
   BRANCHES_META_KEY,
-  'guano-published-baseline',
-  'guano-published-info',
+  'superbird-published-baseline',
+  'superbird-published-info',
 ])
 const isKnownStoreKey = (key) =>
-  KNOWN_STORE_KEYS.has(key) || isProjectKey(key) || key.startsWith('guano-base:')
-// A `guano-base:<id>` merge-base snapshot is a FULL project copy — same
+  KNOWN_STORE_KEYS.has(key) || isProjectKey(key) || key.startsWith('superbird-base:')
+// A `superbird-base:<id>` merge-base snapshot is a FULL project copy — same
 // settings, same secrets, and the structural truth the 3-way merge diffs
 // against. So it needs the same two guards as a project key: redact secrets on
 // a contributor read, and run a contributor write through the authoritative
 // merge (otherwise a poisoned base makes the editor's merge propose structural
 // changes nobody authored).
-const isProjectBlobKey = (key) => isProjectKey(key) || key.startsWith('guano-base:')
+const isProjectBlobKey = (key) => isProjectKey(key) || key.startsWith('superbird-base:')
 
 /** parsed JSON or null — for blobs we only want to peek inside */
 function parseJsonOrNull(str) {
@@ -1561,7 +1558,7 @@ async function storeBytes() {
 
 // ---------- live change feed (SSE) ----------
 // Editors subscribe to GET /api/events; every store write is broadcast with
-// its source ('agent' = a guano_ bearer token, 'human' = a session cookie).
+// its source ('agent' = a superbird_ bearer token, 'human' = a session cookie).
 // The editor uses this to live-apply MCP agent edits and hard-lock the UI
 // while an agent session is active.
 const eventClients = new Set()
@@ -1584,7 +1581,7 @@ function broadcastFormEvent() {
   if (!eventClients.size) return
   const payload = `data: ${JSON.stringify({ type: 'form-submission', ts: Date.now() })}\n\n`
   for (const client of eventClients) {
-    if (isBuildRole(client.guanoUserRole)) client.write(payload)
+    if (isBuildRole(client.superbirdUserRole)) client.write(payload)
   }
 }
 
@@ -1674,12 +1671,12 @@ function handleEvents(req, res) {
   if (!user) return fail(res, 401, 'unauthorized')
   if (isShuttingDown()) return fail(res, 503, 'server is restarting')
   let held = 0
-  for (const client of eventClients) if (client.guanoUserId === user.id) held++
+  for (const client of eventClients) if (client.superbirdUserId === user.id) held++
   if (held >= MAX_EVENT_CLIENTS_PER_USER) {
     return fail(res, 429, 'too many open change feeds — close another editor tab')
   }
-  res.guanoUserId = user.id
-  res.guanoUserRole = user.role
+  res.superbirdUserId = user.id
+  res.superbirdUserRole = user.role
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache',
@@ -1738,7 +1735,7 @@ async function withStoreKeyLockInner(key, fn) {
 
 async function handleStore(req, res, path, query) {
   // any authenticated user (incl. contributors editing content) may use the
-  // store — via session cookie OR a `guano_` API-token bearer (the MCP server)
+  // store — via session cookie OR a `superbird_` API-token bearer (the MCP server)
   const user = requestUser(req)
   if (!user) return fail(res, 401, 'unauthorized')
 
@@ -1771,14 +1768,14 @@ async function handleStore(req, res, path, query) {
       // S4: never hand a contributor the server-side secrets (smtp/integration
       // keys) carried in the project blob. Safe because contributor writes
       // ignore incoming `settings`, so a redacted round-trip can't blank them.
-      // `guano-base:` snapshots are full project copies, so they carry the same
+      // `superbird-base:` snapshots are full project copies, so they carry the same
       // secrets and get the same treatment.
       if (val && !isBuildRole(user.role) && isProjectBlobKey(key)) {
         val = redactSecretsForContributor(val)
       }
       out[key] = val
     }
-    res.setHeader('x-guano-hashes', JSON.stringify(digests))
+    res.setHeader('x-superbird-hashes', JSON.stringify(digests))
     return send(res, 200, JSON.stringify(out))
   }
 
@@ -1796,7 +1793,7 @@ async function handleStore(req, res, path, query) {
   // `protectedWriteDenial`.
   if (
     req.method !== 'GET' &&
-    (key === 'guano-published-baseline' || key === 'guano-published-info') &&
+    (key === 'superbird-published-baseline' || key === 'superbird-published-info') &&
     (isAgentRequest(req) || !isBuildRole(user.role))
   ) {
     const who = isAgentRequest(req) ? 'agents' : `${user.role}s`
@@ -1912,7 +1909,7 @@ async function deleteStoreKey(req, res, user, key) {
   if (user.role === 'contributor') {
     const isDraftKey =
       (isProjectKey(key) && key !== MAIN_PROJECT_KEY) ||
-      (key.startsWith('guano-base:') && key !== 'guano-base:main')
+      (key.startsWith('superbird-base:') && key !== 'superbird-base:main')
     if (!isDraftKey) return fail(res, 403, 'contributors cannot delete stored data')
     if (!(await ownsDraft(user, key))) {
       return fail(res, 403, 'contributors can only discard their own drafts')
@@ -1921,7 +1918,7 @@ async function deleteStoreKey(req, res, user, key) {
   // Main is the live project and its history is in-memory client-side only,
   // so an agent deleting it is unrecoverable — hold it to the same switch
   // that gates agent writes to Main.
-  if (isAgentRequest(req) && (key === MAIN_PROJECT_KEY || key === 'guano-base:main')) {
+  if (isAgentRequest(req) && (key === MAIN_PROJECT_KEY || key === 'superbird-base:main')) {
     const policy = await readAgentPolicy()
     if (!policy.allowMainWrites) return fail(res, 403, AGENT_MAIN_DENIED)
   }
@@ -1931,7 +1928,7 @@ async function deleteStoreKey(req, res, user, key) {
 }
 
 /**
- * Does `user` own the draft a `guano-project:<id>` / `guano-base:<id>` key
+ * Does `user` own the draft a `superbird-project:<id>` / `superbird-base:<id>` key
  * belongs to? Ownership is the `createdBy` stamp the editor and the MCP server
  * write into the branches meta at creation.
  *
@@ -1940,7 +1937,7 @@ async function deleteStoreKey(req, res, user, key) {
  */
 async function ownsDraft(user, key) {
   const id = key.slice(key.indexOf(':') + 1)
-  const meta = parseJsonOrNull(await readFileOrNull(storeFile('guano-branches')))
+  const meta = parseJsonOrNull(await readFileOrNull(storeFile('superbird-branches')))
   const draft = Array.isArray(meta?.branches) ? meta.branches.find((b) => b?.id === id) : null
   if (!draft?.createdBy) return true // unknown or legacy — shared
   return draft.createdBy === user.id
@@ -1979,7 +1976,7 @@ async function protectedWriteDenial(req, user, key, existingStr, bodyStr) {
   const editor = !agent && !contributor && user.role !== 'admin'
   if (!agent && !contributor && !editor) return null // an admin at a browser: their call
 
-  if (agent && (key === MAIN_PROJECT_KEY || key === 'guano-base:main')) {
+  if (agent && (key === MAIN_PROJECT_KEY || key === 'superbird-base:main')) {
     if (!(await readAgentPolicy()).allowMainWrites) return AGENT_MAIN_DENIED
   }
   // For a brand-new draft there is nothing stored yet, so Main is the baseline
@@ -2150,7 +2147,7 @@ async function previewLink(req) {
  * The signed token in the url is that gate, and it stays even though the
  * session cookie now reaches here (same origin, so the `Secure` problem that
  * ruled it out is gone). It stays because the agent's BROWSER is a different
- * browser profile with no Guano session at all — Claude's in-app pane
+ * browser profile with no Superbird session at all — Claude's in-app pane
  * especially — and opening the link is how it gets a short-TTL cookie that
  * every subsequent asset request, click and screenshot rides on. A session-only
  * gate would mean the one workflow this exists for is the one that cannot run.
@@ -2158,7 +2155,7 @@ async function previewLink(req) {
  * This is NOT the agent publish policy, which the preview deliberately
  * ignores: seeing your own work should never require shipping it.
  */
-const PREVIEW_COOKIE = 'guano_preview'
+const PREVIEW_COOKIE = 'superbird_preview'
 // An hour to open the link, then eight to work in. The link is handed to a
 // person or to an agent's browser, so the window has to survive them finishing
 // the sentence they were reading.
@@ -2219,7 +2216,7 @@ async function handlePost(req, res, params) {
   const bearerOk = !!TOKEN && timingSafeEqualStr(req.headers.authorization ?? '', `Bearer ${TOKEN}`)
   let user = null
   if (!bearerOk) {
-    // session cookie or a `guano_` API-token bearer; the PUBLISH_TOKEN CI escape
+    // session cookie or a `superbird_` API-token bearer; the PUBLISH_TOKEN CI escape
     // hatch above bypasses this entirely. Contributors may publish, but the
     // content merge below (mergeContributorProject) rebuilds their snapshot from
     // Main's structure/settings, so they can only ever ship content changes.
@@ -2274,7 +2271,7 @@ async function handlePost(req, res, params) {
   // otherwise a hand-crafted publish would push structure straight to the live
   // site, bypassing the store write guard
   if (user?.role === 'contributor') {
-    const stored = await readFileOrNull(storeFile('guano-project:main'))
+    const stored = await readFileOrNull(storeFile('superbird-project:main'))
     const r = mergeContributorProject(stored, stored, raw)
     if (r.error) return fail(res, 403, r.error)
     raw = r.merged
@@ -2345,7 +2342,7 @@ async function handlePost(req, res, params) {
 
 /**
  * Session-only and admin-only, deliberately: these switches are exactly what an
- * agent would want flipped, so a `guano_` bearer must never be able to flip
+ * agent would want flipped, so a `superbird_` bearer must never be able to flip
  * them — otherwise the policy would guard nothing. Same rule as /api/users and
  * /api/publish-config.
  */
@@ -2410,7 +2407,7 @@ async function handlePublishConfig(req, res) {
 // An integration is a NAMED SET OF KEYS (server/integrations.mjs). The split of
 // authority here is the whole security model of the feature:
 //
-//   READ  — session OR a `guano_` token, admin/editor. An agent needs the key
+//   READ  — session OR a `superbird_` token, admin/editor. An agent needs the key
 //           NAMES to write a valid `{{ENV.X}}` reference in custom code; it
 //           never sees a secret value, because the read shape has no branch
 //           that can include one.
@@ -2428,7 +2425,7 @@ async function handleIntegrations(req, res, path) {
   const rest = path.slice('/api/integrations'.length).replace(/^\//, '')
 
   if (req.method === 'GET' && !rest) {
-    // requestUser, not sessionUser: a `guano_` token reads the names
+    // requestUser, not sessionUser: a `superbird_` token reads the names
     const user = requestUser(req)
     if (!user) return fail(res, 401, 'unauthorized')
     if (!isBuildRole(user.role)) return fail(res, 403, 'forbidden')
@@ -2746,7 +2743,7 @@ async function handleFormsConfig(req, res) {
 // agents read). Enforced by THIS server only: a zip or GitHub export is static
 // files and stays public wherever it is hosted.
 
-const SITE_COOKIE = 'guano_site'
+const SITE_COOKIE = 'superbird_site'
 const SITE_COOKIE_TTL = 30 * 24 * 60 * 60 // 30 days
 const siteCookieSecure = process.env.COOKIE_SECURE !== '0' ? '; Secure' : ''
 /** the cookie value that proves a visitor knew the CURRENT password: an HMAC
@@ -2849,7 +2846,7 @@ async function siteGateHandled(req, res, path) {
   const NOSTORE = { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' }
   // the unlock is answered whether or not a cookie is already held — a stale
   // one must not turn a fresh attempt into a 404 from the static site
-  if (path === '/_guano/unlock' && req.method === 'POST') {
+  if (path === '/_superbird/unlock' && req.method === 'POST') {
     // clientIp, not the socket address: this was the one limiter in the
     // codebase that ignored TRUST_PROXY, so behind a proxy every visitor
     // shared one bucket and ten wrong guesses locked the whole site out.
@@ -2933,7 +2930,7 @@ async function handleUnpublish(req, res) {
 
 // package layout inside the zip: manifest.json, store/<key>.json,
 // media/index.json, media/files/*, media/thumbs/*.webp
-const PACKAGE_FORMAT = 'guano-package'
+const PACKAGE_FORMAT = 'superbird-package'
 const PACKAGE_VERSION = 1
 
 /** GET /api/project-export — admin-only backup package (.zip). Excludes
@@ -3052,7 +3049,7 @@ async function applyPackage(raw) {
       } catch {
         return `unreadable store entry: ${path}`
       }
-      if (path.startsWith('store/guano-project__')) {
+      if (path.startsWith('store/superbird-project__')) {
         if (Array.isArray(parsed.pages) && parsed.pages.length) hasProject = true
       }
     } else if (path === 'media/index.json') {
@@ -3287,7 +3284,7 @@ async function migrateIntegrations() {
   }
   const targets = files
     .filter((f) => f.endsWith('.json'))
-    .filter((f) => f.startsWith('guano-project__') || f.startsWith('guano-base__'))
+    .filter((f) => f.startsWith('superbird-project__') || f.startsWith('superbird-base__'))
     .map((f) => join(STORE_DIR, f))
   if (existsSync(SNAPSHOT)) targets.push(SNAPSHOT)
   let stripped = 0
@@ -3311,7 +3308,7 @@ async function migrateIntegrations() {
 /**
  * Bring every project blob to the current schema.
  *
- * EVERY blob, not just Main: the drafts, the `guano-base:*` merge snapshots
+ * EVERY blob, not just Main: the drafts, the `superbird-base:*` merge snapshots
  * (a full project copy each — a 3-way merge against an unmigrated base would
  * read every page as changed) and the published baseline. One left behind is a
  * project that renders through a code path the app no longer has.
@@ -3323,7 +3320,7 @@ async function migrateIntegrations() {
  */
 async function migrateSchema() {
   const mod = await import(
-    new URL('../packages/guano/runtime/mcp-runtime.mjs', import.meta.url)
+    new URL('../packages/superbird/runtime/mcp-runtime.mjs', import.meta.url)
   ).catch(() =>
     import(new URL('../runtime/mcp-runtime.mjs', import.meta.url)).catch(() => null),
   )
@@ -3342,7 +3339,7 @@ async function migrateSchema() {
   const targets = []
   for (const f of await readdir(STORE_DIR)) {
     if (!f.endsWith('.json')) continue
-    if (!f.startsWith('guano-project__') && !f.startsWith('guano-base__')) continue
+    if (!f.startsWith('superbird-project__') && !f.startsWith('superbird-base__')) continue
     targets.push({ label: f.replace(/\.json$/, '').replaceAll('__', ':'), file: join(STORE_DIR, f) })
   }
   if (existsSync(SNAPSHOT)) targets.push({ label: 'published baseline', file: SNAPSHOT })
@@ -3613,7 +3610,7 @@ const server = createServer(async (req, res) => {
     // forms namespace, which stays the first thing read.
     if (path === '/api/health' && req.method === 'GET') return await handleHealth(res)
     // A launcher token opens the editor and does nothing else. It is already
-    // unreadable as an agent bearer (requestUser parses `guano_` alone), so
+    // unreadable as an agent bearer (requestUser parses `superbird_` alone), so
     // without this it would simply 401 as an unknown credential — and the one
     // thing worth knowing, that the credential is real but at the wrong door,
     // would be invisible. Named, so the attempt is visible rather than merely
@@ -3710,7 +3707,7 @@ const server = createServer(async (req, res) => {
 })
 
 // When PORT wasn't explicitly chosen, a busy default port walks to the next
-// free one (another guano/dev instance is usually what's squatting on it).
+// free one (another superbird/dev instance is usually what's squatting on it).
 /**
  * The preview, under PREVIEW_MOUNT on this origin.
  *
@@ -3726,7 +3723,7 @@ const server = createServer(async (req, res) => {
 async function handlePreviewMount(req, res, path) {
   const url = new URL(req.url, 'http://x')
   // Without the trailing slash the browser resolves nothing relative to the
-  // mount, and a bare `/_guano/preview` would 404 on index.html anyway.
+  // mount, and a bare `/_superbird/preview` would 404 on index.html anyway.
   if (path === PREVIEW_MOUNT) {
     return send(res, 302, '', 'text/plain', {
       location: `${PREVIEW_MOUNT}/${url.search}`,
@@ -3768,7 +3765,7 @@ async function handlePreviewMount(req, res, path) {
   // out without putting a row in the real list.
   const inner = path.slice(PREVIEW_MOUNT.length) || '/'
   if (inner.startsWith('/forms/')) {
-    return await handlePreviewFormPost(req, res, `/_guano${inner}`)
+    return await handlePreviewFormPost(req, res, `/_superbird${inner}`)
   }
   await serveSiteDir(req, res, PREVIEW, { mount: PREVIEW_MOUNT })
 }
@@ -3779,7 +3776,7 @@ async function handlePreviewMount(req, res, path) {
 // from the export.mjs cached in ITS heap — so the editor publishes, the MCP
 // publishes, both report success, and the HTML on disk is built by code from
 // another day. Everything that reaches this server by its default address
-// (the Vite proxy, the MCP's GUANO_URL, an open browser tab) goes to the
+// (the Vite proxy, the MCP's SUPERBIRD_URL, an open browser tab) goes to the
 // squatter, not to us. See the banner warning below.
 const PORT_EXPLICIT = Boolean(process.env.PORT)
 const PORT_STRICT = process.env.PORT_STRICT === '1' || process.env.PORT_STRICT === 'true'
@@ -3808,7 +3805,7 @@ async function boot() {
   } catch (err) {
     log.warn('could not restrict data dir permissions:', err.message)
   }
-  // Identity before the socket: /api/health reports the id, and `guano mcp`
+  // Identity before the socket: /api/health reports the id, and `superbird mcp`
   // compares it against the one baked into its client config, so a client that
   // reached the WRONG project on a shared port is told which project answered
   // instead of being handed a bare 401.
@@ -4007,7 +4004,7 @@ function printBanner() {
   const base = `http://localhost:${port}`
   const label = instance?.name ? `${instance.name} ` : ''
   log.banner(`
-  guano is running${label ? ` — ${instance.name}` : ''}${TOKEN ? ' (publish token required)' : ''}
+  superbird is running${label ? ` — ${instance.name}` : ''}${TOKEN ? ' (publish token required)' : ''}
 
   ➜ editor:  ${base}/admin
   ➜ site:    ${base}/
@@ -4031,11 +4028,11 @@ ${
     log.banner(`  ⚠  PORT ${PORT} WAS BUSY — THIS SERVER IS ON ${port}
 
      Another process is still listening on ${PORT}, and everything that
-     addresses guano by that port goes THERE, not here:
+     addresses superbird by that port goes THERE, not here:
        · the Vite dev proxy (vite.config.ts targets localhost:4174)
        · any browser tab already open on :${PORT}
-       · any MCP client whose GUANO_URL says :${PORT}
-     If that process is an older guano, it publishes and previews with the
+       · any MCP client whose SUPERBIRD_URL says :${PORT}
+     If that process is an older superbird, it publishes and previews with the
      export code cached in its heap: every write reports success and the
      HTML on disk is built by a different day's code.
 ${
@@ -4043,7 +4040,7 @@ ${
     ? `
      :${PORT} is THIS project's remembered port, so an MCP client connected
      earlier is now pointed at the other instance — which answers its token
-     with a 401. Re-run \`guano connect\` here (quit Claude Desktop first) to
+     with a 401. Re-run \`superbird connect\` here (quit Claude Desktop first) to
      re-point it at :${port}.
 `
     : ''

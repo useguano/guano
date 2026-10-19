@@ -43,17 +43,17 @@ declare global {
   interface Window {
     webkit?: {
       messageHandlers?: {
-        guano?: { postMessage: (message: unknown) => void }
+        superbird?: { postMessage: (message: unknown) => void }
       }
     }
-    __guanoHost?: HostCallbacks
+    __superbirdHost?: HostCallbacks
   }
 }
 
 const REAUTH_TIMEOUT_MS = 10_000
 
 const channel = () =>
-  typeof window === 'undefined' ? undefined : window.webkit?.messageHandlers?.guano
+  typeof window === 'undefined' ? undefined : window.webkit?.messageHandlers?.superbird
 
 let pending: { promise: Promise<void>; resolve: () => void; reject: (e: Error) => void } | null =
   null
@@ -106,7 +106,7 @@ export const hostBridge = {
 
 export function installHostCallbacks(handlers: HostHandlers): void {
   if (!channel()) return
-  window.__guanoHost = {
+  window.__superbirdHost = {
     sessionRestored: () => settle((p) => p.resolve()),
     sessionLost: (reason?: string) =>
       settle((p) => p.reject(new Error(reason || 'the session could not be restored'))),

@@ -1,6 +1,6 @@
 import { test } from '@playwright/test'
 // @ts-expect-error untyped package module
-import { createToolSet } from '../../packages/guano/mcp/tools.mjs'
+import { createToolSet } from '../../packages/superbird/mcp/tools.mjs'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -15,7 +15,7 @@ import { withComponents } from './components'
 // flow, and they sort anywhere.
 
 const runtimePromise = import(
-  /* @vite-ignore */ '../../packages/guano/runtime/mcp-runtime.mjs' as string
+  /* @vite-ignore */ '../../packages/superbird/runtime/mcp-runtime.mjs' as string
 ).catch(() => null)
 
 /** a page body: `body` is the markup that goes inside `<body>`. Written out
@@ -28,7 +28,7 @@ export const PREVIEW_TOKEN = '9999999999999.dd636db5c0a14f1a9b3e7c2d8f5a6f461435
 /** the shape the server hands back: this origin, under the preview mount. The
  *  tool appends a route to that PATH — it used to assign `pathname` and threw
  *  the mount away. */
-export const PREVIEW_MOUNT = '/_guano/preview'
+export const PREVIEW_MOUNT = '/_superbird/preview'
 export const PREVIEW_LINK = `http://localhost:4174${PREVIEW_MOUNT}/?t=${PREVIEW_TOKEN}`
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
@@ -82,7 +82,7 @@ function inlineFxSidecar(html: string, dir: string): string {
   if (!ref) return html
   const sidecar = readFileSync(join(dir, ref[1]!), 'utf8')
   const json = sidecar.slice(sidecar.indexOf('=') + 1).replaceAll('</', '<\\/')
-  return html.replace(ref[0], `<script type="application/json" id="guano-fx">${json}</script>`)
+  return html.replace(ref[0], `<script type="application/json" id="superbird-fx">${json}</script>`)
 }
 
 export async function mcpSession(
@@ -90,7 +90,7 @@ export async function mcpSession(
   /** what the server would report back from the export — `route-size` reads it */
   publishStats: { routes: number; bytes: number } = { routes: 1, bytes: 1 },
   /**
-   * `embedded` builds the EDITOR's profile (`GUANO_MCP_EMBEDDED=1`), `noTarget`
+   * `embedded` builds the EDITOR's profile (`SUPERBIRD_MCP_EMBEDDED=1`), `noTarget`
    * skips the `setTarget('main')` every other session gets — which is the one
    * way to see what a write says when the editor never named a branch.
    */
@@ -98,7 +98,7 @@ export async function mcpSession(
 ): Promise<McpSession> {
   const runtime = await runtimePromise
   test.skip(!runtime, 'runtime/mcp-runtime.mjs missing — run `npm run build:mcp-runtime`')
-  const store = new Map([['guano-project:main', JSON.stringify(runtime.createProject(projectName))]])
+  const store = new Map([['superbird-project:main', JSON.stringify(runtime.createProject(projectName))]])
   // The real api is HTTP, so every read and write yields to the event loop
   // before it lands. Model that: a store whose methods resolve synchronously
   // cannot interleave two tool calls at all, which is precisely the bug class
@@ -113,7 +113,7 @@ export async function mcpSession(
       const value = store.get(k) ?? null
       // the hook fires AFTER the value is read and BEFORE the caller can save,
       // which is the only window where another writer's work can be lost
-      if (onRead && k.startsWith('guano-project:')) onRead()
+      if (onRead && k.startsWith('superbird-project:')) onRead()
       return value
     },
     storeGetJson: async (k: string) => {
@@ -148,7 +148,7 @@ export async function mcpSession(
   }
   const set = createToolSet({ api, runtime, embedded: !!opts.embedded })
   set.setTarget(opts.noTarget ? null : 'main')
-  const stored = () => JSON.parse(store.get('guano-project:main')!)
+  const stored = () => JSON.parse(store.get('superbird-project:main')!)
   return {
     runtime,
     call: async (name: string, args: Record<string, unknown> = {}) => {
@@ -165,10 +165,10 @@ export async function mcpSession(
       onRead = fn
     },
     seed: async (keys: string[]) => {
-      store.set('guano-project:main', JSON.stringify(withComponents(stored(), keys)))
+      store.set('superbird-project:main', JSON.stringify(withComponents(stored(), keys)))
     },
     html: async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'guano-mcp-'))
+      const dir = mkdtempSync(join(tmpdir(), 'superbird-mcp-'))
       try {
         await exportSite(stored(), dir)
         const out = readFileSync(join(dir, 'index.html'), 'utf8')
@@ -178,7 +178,7 @@ export async function mcpSession(
       }
     },
     css: async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'guano-mcp-'))
+      const dir = mkdtempSync(join(tmpdir(), 'superbird-mcp-'))
       try {
         await exportSite(stored(), dir)
         return readFileSync(join(dir, 'assets/style.css'), 'utf8')
@@ -187,12 +187,12 @@ export async function mcpSession(
       }
     },
     exportDir: async (project: unknown, dir?: string) => {
-      const out = dir ?? mkdtempSync(join(tmpdir(), 'guano-mcp-'))
+      const out = dir ?? mkdtempSync(join(tmpdir(), 'superbird-mcp-'))
       await exportSite(project, out)
       return out
     },
     exportWith: async (project: unknown, integrations: unknown[]) => {
-      const dir = mkdtempSync(join(tmpdir(), 'guano-mcp-'))
+      const dir = mkdtempSync(join(tmpdir(), 'superbird-mcp-'))
       try {
         await exportSite(project, dir, { integrations })
         return readFileSync(join(dir, 'index.html'), 'utf8')
@@ -201,7 +201,7 @@ export async function mcpSession(
       }
     },
     exportAll: async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'guano-mcp-'))
+      const dir = mkdtempSync(join(tmpdir(), 'superbird-mcp-'))
       try {
         await exportSite(stored(), dir)
         const out: Record<string, string> = {}

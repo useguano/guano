@@ -315,7 +315,7 @@ function unhidePrompt(key: string): void {
 }
 
 function toolLabel(name: string): string {
-  return name.startsWith('mcp__guano__') ? name.slice('mcp__guano__'.length) : name
+  return name.startsWith('mcp__superbird__') ? name.slice('mcp__superbird__'.length) : name
 }
 
 function stringifyInput(value: unknown): string | null {
@@ -712,7 +712,7 @@ export function startAgent(): void {
 }
 
 /**
- * Which branch the editor has loaded, for the host's `guano connect --target`.
+ * Which branch the editor has loaded, for the host's `superbird connect --target`.
  *
  * The host WAITS for this before it spawns, and never substitutes a default:
  * an agent in the panel does not pick a target, so a lost message has to look

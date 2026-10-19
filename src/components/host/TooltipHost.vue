@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
 
   <span
     v-if="active"
-    id="guano-tooltip"
+    id="superbird-tooltip"
     ref="labelEl"
     role="tooltip"
     class="pointer-events-none fixed z-110 rounded-xl border border-input bg-background px-4 py-2 font-mono text-[10px] tracking-wider whitespace-nowrap"

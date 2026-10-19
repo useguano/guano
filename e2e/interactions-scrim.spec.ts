@@ -39,10 +39,10 @@ test.describe('a scrim', () => {
 
   test('it appears behind the sheet and a click on it closes both', async ({ page }) => {
     await page.goto('/?resetstate')
-    expect(await page.locator('[data-guano-scrim]').count()).toBe(0)
+    expect(await page.locator('[data-superbird-scrim]').count()).toBe(0)
 
     await page.locator('#open').click()
-    const scrim = page.locator('[data-guano-scrim]')
+    const scrim = page.locator('[data-superbird-scrim]')
     await expect(scrim).toHaveCount(1)
     await expect(scrim).toHaveClass(/opacity-100/)
     await expect(page.locator('#sheet')).toHaveClass(/block/)
@@ -59,8 +59,8 @@ test.describe('a scrim', () => {
   test('Escape closes it too', async ({ page }) => {
     await page.goto('/?resetstate')
     await page.locator('#open').click()
-    await expect(page.locator('[data-guano-scrim]')).toHaveClass(/opacity-100/)
+    await expect(page.locator('[data-superbird-scrim]')).toHaveClass(/opacity-100/)
     await page.keyboard.press('Escape')
-    await expect(page.locator('[data-guano-scrim]')).toHaveClass(/opacity-0/)
+    await expect(page.locator('[data-superbird-scrim]')).toHaveClass(/opacity-0/)
   })
 })

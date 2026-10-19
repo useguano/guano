@@ -464,7 +464,7 @@ export function useRenderNode(
   /**
    * The colour-mode switcher this node declares (`@theme`, `@theme:dark`, …).
    * A switch is not a navigation, so it never becomes an href — the published
-   * page carries `data-guano-theme` and the head script delegates the click.
+   * page carries `data-superbird-theme` and the head script delegates the click.
    */
   const themeAction = computed(() =>
     themeLinkAction(resolveInstanceValue(node.value, mapping.value, 'link')),

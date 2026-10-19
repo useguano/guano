@@ -20,7 +20,7 @@
  *    per component instance.
  *
  * 2. One **sidecar file** per route, `assets/fx-<hash>.js`, replacing seven
- *    inline islands. It is a `.js` that assigns `window.__guanoFx`, loaded with
+ *    inline islands. It is a `.js` that assigns `window.__superbirdFx`, loaded with
  *    `defer` BEFORE the runtimes — deliberately not a `.json` the runtime
  *    fetches. A deferred script is discovered when the document is parsed and
  *    fetched in PARALLEL with `script.js`/`motion.js`, and `defer` guarantees
@@ -62,7 +62,7 @@
 
 export const FX_ATTR = 'data-fx'
 /** the global the sidecar assigns, read by both runtimes */
-export const FX_GLOBAL = '__guanoFx'
+export const FX_GLOBAL = '__superbirdFx'
 
 /**
  * The sidecar's content and its content-addressed name. One assignment and no

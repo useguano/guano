@@ -65,7 +65,7 @@ export interface FxManifest {
  * that inline form is what the second branch reads.
  */
 export function manifest(html: string, dir?: string): FxManifest {
-  const inline = /<script type="application\/json" id="guano-fx">(.*?)<\/script>/s.exec(html)
+  const inline = /<script type="application\/json" id="superbird-fx">(.*?)<\/script>/s.exec(html)
   if (inline) return JSON.parse(inline[1]!.replaceAll('<\\/', '</')) as FxManifest
   const ref = /<script src="\/(assets\/fx-[0-9a-f]{8}\.js)" defer><\/script>/.exec(html)
   if (!ref) return {}

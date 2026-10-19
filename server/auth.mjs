@@ -29,7 +29,7 @@ const LEGACY_AUTH_FILE = join(DATA_DIR, 'auth.json') // pre-multi-user single ac
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000 // 30 days
 const INVITE_TTL = 7 * 24 * 60 * 60 * 1000 // 7 days
 // renamed from sb_session — old cookies are simply invalid (one re-login)
-const COOKIE = 'guano_session'
+const COOKIE = 'superbird_session'
 
 export const ROLES = ['admin', 'editor', 'contributor', 'reviewer']
 /** admin and editor build pages; a contributor edits content; a reviewer
@@ -269,7 +269,7 @@ const cleanName = (value) => (typeof value === 'string' ? value.slice(0, MAX_NAM
 export async function createFirstAdmin(email, password, name = '') {
   if (!needsSetup()) return null
   const user = await createUser({ name, email, password, role: 'admin' })
-  // a token minted BEFORE this account existed (`guano connect --offline`, the
+  // a token minted BEFORE this account existed (`superbird connect --offline`, the
   // scaffolder) was waiting for exactly this person — bind it here, in the auth
   // module, so a headless setup binds it too
   await bindPendingTokens(user.id)
@@ -285,7 +285,7 @@ export async function createFirstAdmin(email, password, name = '') {
 // **the server binds every interface** — so on café wifi, or on a VPS in the
 // minutes before its owner opens /admin, the first stranger to reach it became
 // the instance's admin. `bindPendingTokens` above makes that worse than it
-// sounds: they also inherit every token `guano connect --offline` minted. And
+// sounds: they also inherit every token `superbird connect --offline` minted. And
 // a data-dir wipe reopens the window on a machine that was already set up.
 //
 // Loopback stays free, because that is the launcher, `npm run dev` and anyone
@@ -740,8 +740,8 @@ export async function acceptInvite(token, password) {
 // deletion takes effect on the very next request. Mirrors the invite pattern.
 //
 // A PENDING record (`userId: null, pendingFirstAdmin: true`) is one minted
-// before any account existed — `npm create @useguano` connects Claude Desktop
-// at scaffold time, and `guano connect --offline` does the same by hand. It
+// before any account existed — `npm create @superbird-app` connects Claude Desktop
+// at scaffold time, and `superbird connect --offline` does the same by hand. It
 // authenticates nobody (apiTokenUser finds no user) until `createFirstAdmin`
 // binds every pending record to the first admin. Whoever can write the data
 // dir before setup owns the instance anyway, so this grants nothing new.
@@ -752,25 +752,25 @@ const persistApiTokens = () =>
 /**
  * The two token KINDS, as prefixes rather than a field.
  *
- * An agent token is `guano_…` and a launcher token is `guanol_…`, and they are
+ * An agent token is `superbird_…` and a launcher token is `superbirdl_…`, and they are
  * different TYPES to every parser: `apiTokenUser` reads the agent prefix and
  * nothing else, `launcherTokenUser` reads the launcher prefix and nothing
- * else. The two strings are disjoint — `'guanol_'.startsWith('guano_')` is
- * false, because what follows `guano` is `l` and not `_` — so neither resolves
+ * else. The two strings are disjoint — `'superbirdl_'.startsWith('superbird_')` is
+ * false, because what follows `superbird` is `l` and not `_` — so neither resolves
  * where the other belongs. Not "is refused": cannot be read.
  *
  * WHY A PREFIX. Agents are gated by the agent policy (`allowMainWrites`,
  * `allowPublish`) because they are judged by HOW they authenticated. If the
- * `/api/auth/launcher-session` exchange accepted any `guano_` token, an
+ * `/api/auth/launcher-session` exchange accepted any `superbird_` token, an
  * injected agent would trade its token for a cookie, stop being an agent in
  * the server's eyes, and write Main with the policy off. `kind` is stored too,
  * for the admin's token list, but the prefix is the enforcement — a field is a
  * check someone can forget.
  */
-export const TOKEN_KINDS = { agent: 'guano_', launcher: 'guanol_' }
+export const TOKEN_KINDS = { agent: 'superbird_', launcher: 'superbirdl_' }
 
 /** A record written before kinds existed carries no `kind`; every one of them
- *  is `guano_`-prefixed, so absent means agent. */
+ *  is `superbird_`-prefixed, so absent means agent. */
 const kindOf = (t) => (t.kind === 'launcher' ? 'launcher' : 'agent')
 
 const apiTokenView = (t) => ({
@@ -829,17 +829,17 @@ export async function createApiToken(userId, name, { kind = 'agent' } = {}) {
   return { token: raw, record: apiTokenView(token) }
 }
 
-/** local-trust bootstrap (`guano connect`): mint a token for the first admin.
+/** local-trust bootstrap (`superbird connect`): mint a token for the first admin.
  *  The caller proves instance ownership via a nonce file in DATA_DIR (checked
  *  by the /api/auth/connect route) — filesystem access = owner. */
 export async function bootstrapConnectToken(name) {
   const admin = loadUsers().find((u) => u.role === 'admin')
   if (!admin) {
     // no account yet: a PENDING token, bound to the first admin at setup
-    const { token } = await createApiToken(null, name || 'guano connect')
+    const { token } = await createApiToken(null, name || 'superbird connect')
     return { token, email: null, pending: true }
   }
-  const { token } = await createApiToken(admin.id, name || 'guano connect')
+  const { token } = await createApiToken(admin.id, name || 'superbird connect')
   return { token, email: admin.email }
 }
 
@@ -892,11 +892,11 @@ function tokenUser(rawToken, want) {
   return user
 }
 
-/** the owner of an AGENT token (`guano_…`) — the MCP server's credential, and
+/** the owner of an AGENT token (`superbird_…`) — the MCP server's credential, and
  *  the only kind `requestUser` can read */
 export const apiTokenUser = (rawToken) => tokenUser(rawToken, 'agent')
 
-/** the owner of a LAUNCHER token (`guanol_…`) — read by exactly one route,
+/** the owner of a LAUNCHER token (`superbirdl_…`) — read by exactly one route,
  *  `POST /api/auth/launcher-session`, and by nothing else anywhere */
 export const launcherTokenUser = (rawToken) => tokenUser(rawToken, 'launcher')
 

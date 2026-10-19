@@ -5,8 +5,8 @@
      src/lib/hostBridge.ts. The options weighed are ROADMAP.md §5; the
      launcher's half is ../launcher/PLAN.md Phases 4.6 and 4.8. -->
 
-**The panel is Guano's main AI integration** (decided 2026-10-18). The
-external client path — `guano connect` into Claude Desktop or a Claude Code
+**The panel is Superbird's main AI integration** (decided 2026-10-18). The
+external client path — `superbird connect` into Claude Desktop or a Claude Code
 terminal — stays supported and is secondary: it pushes the person into another
 app, and everything it needs to orient itself (`use_project`, the `set_target`
 dialog, the pin file) exists only because an outside client knows nothing about
@@ -41,8 +41,8 @@ Code install shows instead.
 
 ## The bridge is one contract with the launcher
 
-`src/lib/hostBridge.ts`, over the `guano` `WKScriptMessageHandler` and
-`window.__guanoHost` — the same channel that already carries save status, the
+`src/lib/hostBridge.ts`, over the `superbird` `WKScriptMessageHandler` and
+`window.__superbirdHost` — the same channel that already carries save status, the
 Edit / Play switch (`view-mode` out, `setViewMode` back) and the reauth
 round-trip (→ `docs/ui.md`, The two rails and The two surfaces).
 
@@ -51,14 +51,14 @@ round-trip (→ `docs/ui.md`, The two rails and The two surfaces).
 | `{type:'agent-start'}` | spawn or resume, then answer `ready` or `unavailable` |
 | `{type:'agent-send', text, images?}` | one `user` line on stdin — a plain string, or with images a content array of image blocks then the text (verified with a real screenshot) |
 | `{type:'agent-model', model}` | a `set_model` control request; the CLI answers it and then emits a fresh `system/init` naming the new model, which is how the page learns it took |
-| `{type:'agent-target', target}` | `main` or a draft id — the branch the editor has loaded. The host waits for it before it spawns, and re-runs `guano connect --target` and respawns when it changes |
+| `{type:'agent-target', target}` | `main` or a draft id — the branch the editor has loaded. The host waits for it before it spawns, and re-runs `superbird connect --target` and respawns when it changes |
 | `{type:'agent-interrupt'}` | the interrupt control request (below) |
 | `{type:'agent-stop'}` | SIGTERM; keep the session id for a resume |
 
 | host → page | |
 |---|---|
-| `__guanoHost.agentEvent(obj)` | one parsed JSONL line, or a synthetic `ready` / `unavailable` |
-| `__guanoHost.agentExit({code, reason})` | the process is gone |
+| `__superbirdHost.agentEvent(obj)` | one parsed JSONL line, or a synthetic `ready` / `unavailable` |
+| `__superbirdHost.agentExit({code, reason})` | the process is gone |
 
 The host also sends one synthetic event of its own beside `ready` and
 `unavailable`: `{type:'switching', target}`, emitted before a respawn onto
@@ -260,7 +260,7 @@ prompt is **denied automatically**, exactly as `none` would do. Probed with a
 model then said *"I need your permission to write the file"*.
 
 So the panel runs `--permission-prompts none` with `--allowedTools
-"mcp__guano__*"`, and **rendering the denial is not optional** — without it the
+"mcp__superbird__*"`, and **rendering the denial is not optional** — without it the
 person reads a model asking for permission in a UI with no way to grant it.
 
 A denial arrives twice, and the second must not erase the first: the live
@@ -298,14 +298,14 @@ raises a notice, because by then the panel may not be open.
 
 ## Embedded mode is the server's contract too
 
-The panel is Guano's **main** AI integration, and the MCP side knows it. One
-signal — **`GUANO_MCP_EMBEDDED=1`** in the entry's `env`, written only by
-`guano connect --config <file> --embedded` — and `guano mcp` becomes the
+The panel is Superbird's **main** AI integration, and the MCP side knows it. One
+signal — **`SUPERBIRD_MCP_EMBEDDED=1`** in the entry's `env`, written only by
+`superbird connect --config <file> --embedded` — and `superbird mcp` becomes the
 editor's agent rather than an outside client:
 
 | | external client | the panel |
 |---|---|---|
-| which site | the `GUANO_PROJECTS` map, the pin file, a `use_project` dialog | the one project in the file; `use_project` is not listed |
+| which site | the `SUPERBIRD_PROJECTS` map, the pin file, a `use_project` dialog | the one project in the file; `use_project` is not listed |
 | write target | `set_target`'s dialog, the chat attestation, or a policy-gated `target` | the per-project `target` field, **always written**; `set_target` is not listed, and a write with no target is a hard refusal naming the editor |
 | tool list | all of them | the panel profile (below) |
 | `initialize` instructions | the golden rules + the workflow recipe | the same, with rules 5 and 6 replaced by the handbook's **Inside the editor** |
@@ -337,10 +337,10 @@ else — `AgentHost` in `LauncherCore` is where all three live, and the panel, t
 transcript, the flags, the model menu and the target handshake have no idea
 which kind of instance they are talking to.
 
-**The CLI.** A local project runs its own installed `@useguano/guano`: its
+**The CLI.** A local project runs its own installed `@superbird-app/superbird`: its
 version is the project's business, and its server and its MCP process are the
 same copy by construction. A remote has no copy here, so the app ships one at
-`Contents/Resources/guano`, staged by `make guano` with the MCP SDK and nothing
+`Contents/Resources/superbird`, staged by `make superbird` with the MCP SDK and nothing
 else — the published package's other dependencies are the exporter's, tens of
 megabytes, and nothing the app runs from that copy touches them. **The lender is
 gone**, and not only from this path: it was the newest installed project's
@@ -354,16 +354,16 @@ them.
 **`--url --embedded --config --target`, together.** Verified against the CLI for
 the first time on 2026-10-19 (it had never been tried): one entry carrying the
 token, the instance id, the target and the payload fence, with
-`GUANO_MCP_EMBEDDED=1`. **One device approval per instance, not two** — the app
+`SUPERBIRD_MCP_EMBEDDED=1`. **One device approval per instance, not two** — the app
 mints the AGENT token itself through that instance's own tokens API, with the
-builder session its `guanol_` launcher token buys, and passes it as `--token`.
+builder session its `superbirdl_` launcher token buys, and passes it as `--token`.
 The second device flow would have been the CLI's own, for a credential the app
 is already entitled to mint, and two approvals for one server is the kind of
 thing people stop doing.
 
 **Where it stands.** A local spawn's cwd is the project folder. A remote's is
-the **payload fence**, `~/.guano/payloads/<slug>`, which `connect --url` creates
-0700 and writes into the entry as `GUANO_MCP_FILE_ROOT`. The agent has no file
+the **payload fence**, `~/.superbird/payloads/<slug>`, which `connect --url` creates
+0700 and writes into the entry as `SUPERBIRD_MCP_FILE_ROOT`. The agent has no file
 tools either way (`AgentLaunch.disallowedTools`), so this is the belt to that
 braces. The slug is `hostSlug`'s rule verbatim — the hostname with a leading
 `www.` removed, and nothing else — because two implementations of one path only
@@ -375,7 +375,7 @@ file that is plainly there as the symptom.
 identifies it: there is no folder to match a command line against, and the
 address is a cached guess the way a local port is — so a server that moved
 domain keeps a config that still names the right instance. The target and
-`GUANO_MCP_EMBEDDED` are checked exactly as they are locally.
+`SUPERBIRD_MCP_EMBEDDED` are checked exactly as they are locally.
 
 **Version drift is the person's problem now, so the app says it.** Two versions
 updated by two people on two schedules is a state a local project cannot be in.
@@ -397,9 +397,9 @@ the session id, then starts again. Without the interrupt, a write the model
 built against the branch the person just left lands after the switch.
 
 `AgentMCPConfig.isCurrent` compares the target for the same reason it does not
-compare the port: the port is a cached guess that `guano mcp` re-reads from
+compare the port: the port is a cached guess that `superbird mcp` re-reads from
 `instance.json`, while the target is read from the config file and nowhere
-else. It also requires `GUANO_MCP_EMBEDDED`, so an external entry for the same
+else. It also requires `SUPERBIRD_MCP_EMBEDDED`, so an external entry for the same
 project never passes for the panel's.
 
 The page re-posts the target on any `ready` that has not seen one, because a
@@ -431,8 +431,8 @@ waits are stacked there and they have different fixes**, so the panel measures
 both and neither is behind a developer flag.
 
 **Getting to `ready`** is a chain of other people's boots: `agent-start` →
-`AgentMCPConfig.isCurrent` → (maybe) `guano connect --embedded`, which is a
-Node boot and a token mint over HTTP → `claude -p` → its own `node guano.js
+`AgentMCPConfig.isCurrent` → (maybe) `superbird connect --embedded`, which is a
+Node boot and a token mint over HTTP → `claude -p` → its own `node superbird.js
 mcp` (the 242 KB runtime bundle, the 110 KB `GUIDE.md`, a call to
 `/api/auth/me`) → `initialize` → `system/init`. `AgentSession` marks each link
 into the project's log (⌘L) through `AgentMilestones`, elapsed from
@@ -482,7 +482,7 @@ appending its own row.
 
 **The baseline's answer was not close, and it was not the process chain.**
 The launcher's log breaks that 5.2 s down: 0.70 s waiting for the page's
-`agent-target` (the editor was still booting), 0.19 s for `guano connect` —
+`agent-target` (the editor was still booting), 0.19 s for `superbird connect` —
 which ran because a brand-new project has no config yet, `isCurrent: false`
 being correct there and not the stale-config bug — and then 4.27 s from
 `claude spawned` to `system/init`. The first turn, meanwhile, spent **six
@@ -594,7 +594,7 @@ Each change records its own before/after against the same prompt.
 All of it is in.
 
 **One link of the chain is already measured and already ruled out.** `node
-packages/guano/bin/guano.js mcp` reaches `ready (stdio)` in **178–225 ms**
+packages/superbird/bin/superbird.js mcp` reaches `ready (stdio)` in **178–225 ms**
 (five runs, 2026-10-18, no instance listening). That boot reads the 185 KB
 `GUIDE.md` and imports the 242 KB runtime bundle before it answers
 `initialize`, which looked like the obvious thing to make lazy — it is not:
@@ -648,7 +648,7 @@ that decision — node `content`/`src`/`background`/`locales`, page/entry `seo` 
 `status`, collection `entries`, `comments`. The gate is `user.role ===
 'contributor'`, and for a token request `user` is **the token's owner**. So an
 agent token owned by a contributor is scoped correctly with no new code, and an
-agent token owned by an admin — which is what `guano connect` mints — is not
+agent token owned by an admin — which is what `superbird connect` mints — is not
 scoped at all. **One token per driving person is the whole implementation**, and
 until it exists a contributor-driven turn must not run on an admin's token.
 
@@ -666,7 +666,7 @@ browser, where `available` is false.
 `AgentSession.swift` and `EditorSession.swift`, with the traps that shaped
 them: a GUI app's `PATH` does not contain `claude` (`ClaudeCLILocator`);
 `ChildProcess` wires stdin to `/dev/null`; **the MCP config is written by
-`guano connect --config`, never from Swift** — adding `--target` to `connect`
+`superbird connect --config`, never from Swift** — adding `--target` to `connect`
 is the whole mechanism behind the branch switch; SIGTERM before SIGKILL; and
 the transcript is replayed after a reload, because the web view reloads on
 reauth and the process outlives the DOM.

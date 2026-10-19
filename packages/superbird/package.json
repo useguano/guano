@@ -1,23 +1,23 @@
 {
-  "name": "@useguano/guano",
+  "name": "@superbird-app/superbird",
   "version": "0.1.13",
   "license": "AGPL-3.0-only",
   "publishConfig": {
     "access": "public"
   },
   "description": "Self-hosted visual website builder: live canvas, layers tree, components, CMS collections, static publishing.",
-  "homepage": "https://github.com/useguano/guano#readme",
+  "homepage": "https://github.com/superbird-app/superbird#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/useguano/guano.git",
-    "directory": "packages/guano"
+    "url": "git+https://github.com/superbird-app/superbird.git",
+    "directory": "packages/superbird"
   },
   "bugs": {
-    "url": "https://github.com/useguano/guano/issues"
+    "url": "https://github.com/superbird-app/superbird/issues"
   },
   "type": "module",
   "bin": {
-    "guano": "bin/guano.js"
+    "superbird": "bin/superbird.js"
   },
   "files": [
     "bin",

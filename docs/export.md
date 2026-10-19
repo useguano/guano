@@ -26,7 +26,7 @@ It reads and writes a class list with `getAttribute`/`setAttribute('class')`. On
 
 `src/lib/shared/fxWire.js` is the one definition, read by the exporter and both site runtimes.
 
-The published page carries **one `data-fx="<n>"` per participating element** and **one `<script type="application/json" id="guano-fx">` manifest**. That replaces four escaped-JSON attributes per element (`data-int`/`data-anim`/`data-tgt`/`data-atgt`) and seven JSON islands (`int-fx`, `int-fxrm`, `int-fxbp`, `int-bp`, `int-modal`, `anim-lib`, `anim-bp`, `site-fx`). `data-fx` is an index into the manifest's `els`, whose entry holds all four roles at once: `c` the class effects it fires, `m` the timelines it triggers, `t` the state keys driving its class list, `a` the binding keys whose tween lands on it.
+The published page carries **one `data-fx="<n>"` per participating element** and **one `<script type="application/json" id="superbird-fx">` manifest**. That replaces four escaped-JSON attributes per element (`data-int`/`data-anim`/`data-tgt`/`data-atgt`) and seven JSON islands (`int-fx`, `int-fxrm`, `int-fxbp`, `int-bp`, `int-modal`, `anim-lib`, `anim-bp`, `site-fx`). `data-fx` is an index into the manifest's `els`, whose entry holds all four roles at once: `c` the class effects it fires, `m` the timelines it triggers, `t` the state keys driving its class list, `a` the binding keys whose tween lands on it.
 
 Three things make it a compile rather than a rename.
 
@@ -60,7 +60,7 @@ An authored `loading` wins, and the exporter then emits none of its own, since a
 
 `sizes` is the one thing the export cannot know — the layout decides the slot — so it is in `ATTR_ALLOW` for the author and defaults to `100vw`, which over-fetches rather than shipping a blurry image.
 
-Resizing is **cached** under `$GUANO_DATA_DIR/media/variants/<hash>-<w>.webp`: the content hash already names the original, so the key is free, and a republish (and the preview export, which runs the same code and shares the cache) reads instead of re-encoding. An unwritable cache warns and costs time, never the export.
+Resizing is **cached** under `$SUPERBIRD_DATA_DIR/media/variants/<hash>-<w>.webp`: the content hash already names the original, so the key is free, and a republish (and the preview export, which runs the same code and shares the cache) reads instead of re-encoding. An unwritable cache warns and costs time, never the export.
 
 ## The published site is cacheable, in three tiers
 
@@ -82,7 +82,7 @@ Zip and GitHub exports are served elsewhere and get the host's own headers; the 
 
 **`server`** responds with JSON stats.
 
-**`zip`** streams the freshly-exported `site/` back as an attachment: a hand-rolled zero-dep writer in `server/zip.mjs` (`createZip`/`readZip` on `node:zlib` + CRC32, zip-slip guarded), **with every root-absolute URL rewritten depth-relative** (`server/relative.mjs` — `assets/style.css` at the root, `../assets/style.css` one level down, and a route link `/fr` becomes `../fr/index.html`, so the archive opens from disk and from a sub-folder). `//cdn`, `/_guano/*`, `data-form-redirect`, JSON-LD and `<meta content>` are left alone. The directory on disk, what `/` serves and what GitHub receives all keep `/assets/…`.
+**`zip`** streams the freshly-exported `site/` back as an attachment: a hand-rolled zero-dep writer in `server/zip.mjs` (`createZip`/`readZip` on `node:zlib` + CRC32, zip-slip guarded), **with every root-absolute URL rewritten depth-relative** (`server/relative.mjs` — `assets/style.css` at the root, `../assets/style.css` one level down, and a route link `/fr` becomes `../fr/index.html`, so the archive opens from disk and from a sub-folder). `//cdn`, `/_superbird/*`, `data-form-redirect`, JSON-LD and `<meta content>` are left alone. The directory on disk, what `/` serves and what GitHub receives all keep `/assets/…`.
 
 **`github`** pushes the export as the **complete tree** of a branch via the GitHub Git Data API (`server/github.mjs`, global `fetch`, replace-root so deleted routes and assets disappear). The **token is server-side only** — stored in `server/data/publish.json`, never `/api/store`, never the project blob, never an export — and managed write-only via `GET/PUT /api/publish-config` (`{github:{tokenSet}}`, which never echoes it). The **repo and branch come from the stored Main blob, never the request body**: the server signs the push with its own PAT, so letting the caller name the destination would delegate that PAT's write access to anyone who can publish.
 
@@ -102,13 +102,13 @@ The public namespace's CORS rule (`server/public/cors.mjs`) reads the allowed or
 
 `GET/PUT /api/site-password`, session + build role; Settings → General → Private site. One shared visitor password, scrypt-hashed in `publish.json` beside an `enabled` switch, never in the project blob.
 
-`siteGateHandled` sits in front of `serveSiteDir(SITE)` and answers with an inline gate page (401, noindex, no-store) until a `POST /_guano/unlock` (form, 10/min per IP) sets the `guano_site` cookie — an HMAC of the stored hash, so a new password logs every visitor out. Enforced by this server only: zip and GitHub exports are static files and stay public. Minimum 8 characters.
+`siteGateHandled` sits in front of `serveSiteDir(SITE)` and answers with an inline gate page (401, noindex, no-store) until a `POST /_superbird/unlock` (form, 10/min per IP) sets the `superbird_site` cookie — an HMAC of the stored hash, so a new password logs every visitor out. Enforced by this server only: zip and GitHub exports are static files and stay public. Minimum 8 characters.
 
 Three details are load-bearing. The unlock limiter keys on **`clientIp`** — it was the one limiter ignoring `TRUST_PROXY`, so behind a proxy ten wrong guesses locked every visitor out. The redirect rejects `\` as well as `//`, because a browser treats `/\` as `//` for a special scheme (`site-runtime.js` already had the rule). And the comparison runs through the async, concurrency-capped verify rather than blocking the loop per guess. Coverage: `e2e/store-site-password.spec.ts`.
 
 ## Preview without publishing
 
-`POST /api/preview` → `handlePreview` in `server/index.mjs`. It runs the same `exportSite` into `server/data/preview` and serves it **from this same server, under `/_guano/preview/`**.
+`POST /api/preview` → `handlePreview` in `server/index.mjs`. It runs the same `exportSite` into `server/data/preview` and serves it **from this same server, under `/_superbird/preview/`**.
 
 It renders **draft pages too** (the live export drops them), sends `X-Robots-Tag: noindex`, and is deliberately NOT gated on the agent publish policy: seeing your own work should never require shipping it. A contributor's snapshot goes through the same `mergeContributorProject` as a publish, so a preview cannot render structure they may not write. Its own rate limit (30/min) means looking never spends the publish budget. `serveSiteDir` is the shared static handler for the live site and the preview, and takes a `mount` it strips before the file lookup.
 
@@ -122,11 +122,11 @@ What the separate port cost: it bound every interface and authenticated nothing 
 
 **`mountSite` (`server/relative.mjs`) is what replaced it**: one pass over the exported HTML and CSS moving every root-absolute URL onto the mount, run on the files on disk inside the same `withCritical('preview')` section as the export. A preview is exported once and then browsed, so the cost is paid once.
 
-Three paths are deliberately NOT rewritten, because they are the instance's and not the site's: `//cdn…`, anything under `/_guano/` and anything under `/media/`. The one exception is the form endpoint, remapped from `/_guano/forms/:id` into `<mount>/forms/:id` so a draft form posts to the preview's own handler — it validates exactly as the live one does and then stores and sends nothing. Without that remap, trying out a form in the preview would put a row in the real list. `data-form-redirect` is rewritten too (the zip rewrite leaves it alone), or a form's success redirect would send you to the LIVE route of that name.
+Three paths are deliberately NOT rewritten, because they are the instance's and not the site's: `//cdn…`, anything under `/_superbird/` and anything under `/media/`. The one exception is the form endpoint, remapped from `/_superbird/forms/:id` into `<mount>/forms/:id` so a draft form posts to the preview's own handler — it validates exactly as the live one does and then stores and sends nothing. Without that remap, trying out a form in the preview would put a row in the real list. `data-form-redirect` is rewritten too (the zip rewrite leaves it alone), or a form's success redirect would send you to the LIVE route of that name.
 
-**The signed `?t=` token stays, even though the session cookie now reaches here.** Same origin removed the reason it couldn't be the credential (the cookie is `Secure`, the preview was plain HTTP elsewhere) — but the agent's BROWSER is a different browser profile with no Guano session at all, and opening the link is how it gets the short-TTL cookie that every later asset request, click and screenshot rides on. A session-only gate would mean the one workflow this exists for is the one that cannot run. The cookie's `Path` is the mount, so it is never sent to the published site, the editor or the API.
+**The signed `?t=` token stays, even though the session cookie now reaches here.** Same origin removed the reason it couldn't be the credential (the cookie is `Secure`, the preview was plain HTTP elsewhere) — but the agent's BROWSER is a different browser profile with no Superbird session at all, and opening the link is how it gets the short-TTL cookie that every later asset request, click and screenshot rides on. A session-only gate would mean the one workflow this exists for is the one that cannot run. The cookie's `Path` is the mount, so it is never sent to the published site, the editor or the API.
 
-`/_guano/preview` without its trailing slash answers a 302 to the slashed form: without it the browser resolves every relative URL one directory up.
+`/_superbird/preview` without its trailing slash answers a 302 to the slashed form: without it the browser resolves every relative URL one directory up.
 
 `routePaths` on the export's return (and `routeUrls` on the API response and the `preview` tool) is every route's url, carrying the same token — so an agent navigates straight to a page instead of clicking around hunting for a link to it. Clicking is for checking navigation, not for reaching a page.
 

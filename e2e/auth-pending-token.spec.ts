@@ -6,7 +6,7 @@ import { boot, instances } from './fixtures/server'
 
 // A token minted BEFORE the first account exists.
 //
-// `npm create @useguano` connects Claude Desktop at scaffold time, before the
+// `npm create @superbird-app` connects Claude Desktop at scaffold time, before the
 // server has ever run: it writes a PENDING api-token record (`userId: null`,
 // `pendingFirstAdmin: true`) and the agent policy into the data dir. The
 // server must (1) refuse that token until setup, (2) show the preset policy to
@@ -14,7 +14,7 @@ import { boot, instances } from './fixtures/server'
 // first admin the moment that account is created. A server of its own, since
 // the token file is read once at boot.
 
-const RAW = 'guano_' + randomBytes(24).toString('hex')
+const RAW = 'superbird_' + randomBytes(24).toString('hex')
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 
 function pendingRecord() {
@@ -22,7 +22,7 @@ function pendingRecord() {
     id: randomBytes(12).toString('hex'),
     tokenHash: sha256(RAW),
     userId: null,
-    name: 'guano connect (Claude Desktop)',
+    name: 'superbird connect (Claude Desktop)',
     createdAt: Date.now(),
     lastUsedAt: null,
     pendingFirstAdmin: true,
@@ -95,7 +95,7 @@ test('a fresh instance exposes no preset, and connect mints a pending token with
   expect(me.status()).toBe(401)
   expect(await me.json()).toEqual({ needsSetup: true })
 
-  // `guano connect` against a running server with no account yet
+  // `superbird connect` against a running server with no account yet
   const nonce = randomBytes(32).toString('hex')
   writeFileSync(join(srv.dataDir, '.connect-nonce'), nonce, { mode: 0o600 })
   const res = await srv.api.post('/api/auth/connect', {
@@ -105,7 +105,7 @@ test('a fresh instance exposes no preset, and connect mints a pending token with
   const minted = await res.json()
   expect(minted.pending).toBe(true)
   expect(minted.email).toBeNull()
-  expect(minted.token).toMatch(/^guano_[0-9a-f]{48}$/)
+  expect(minted.token).toMatch(/^superbird_[0-9a-f]{48}$/)
   expect(minted.agentPolicy).toMatchObject({ allowMainWrites: false, allowPublish: true })
 
   // the policy it wrote is now the preset the setup form sees

@@ -2,13 +2,13 @@ import { test, expect, request as pwRequest, type APIRequestContext } from '@pla
 import { becomeBuilder } from './fixtures/session'
 
 // POST /api/preview renders the posted snapshot to its OWN site, served by the
-// same server under /_guano/preview, and touches nothing live.
+// same server under /_superbird/preview, and touches nothing live.
 //
 // It used to be a second HTTP server on PORT+1, which bound every interface,
 // spoke plain HTTP while the studio is HTTPS, and behind a proxy or on a VPS
 // was simply unreachable — so the `preview` tool handed back a url that hangs
 // and the workflow it exists for could never run. One origin fixes that; the
-// signed token stays, because an agent's browser has no Guano session.
+// signed token stays, because an agent's browser has no Superbird session.
 //
 // Without it publishing was the only way to render anything, so the Cocoapp
 // review session published six of its seven times purely to look — each one
@@ -21,7 +21,7 @@ import { becomeBuilder } from './fixtures/session'
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 /** where the preview is served on the studio's own origin */
-const MOUNT = '/_guano/preview'
+const MOUNT = '/_superbird/preview'
 
 const login = (ctx: APIRequestContext, creds = ADMIN) =>
   ctx.post('/api/auth/login', { data: creds })
@@ -103,12 +103,12 @@ test('a preview renders under the mount, includes drafts, and leaves the live on
   }
   expect(body.routes).toBe(2) // the draft is rendered too
   // the studio's own origin, under the mount, with a one-time access token
-  expect(body.url).toMatch(/^http:\/\/[^/]+\/_guano\/preview\/\?t=\d+\.[a-f0-9]{64}$/)
+  expect(body.url).toMatch(/^http:\/\/[^/]+\/_superbird\/preview\/\?t=\d+\.[a-f0-9]{64}$/)
 
   // every route, so an agent navigates straight to a page instead of hunting
   // for a link to click
   expect(body.routeUrls).toEqual(
-    expect.arrayContaining([expect.stringContaining('/_guano/preview/draft')]),
+    expect.arrayContaining([expect.stringContaining('/_superbird/preview/draft')]),
   )
   expect(body.routeUrls!.every((u) => u.includes('?t='))).toBe(true)
 
@@ -158,7 +158,7 @@ test('a preview needs a session', async ({ baseURL }) => {
  * work. The signed token in the url the editor is handed is the gate, traded on
  * first hit for a cookie scoped to the mount — and it stays even now that the
  * session cookie could reach here, because the agent's BROWSER is a different
- * profile with no Guano session at all. A session-only gate would mean the one
+ * profile with no Superbird session at all. A session-only gate would mean the one
  * workflow this exists for is the one that cannot run.
  */
 test('the preview is reachable only with the token the editor was handed', async ({ baseURL }) => {
@@ -207,7 +207,7 @@ test('the preview is reachable only with the token the editor was handed', async
   const direct = await cookieless.get(url, { maxRedirects: 0 })
   expect(direct.status()).toBe(200)
   expect(await direct.text()).toContain('Live home')
-  expect(direct.headers()['set-cookie']).toContain('guano_preview=')
+  expect(direct.headers()['set-cookie']).toContain('superbird_preview=')
   // scoped to the mount, so it is never sent with a request for the published
   // site, the editor or the API
   expect(direct.headers()['set-cookie']).toContain(`Path=${MOUNT}`)
@@ -225,7 +225,7 @@ test('the preview is reachable only with the token the editor was handed', async
   // token with a real character added.
   //
   // Each probe gets its OWN context: a request that succeeds leaves the
-  // `guano_preview` cookie in the one it was made from, and every later probe
+  // `superbird_preview` cookie in the one it was made from, and every later probe
   // from there is unlocked by the cookie whatever its token says — which would
   // make all three of these pass without reading the token at all.
   const probe = async (path: string) => {
@@ -247,7 +247,7 @@ test('the preview is reachable only with the token the editor was handed', async
   // the studio's origin now, so this is the assertion that replaces "the
   // editor is not reachable from the preview port": an unauthenticated caller
   // holding only a preview cookie still gets nowhere near the API.
-  expect((await visitor.get('/api/store?keys=guano-project:main')).status()).toBe(401)
+  expect((await visitor.get('/api/store?keys=superbird-project:main')).status()).toBe(401)
   // ...and a route under the mount that is not in the export is the export's
   // own miss, never the editor
   const notInExport = await visitor.get(`${MOUNT}/admin/`)

@@ -1,4 +1,4 @@
-// `guano use [slug|--none|--list]` — pick the project the agent works on.
+// `superbird use [slug|--none|--list]` — pick the project the agent works on.
 //
 // See pin.mjs for why this is a file rather than an env var, and why writing
 // it is a human action an agent cannot perform. This module is the UI: it
@@ -17,7 +17,7 @@ async function allProjects() {
   for (const target of clientTargets()) {
     try {
       const config = JSON.parse(await readFile(target.path, 'utf8'))
-      const raw = config?.mcpServers?.[ENTRY_KEY]?.env?.GUANO_PROJECTS
+      const raw = config?.mcpServers?.[ENTRY_KEY]?.env?.SUPERBIRD_PROJECTS
       if (typeof raw !== 'string' || !raw) continue
       const { projects } = parseProjects(raw)
       for (const [slug, p] of Object.entries(projects)) all[slug] ??= p
@@ -52,7 +52,7 @@ export async function main(args = []) {
 
   if (flag('--list') || (!named && !current)) {
     if (!slugs.length) {
-      console.log('no projects are configured — run `guano connect` in a project folder')
+      console.log('no projects are configured — run `superbird connect` in a project folder')
       return
     }
     console.log(`\nprojects (${pinFile()})\n`)
@@ -62,17 +62,17 @@ export async function main(args = []) {
       const state = verdict.ok ? 'running' : verdict.answered ? 'stale  ' : 'stopped'
       console.log(`  ${mark} ${slug.padEnd(20)} ${state}  ${addressOf(projects[slug]) || ''}`)
     }
-    console.log(`\npick one with \`guano use <slug>\`, or \`guano use --none\` to unpin.`)
+    console.log(`\npick one with \`superbird use <slug>\`, or \`superbird use --none\` to unpin.`)
     return
   }
 
-  // bare `guano use` with a pin set reports it; with none it listed, above
+  // bare `superbird use` with a pin set reports it; with none it listed, above
   if (!named) {
     const known = projects[current]
     console.log(
       known
         ? `→ ${current} (${addressOf(known) || 'no address'})`
-        : `→ ${current} — which is no longer configured; \`guano use --none\` to clear it`,
+        : `→ ${current} — which is no longer configured; \`superbird use --none\` to clear it`,
     )
     return
   }
@@ -80,14 +80,14 @@ export async function main(args = []) {
   const slug = named === '.' ? await slugHere(projects) : named
   if (named === '.' && !slug) {
     throw new Error(
-      'this folder is not a connected project — run `guano connect` here first, ' +
-        'or name one: `guano use <slug>`',
+      'this folder is not a connected project — run `superbird connect` here first, ' +
+        'or name one: `superbird use <slug>`',
     )
   }
   if (!projects[slug]) {
     throw new Error(
       `"${slug}" is not a configured project${slugs.length ? ` (${slugs.join(', ')})` : ''}. ` +
-        'Run `guano connect` in its folder first.',
+        'Run `superbird connect` in its folder first.',
     )
   }
 

@@ -1,4 +1,4 @@
-// POST /_guano/forms/:formId — the only unauthenticated WRITE in the product.
+// POST /_superbird/forms/:formId — the only unauthenticated WRITE in the product.
 //
 // Everything about this file is shaped by that sentence. It is reachable by
 // anyone on the internet, it stores what they send, and it can make the
@@ -6,7 +6,7 @@
 //
 //   * It lives OUTSIDE /api. Every mutating /api route is cookie-authed and
 //     same-origin-checked; sharing a prefix would mean one loosened guard
-//     exposes both. /_guano/ is already the private-site unlock's namespace.
+//     exposes both. /_superbird/ is already the private-site unlock's namespace.
 //   * It validates against the MANIFEST, never against the request and never
 //     against the live project. The visitor submitted the page that was
 //     PUBLISHED; Main may have moved on, and a draft may not be published at
@@ -126,7 +126,7 @@ export function createFormsHandler(deps) {
     const H = cors.headers
 
     // 2. the id, before anything touches disk
-    const id = decodeURIComponent(path.slice('/_guano/forms/'.length))
+    const id = decodeURIComponent(path.slice('/_superbird/forms/'.length))
     if (!FORM_ID_RE.test(id)) return send(404, { error: NOT_FOUND }, H)
 
     // 3. rate limits. Per IP first (the cheapest refusal that stops a flood),

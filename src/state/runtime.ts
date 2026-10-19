@@ -283,7 +283,7 @@ function start(ds: DsWire) {
 
   /** hand re-created and restyled rows back to the interaction runtime */
   function rescan() {
-    const hook = win.__guanoFxRescan
+    const hook = win.__superbirdFxRescan
     if (typeof hook === 'function') (hook as () => void)()
   }
 

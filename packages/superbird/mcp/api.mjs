@@ -1,14 +1,14 @@
-// Thin HTTP client for a running Guano instance. The MCP server NEVER touches
+// Thin HTTP client for a running Superbird instance. The MCP server NEVER touches
 // the data dir directly — every read/write goes through the authed HTTP API,
-// exactly as the browser editor does. Auth is a `guano_` API-token bearer
+// exactly as the browser editor does. Auth is a `superbird_` API-token bearer
 // (create one in the editor: My account → API tokens).
 //
 // `createApi` is the per-project client. One Claude Desktop entry now carries
-// SEVERAL projects (GUANO_PROJECTS), each with its own url, token and instance
+// SEVERAL projects (SUPERBIRD_PROJECTS), each with its own url, token and instance
 // id, and the live one is resolved per call — so a client cannot be bound to
 // one address at import time any more. The module-level exports below are the
 // single-project form, built from the environment, and are what a bare
-// GUANO_URL/GUANO_TOKEN setup still uses.
+// SUPERBIRD_URL/SUPERBIRD_TOKEN setup still uses.
 
 class ApiError extends Error {
   constructor(status, message, detail) {
@@ -19,9 +19,9 @@ class ApiError extends Error {
     if (detail?.retryAfterSeconds !== undefined) this.retryAfterSeconds = detail.retryAfterSeconds
     // ...and needsSetup on a 401, which is a 401 for a completely different
     // reason: the instance has no admin account yet, so a token minted by
-    // `guano connect` is PENDING until the first admin is created and binds it.
+    // `superbird connect` is PENDING until the first admin is created and binds it.
     // Without this it reads as "the token is dead", and the advice that follows
-    // ("run guano connect again") is the one thing that does not help.
+    // ("run superbird connect again") is the one thing that does not help.
     if (detail?.needsSetup) this.needsSetup = true
   }
 }
@@ -52,7 +52,7 @@ export function createApi({ base, token, instance = '' }) {
         body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
       })
     } catch (e) {
-      throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
+      throw new ApiError(0, `cannot reach Superbird at ${BASE} — is the server running? (${e.message})`)
     }
     if (!res.ok) {
       const detail = await res.json().catch(() => null)
@@ -179,7 +179,7 @@ export function createApi({ base, token, instance = '' }) {
         body: bytes,
       })
     } catch (e) {
-      throw new ApiError(0, `cannot reach Guano at ${BASE} — is the server running? (${e.message})`)
+      throw new ApiError(0, `cannot reach Superbird at ${BASE} — is the server running? (${e.message})`)
     }
     if (!res.ok) {
       const detail = await res.json().catch(() => null)
@@ -209,17 +209,17 @@ export function createApi({ base, token, instance = '' }) {
 
 // ---------- the single-project client, from the environment ----------
 //
-// A bare GUANO_URL/GUANO_TOKEN entry (and `server/agent.mjs`, and every test
+// A bare SUPERBIRD_URL/SUPERBIRD_TOKEN entry (and `server/agent.mjs`, and every test
 // that builds its own api) still works exactly as before. The router in
 // projects.mjs builds its clients with `createApi` instead.
-const BASE = (process.env.GUANO_URL || 'http://localhost:4174').replace(/\/+$/, '')
-const TOKEN = process.env.GUANO_TOKEN || ''
-// Which project this entry was connected to, written by `guano connect`. A
+const BASE = (process.env.SUPERBIRD_URL || 'http://localhost:4174').replace(/\/+$/, '')
+const TOKEN = process.env.SUPERBIRD_TOKEN || ''
+// Which project this entry was connected to, written by `superbird connect`. A
 // token is minted into ONE data dir, so when several projects share a default
 // port the instance that answers may not be the one that issued the token —
 // and the 401 it returns is indistinguishable from a revoked token. Comparing
 // this against /api/health turns that into a message naming both projects.
-const INSTANCE = process.env.GUANO_INSTANCE || ''
+const INSTANCE = process.env.SUPERBIRD_INSTANCE || ''
 
 /** Every outbound request is bounded. `health` is a probe the router runs
  *  against several addresses, so it gets the short one. */

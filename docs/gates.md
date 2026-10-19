@@ -10,15 +10,15 @@
 
 `npm run serve` is the node server (`server/index.mjs`): auth, the editor store, the publish/export API, the built SPA and the exported static site.
 
-**A busy 4174 walks to the next free port, and that convenience can cost a day.** The Vite proxy, the MCP's `GUANO_URL` default and every open tab all address guano by its default port, so they keep talking to whatever is squatting it. An older instance answers `/api/published` out of the `export.mjs` cached in ITS heap: publish and preview report success while the HTML on disk is built by another day's code. `assets/script.js` is read from disk per export, so the runtime half still looks current — which is what makes it unreadable. The walk prints a warning last, naming all three addresses; `PORT_STRICT=1` (or an explicit `PORT`) refuses to walk.
+**A busy 4174 walks to the next free port, and that convenience can cost a day.** The Vite proxy, the MCP's `SUPERBIRD_URL` default and every open tab all address superbird by its default port, so they keep talking to whatever is squatting it. An older instance answers `/api/published` out of the `export.mjs` cached in ITS heap: publish and preview report success while the HTML on disk is built by another day's code. `assets/script.js` is read from disk per export, so the runtime half still looks current — which is what makes it unreadable. The walk prints a warning last, naming all three addresses; `PORT_STRICT=1` (or an explicit `PORT`) refuses to walk.
 
 **A project remembers its port** (`server/instance.mjs` → `data/instance.json`), so an unset `PORT` prefers the port this data dir last landed on over the bare 4174 default — two projects stop trading one address depending on boot order, and the warning says so when the port it lost was its own. See the instance-identity doc.
 
 ## First-run seeding
 
-`npm run serve` **seeds `guano-project:main`** — at `POST /api/auth/setup` (with the project name from the setup form) and lazily on an agent-token store request — via `createProject` from the MCP runtime bundle, so a fresh instance is drivable headlessly instead of waiting for someone to open `/admin`.
+`npm run serve` **seeds `superbird-project:main`** — at `POST /api/auth/setup` (with the project name from the setup form) and lazily on an agent-token store request — via `createProject` from the MCP runtime bundle, so a fresh instance is drivable headlessly instead of waiting for someone to open `/admin`.
 
-The bundle is **committed** (like `server/motion-runtime.js`), so seeding works on a fresh clone; rebuild it with `npm run build:mcp-runtime` after changing anything it re-exports from `src/lib` (`prepack` always rebuilds it fresh before publishing). If it is missing, seeding logs a warning and no-ops: the browser still creates the project, and `SetupView`'s `guano-setup-name` stash carries the name.
+The bundle is **committed** (like `server/motion-runtime.js`), so seeding works on a fresh clone; rebuild it with `npm run build:mcp-runtime` after changing anything it re-exports from `src/lib` (`prepack` always rebuilds it fresh before publishing). If it is missing, seeding logs a warning and no-ops: the browser still creates the project, and `SetupView`'s `superbird-setup-name` stash carries the name.
 
 ## `check:corpus` — the render referee
 
@@ -28,7 +28,7 @@ The inputs live in `.corpus/inputs/` (gitignored) and **are** the referee — no
 
 **A difference is a bug, never a re-baseline — with one exception, and only one.** The referee diffs the whole exported directory, so `assets/script.js`, `assets/motion.js` and `assets/slider.js` are in it too. Rebuilding a runtime (`build:motion`, `build:slider`, or an edit to `server/site-runtime.js`) therefore moves the baseline by exactly those files. Read the diff and confirm it is ONLY the asset you rebuilt before saving; a page of HTML in the same diff is still a bug.
 
-**Media is part of the referee too.** A `/media/<id>` resolves out of `$GUANO_DATA_DIR/media`, so `build` (or `media --from <data dir>`, once) snapshots the referenced bytes into `.corpus/media/`, and every export points `GUANO_DATA_DIR` at `.corpus`. An input referencing an id the snapshot does not hold **refuses to run** rather than exporting a hole and blaming the code — the one thing a referee must never do.
+**Media is part of the referee too.** A `/media/<id>` resolves out of `$SUPERBIRD_DATA_DIR/media`, so `build` (or `media --from <data dir>`, once) snapshots the referenced bytes into `.corpus/media/`, and every export points `SUPERBIRD_DATA_DIR` at `.corpus`. An input referencing an id the snapshot does not hold **refuses to run** rather than exporting a hole and blaming the code — the one thing a referee must never do.
 
 ## `check:html` — the agent-facing HTML layer
 
@@ -50,7 +50,7 @@ It also pins idempotence, that a disagreeing text mirror is *recorded* and never
 
 ## `check:mcp` — the tool-list byte budget
 
-Measures what an MCP client actually receives from `packages/guano/mcp/` (the `tools/list` payload and the initialize `instructions`) and **fails when the tool list exceeds its byte budget**. **Run it after touching any tool description or `inputSchema`.**
+Measures what an MCP client actually receives from `packages/superbird/mcp/` (the `tools/list` payload and the initialize `instructions`) and **fails when the tool list exceeds its byte budget**. **Run it after touching any tool description or `inputSchema`.**
 
 The files on disk cost an agent nothing, but the tool list is injected into the model's context on *every turn*: a sentence added to a schema is a tax on every call forever. A description says WHAT and WHEN in a sentence or two and points at `get_guide {section: "…"}`; the explanation belongs in `GUIDE.md`, fetched a section at a time.
 
@@ -64,9 +64,9 @@ The `for` parameter on `get_guide` is the worked example of the trim rule: its e
 
 ## `check:cli` — the shipped CLI, the way a user meets it
 
-`scripts/check-cli.mjs`: every module under `packages/`, `server/` and `scripts/` parses, each package's `bin` entry exists and carries a shebang, and `packages/guano/bin/guano.js` is actually INVOKED for `--version` (compared against `package.json`), `--help` (which must still name every subcommand, and must not leak a backtick) and an unknown command (exit 1). `prepack` runs it before any build work, so a tarball whose entry point cannot run is never built.
+`scripts/check-cli.mjs`: every module under `packages/`, `server/` and `scripts/` parses, each package's `bin` entry exists and carries a shebang, and `packages/superbird/bin/superbird.js` is actually INVOKED for `--version` (compared against `package.json`), `--help` (which must still name every subcommand, and must not leak a backtick) and an unknown command (exit 1). `prepack` runs it before any build work, so a tarball whose entry point cannot run is never built.
 
-**0.1.4 shipped with this bug.** An unescaped backtick in the `HELP` template literal made `bin/guano.js` a SyntaxError, so every subcommand — `guano dev` included — died before running a line. `vue-tsc` does not look at `packages/`, the e2e suite drives the MCP server in-process, and nothing else ever loaded the file: all six gates passed on a package that could not start.
+**0.1.4 shipped with this bug.** An unescaped backtick in the `HELP` template literal made `bin/superbird.js` a SyntaxError, so every subcommand — `superbird dev` included — died before running a line. `vue-tsc` does not look at `packages/`, the e2e suite drives the MCP server in-process, and nothing else ever loaded the file: all six gates passed on a package that could not start.
 
 ## `build:*` — the committed artifacts
 
@@ -75,13 +75,13 @@ Each of these rebuilds a file that is **committed**, so it is only needed after 
 - `build:motion` — `server/motion-runtime.js` (the published site's tween runtime) from `src/motion/runtime.ts`.
 - `build:slider` — `server/slider-runtime.js` (the carousel runtime) from `src/slider/runtime.ts`. Rebuild after changing `src/lib/shared/slider.js` or its driver.
 - `build:icons` — the icon table from the installed `lucide-vue-next` (`scripts/build-icons.ts`): `src/lib/shared/lucideIcons.js`, the whole set the icon picker offers. Run it after bumping `lucide-vue-next`. Every icon is run through the inline-SVG sanitizer, and the build fails on one it would alter.
-- `build:mcp-runtime` — `packages/guano/runtime/mcp-runtime.mjs` (see First-run seeding).
+- `build:mcp-runtime` — `packages/superbird/runtime/mcp-runtime.mjs` (see First-run seeding).
 
 Rebuilding a runtime moves the `check:corpus` baseline by exactly that asset.
 
 ## `test:e2e` — the Playwright suite
 
-`e2e/`, 585 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `GUANO_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
+`e2e/`, 585 tests in 74 files. **Requires a prior `npm run build`** — the e2e server serves `dist/`. It boots its own server on port 4188 against an isolated `SUPERBIRD_DATA_DIR` (`.e2e-data`), so it never touches dev data or a running `npm run serve`.
 
 What is in it, by group:
 
@@ -94,9 +94,9 @@ What is in it, by group:
 
 **The content fixture is `e2e/fixtures/project.json`**, written straight to the store by `loadFixture()` — test data only, hand-maintained. The product has no demo project and no `?demo` URL.
 
-**One `openEditor`, and it holds a BUILDER session** (`e2e/fixtures/session.ts`). There were thirteen copies, one per `ui-*` spec, each logging in through the browser form — and every one of them became a contributor session the moment the server's gates started reading `effectiveRole(req, user)`, because *a browser session is never a builder session* (→ `docs/server.md`). The fixture mints the way the desktop launcher mints: `POST /api/auth/launcher-session` with the spawn secret over the suite server's loopback, which is why `playwright.config.ts` passes `GUANO_LAUNCHER_SECRET` in `webServer.env` — one definition, in the fixture. That consolidation happened in a commit of its own, BEFORE the gates flipped and with the full suite green, so the flip could only fail on a gate; doing both at once would have been one big uncertain commit instead of two small ones.
+**One `openEditor`, and it holds a BUILDER session** (`e2e/fixtures/session.ts`). There were thirteen copies, one per `ui-*` spec, each logging in through the browser form — and every one of them became a contributor session the moment the server's gates started reading `effectiveRole(req, user)`, because *a browser session is never a builder session* (→ `docs/server.md`). The fixture mints the way the desktop launcher mints: `POST /api/auth/launcher-session` with the spawn secret over the suite server's loopback, which is why `playwright.config.ts` passes `SUPERBIRD_LAUNCHER_SECRET` in `webServer.env` — one definition, in the fixture. That consolidation happened in a commit of its own, BEFORE the gates flipped and with the full suite green, so the flip could only fail on a gate; doing both at once would have been one big uncertain commit instead of two small ones.
 
-Three more helpers, each for a case the first cannot cover. `openEditorInBrowser` is the form login, for the two specs where the browser IS the point — the save pill and the App button are chrome the app's own window provides or that `canBuild` gates. `becomeBuilder(ctx)` upgrades an API context, which thirteen API specs need: seeding a project, writing structure, reading the team, minting a token, publishing, snapshotting and touching settings are all builder work. And `becomeBuilderByApproval(who, baseURL, name)` is for a builder who is NOT the instance's owner — the secret proof mints for `oldestAdmin()` alone, so an editor's builder session can only be a `guanol_` token they approved for themselves through the device flow, which is the path a second builder takes in real life. Each device flow presents its own `X-Forwarded-For`, because the device pool is capped per address and every context in the suite otherwise shares one socket: without it a spec measures the limiter rather than the endpoint. (`TRUST_PROXY` is on for the suite server already, for the forms limiter.)
+Three more helpers, each for a case the first cannot cover. `openEditorInBrowser` is the form login, for the two specs where the browser IS the point — the save pill and the App button are chrome the app's own window provides or that `canBuild` gates. `becomeBuilder(ctx)` upgrades an API context, which thirteen API specs need: seeding a project, writing structure, reading the team, minting a token, publishing, snapshotting and touching settings are all builder work. And `becomeBuilderByApproval(who, baseURL, name)` is for a builder who is NOT the instance's owner — the secret proof mints for `oldestAdmin()` alone, so an editor's builder session can only be a `superbirdl_` token they approved for themselves through the device flow, which is the path a second builder takes in real life. Each device flow presents its own `X-Forwarded-For`, because the device pool is capped per address and every context in the suite otherwise shares one socket: without it a spec measures the limiter rather than the endpoint. (`TRUST_PROXY` is on for the suite server already, for the forms limiter.)
 
 **A spec that logs in must sort AFTER `smoke.spec.ts`.** Smoke owns the first-run flow and needs a server with no admin account yet; that is why `store-concurrency`, `store-forms`, `store-integrations`, `store-agent-security`, `ui-components-drawer`, `ui-forms-panel`, `ui-entry-editor`, `ui-interactions-panel`, `ui-layers`, `ui-nesting`, `ui-preview-editing`, `ui-persistence`, `ui-slider-panel`, `ui-a11y` and `ui-variants` are named as they are. `lifecycle`, `auth-kdf`, `auth-setup-code` and `instance-identity` are exempt: each spawns its OWN server on its own data dir, so none touches the shared instance's first-run state — a SIGTERM would otherwise end the suite, and a legacy password record has to be on disk BEFORE boot for the user cache to read it.
 

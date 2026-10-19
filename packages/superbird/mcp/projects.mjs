@@ -1,10 +1,10 @@
-// Which Guano project this MCP process is working on.
+// Which Superbird project this MCP process is working on.
 //
-// ONE Claude Desktop entry, several projects. `guano connect` used to write a
-// `guano-<slug>` entry per project, which Claude Desktop then launched all of
+// ONE Claude Desktop entry, several projects. `superbird connect` used to write a
+// `superbird-<slug>` entry per project, which Claude Desktop then launched all of
 // at once — so every project you were not running that minute failed its
 // handshake and raised its own "could not connect" alert. A single entry
-// carrying a map of projects (GUANO_PROJECTS) has one process, one toolset and
+// carrying a map of projects (SUPERBIRD_PROJECTS) has one process, one toolset and
 // so one tool list, whatever the project count.
 //
 // THE RULE THAT MATTERS: the agent must never be the one that decides which
@@ -13,10 +13,10 @@
 // write — it is an edit to someone else's site, reported as success. So
 // selection reads, in order:
 //
-//   1. GUANO_MCP_PROJECT — pinned in the entry's env. The human edited a config
+//   1. SUPERBIRD_MCP_PROJECT — pinned in the entry's env. The human edited a config
 //      file, which is the one consent channel a prompt-injected agent cannot
 //      reach. Never asked, never overridden.
-//   2. `guano use <slug>` — the human's "this one, for now", in a file outside
+//   2. `superbird use <slug>` — the human's "this one, for now", in a file outside
 //      every project so the agent cannot reach it either. Read on every
 //      resolve, so switching needs no client restart.
 //   3. the sole REACHABLE project — if exactly one of the mapped projects
@@ -33,7 +33,7 @@
 // identifies as THIS project: by the `instance` id `connect` baked in, or,
 // when either side has no id to compare, by the instance accepting its token.
 // That is what stops another project squatting the port from being mistaken
-// for this one — the same check `guano mcp` makes before presenting a token.
+// for this one — the same check `superbird mcp` makes before presenting a token.
 //
 // AN ENTRY ADDRESSES A DATA DIR, NOT A PORT. `dir` is the authority on where a
 // local project is, exactly as it is everywhere else in this product; `url` is
@@ -84,7 +84,7 @@ const PROBE_TTL_MS = 5_000
 const slugOk = (s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(s)
 
 /**
- * Parse GUANO_PROJECTS: `{"<slug>": {url, token, instance?, target?}}`.
+ * Parse SUPERBIRD_PROJECTS: `{"<slug>": {url, token, instance?, target?}}`.
  * Anything malformed is dropped rather than thrown — a typo in one entry must
  * not take out the whole client.
  */
@@ -93,10 +93,10 @@ export function parseProjects(raw) {
   try {
     parsed = JSON.parse(raw || '{}')
   } catch {
-    return { projects: {}, error: 'GUANO_PROJECTS is not valid JSON' }
+    return { projects: {}, error: 'SUPERBIRD_PROJECTS is not valid JSON' }
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { projects: {}, error: 'GUANO_PROJECTS must be an object of {slug: {url, token}}' }
+    return { projects: {}, error: 'SUPERBIRD_PROJECTS must be an object of {slug: {url, token}}' }
   }
   const projects = {}
   const dropped = []
@@ -115,7 +115,7 @@ export function parseProjects(raw) {
       url: hasUrl ? v.url.replace(/\/+$/, '') : '',
       token: typeof v.token === 'string' ? v.token : '',
       instance: typeof v.instance === 'string' ? v.instance : '',
-      // the per-project write target, which used to be one GUANO_MCP_TARGET for
+      // the per-project write target, which used to be one SUPERBIRD_MCP_TARGET for
       // the whole entry. With several projects behind one entry it has to be
       // per project, or pinning Main for a landing page would pin it for a
       // client's live site too.
@@ -160,13 +160,13 @@ async function tokenAccepted(api) {
  *
  * Returns `{ok, answered, why, instance}`, not a bare boolean, because the two
  * ways of failing need different advice and the refusal used to give one. A
- * project that is simply not up is fixed by `guano dev`. A project whose
+ * project that is simply not up is fixed by `superbird dev`. A project whose
  * ADDRESS answers but whose identity does not check out is a STALE ENTRY, and
  * telling its owner to start a server they are already running is how an
  * afternoon goes: /api/health answers 200 ok, every tool call answers "no
  * configured project is running", and nothing reconciles the two.
  *
- * Shared, because `guano disconnect --stale` decides what to delete on exactly
+ * Shared, because `superbird disconnect --stale` decides what to delete on exactly
  * this question and two implementations of it would eventually disagree about
  * which entries are dead.
  */
@@ -244,8 +244,8 @@ export async function identifyEntry(p, api = createApi({ base: addressOf(p), tok
  * which is live; `current()` is what the toolset's api wrapper dispatches to.
  */
 export function createProjectRouter({
-  raw = process.env.GUANO_PROJECTS,
-  pinned = (process.env.GUANO_MCP_PROJECT ?? '').trim(),
+  raw = process.env.SUPERBIRD_PROJECTS,
+  pinned = (process.env.SUPERBIRD_MCP_PROJECT ?? '').trim(),
   now = () => Date.now(),
 } = {}) {
   const { projects, error, dropped } = parseProjects(raw)
@@ -286,19 +286,19 @@ export function createProjectRouter({
    */
   async function resolve() {
     if (error) return { error }
-    if (!slugs.length) return { error: 'no projects are configured — run `guano connect`' }
+    if (!slugs.length) return { error: 'no projects are configured — run `superbird connect`' }
     if (pinned) {
       if (!projects[pinned]) {
         return {
           error:
-            `GUANO_MCP_PROJECT is "${pinned}", which is not one of the configured projects ` +
-            `(${slugs.join(', ')}). Fix it in the MCP config, or run \`guano connect\` in that project.`,
+            `SUPERBIRD_MCP_PROJECT is "${pinned}", which is not one of the configured projects ` +
+            `(${slugs.join(', ')}). Fix it in the MCP config, or run \`superbird connect\` in that project.`,
         }
       }
       active = pinned
       return { slug: pinned, pinned: true }
     }
-    // `guano use` — the human's "this one, for now". Read every time, so a
+    // `superbird use` — the human's "this one, for now". Read every time, so a
     // switch needs no client restart. A pin naming a project that is no
     // longer in the map is simply stale (it was disconnected) and is ignored
     // rather than treated as an error; one naming a project that is mapped is
@@ -332,18 +332,18 @@ export function createProjectRouter({
       if (stale.length) {
         return {
           error:
-            'a Guano server is running, but it is not any of the configured projects:\n  ' +
+            'a Superbird server is running, but it is not any of the configured projects:\n  ' +
             stale.join('\n  ') +
             '\nReconnect the project you are working on: quit Claude (it rewrites its config on ' +
-            'quit), run `guano connect` in that project\'s folder, then reopen Claude. ' +
-            '`guano disconnect --stale` clears entries that can no longer work.',
+            'quit), run `superbird connect` in that project\'s folder, then reopen Claude. ' +
+            '`superbird disconnect --stale` clears entries that can no longer work.',
           candidates: slugs,
         }
       }
       return {
         error:
           `none of the configured projects is running (${slugs.join(', ')}). Start one with ` +
-          '`guano dev` in its folder, then try again.',
+          '`superbird dev` in its folder, then try again.',
         candidates: slugs,
       }
     }
@@ -351,7 +351,7 @@ export function createProjectRouter({
       error:
         `${up.length} projects are running (${up.join(', ')}), so which one to edit is ambiguous ` +
         '— and guessing would mean editing the wrong site and reporting success.\n' +
-        `Pick one with \`guano use ${up[0]}\` (it takes effect on the next tool call — no restart), ` +
+        `Pick one with \`superbird use ${up[0]}\` (it takes effect on the next tool call — no restart), ` +
         'or stop the ones you are not working on.',
       candidates: up,
     }
@@ -375,7 +375,7 @@ export function createProjectRouter({
     /**
      * Point every client on this machine at `slug`.
      *
-     * The write itself is the same pin `guano use` sets — what differs is only
+     * The write itself is the same pin `superbird use` sets — what differs is only
      * who asked: this path is reached from `use_project`, which gets the
      * human's answer through an elicitation dialog first. The agent proposes;
      * it never decides.
@@ -390,7 +390,7 @@ export function createProjectRouter({
     /** the active project's key, for invalidating per-project session state */
     activeKey: () => active,
     /** this project's pinned write target, which is per project rather than one
-     *  GUANO_MCP_TARGET for the whole entry */
+     *  SUPERBIRD_MCP_TARGET for the whole entry */
     targetFor: (slug) => projects[slug]?.target ?? '',
     configured: () => ({
       count: slugs.length,

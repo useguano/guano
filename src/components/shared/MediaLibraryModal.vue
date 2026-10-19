@@ -347,9 +347,9 @@ async function createFolderHere() {
 }
 
 function onCrumbDrop(e: DragEvent, folderId: string | null) {
-  const assetId = e.dataTransfer?.getData('application/x-guano-asset')
+  const assetId = e.dataTransfer?.getData('application/x-superbird-asset')
   if (assetId) return void onMoveAsset(assetId, folderId)
-  const fId = e.dataTransfer?.getData('application/x-guano-folder')
+  const fId = e.dataTransfer?.getData('application/x-superbird-folder')
   if (fId && fId !== folderId) void onMoveFolder(fId, folderId)
 }
 

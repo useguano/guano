@@ -7,7 +7,7 @@
 //
 // WHY THE WHOLE INTEGRATION LIVES HERE, not just its secrets: the project blob
 // is written by editors, by drafts, by a 3-way merge, by contributors and by
-// agent tokens, and a `guano-base:*` snapshot is a whole copy of it. While the
+// agent tokens, and a `superbird-base:*` snapshot is a whole copy of it. While the
 // SMTP *host* sat in the blob and only the password sat server-side, anyone who
 // could write the blob could point the host at their own machine and read the
 // password off the first AUTH. With the whole integration here that class of
@@ -18,7 +18,7 @@
 //      `publicIntegration` (shared/integrations.js), which has no branch that
 //      can include one. A secret is usable only by a server-side capability
 //      (capabilities.mjs) — SMTP send, webhook forward.
-//   2. WRITES are admin + session cookie only. A `guano_` token may LIST
+//   2. WRITES are admin + session cookie only. A `superbird_` token may LIST
 //      (an agent needs key names to write a valid `{{ENV.X}}` reference) and
 //      can never create, change, delete or read a secret. Same contract as
 //      /api/agent-policy and the GitHub token: a credential able to mint

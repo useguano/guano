@@ -7,7 +7,7 @@ import { becomeBuilder } from './fixtures/session'
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const CONTRIB = { email: 'contrib@example.com', password: 'contrib-pass-1' }
-const STORE_GET = '/api/store?keys=guano-project:main'
+const STORE_GET = '/api/store?keys=superbird-project:main'
 
 async function login(ctx: APIRequestContext, creds: { email: string; password: string }) {
   return ctx.post('/api/auth/login', { data: creds })
@@ -35,7 +35,7 @@ test('API tokens: create via session, use as bearer, revoke kills it, contributo
   res = await admin.post('/api/tokens', { data: { name: 'mcp-e2e' } })
   expect(res.status()).toBe(200)
   const created = await res.json()
-  expect(created.token).toMatch(/^guano_[0-9a-f]{48}$/)
+  expect(created.token).toMatch(/^superbird_[0-9a-f]{48}$/)
   expect(created.id).toBeTruthy()
   const raw: string = created.token
   const id: string = created.id
@@ -50,7 +50,7 @@ test('API tokens: create via session, use as bearer, revoke kills it, contributo
   expect(res.status()).toBe(200)
 
   // --- a garbage bearer is rejected ---
-  const garbage = await bearerCtx(baseURL, 'guano_deadbeef')
+  const garbage = await bearerCtx(baseURL, 'superbird_deadbeef')
   expect((await garbage.get(STORE_GET)).status()).toBe(401)
 
   // --- the token appears in the owner's list (no hash) ---

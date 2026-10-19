@@ -35,7 +35,7 @@ const RESERVED_DATA_ATTRS = new Set([
   // the theme switcher the head script delegates from (shared/colorMode.js) —
   // a duplicate attribute resolves to the FIRST occurrence, so an authored one
   // would shadow the renderer's own value
-  'data-guano-theme',
+  'data-superbird-theme',
   'data-node-id',
   'data-id',
   'data-ref',

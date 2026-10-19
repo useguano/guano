@@ -20,7 +20,7 @@ import { readZip } from '../server/zip.mjs'
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const REVIEWER = { email: 'reviewer@example.com', password: 'reviewer-pass-1' }
 const CONTRIB = { email: 'contrib@example.com', password: 'contrib-pass-1' }
-const MAIN = 'guano-project:main'
+const MAIN = 'superbird-project:main'
 
 async function adminContext(baseURL: string | undefined) {
   const ctx = await pwRequest.newContext({ baseURL })
@@ -129,8 +129,8 @@ test('a reviewer can only add comments', async ({ baseURL }) => {
 
   // nothing else: no draft, no draft index, no delete, no publish or preview
   // by any method, no token, no team list, no media mutation
-  expect((await reviewer.put('/api/store/guano-project:rev-draft', { data: JSON.stringify(main) })).status()).toBe(403)
-  expect((await reviewer.put('/api/store/guano-branches', { data: JSON.stringify({ branches: [] }) })).status()).toBe(403)
+  expect((await reviewer.put('/api/store/superbird-project:rev-draft', { data: JSON.stringify(main) })).status()).toBe(403)
+  expect((await reviewer.put('/api/store/superbird-branches', { data: JSON.stringify({ branches: [] }) })).status()).toBe(403)
   expect((await reviewer.delete(`/api/store/${MAIN}`)).status()).toBe(403)
   for (const method of ['server', 'zip', 'github']) {
     expect((await reviewer.post(`/api/published?method=${method}`, { data: main })).status()).toBe(403)

@@ -1,4 +1,4 @@
-// Measures what an MCP client actually receives from the Guano MCP server, and
+// Measures what an MCP client actually receives from the Superbird MCP server, and
 // fails when the tool list exceeds its budget.
 //
 // The files on disk (tools.mjs, mcp-runtime.mjs, GUIDE.md) cost an agent
@@ -7,7 +7,7 @@
 // sentence at a time with every bug fix, so this is a gate, not a report:
 // explanation belongs in GUIDE.md (fetched on demand, a section at a time),
 // not in a schema the client injects on every turn.
-import { createToolSet, guideInstructions } from '../packages/guano/mcp/tools.mjs'
+import { createToolSet, guideInstructions } from '../packages/superbird/mcp/tools.mjs'
 
 /**
  * tools/list must stay under this. It is set a little above the measured size,
@@ -28,7 +28,7 @@ import { createToolSet, guideInstructions } from '../packages/guano/mcp/tools.mj
  */
 const BUDGET = 80_000
 
-const runtime = await import('../packages/guano/runtime/mcp-runtime.mjs').catch(() => null)
+const runtime = await import('../packages/superbird/runtime/mcp-runtime.mjs').catch(() => null)
 if (!runtime) {
   console.error('runtime/mcp-runtime.mjs missing — run `npm run build:mcp-runtime`')
   process.exit(1)

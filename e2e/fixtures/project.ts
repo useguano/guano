@@ -20,7 +20,7 @@ const FIXTURE = readFileSync(new URL('./project.json', import.meta.url), 'utf8')
  */
 export async function loadFixture(page: Page) {
   await page.goto('about:blank')
-  const res = await page.request.put('/api/store/guano-project%3Amain', { data: FIXTURE })
+  const res = await page.request.put('/api/store/superbird-project%3Amain', { data: FIXTURE })
   if (!res.ok()) throw new Error(`could not seed the fixture project (${res.status()})`)
   await page.goto('/admin/')
 }

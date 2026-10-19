@@ -29,7 +29,7 @@ export default defineConfig({
       entry: fileURLToPath(new URL('./src/motion/runtime.ts', import.meta.url)),
       // IIFE: a plain <script> the page can load with no module plumbing
       formats: ['iife'],
-      name: 'GuanoMotion',
+      name: 'SuperbirdMotion',
       fileName: () => 'motion-runtime.js',
     },
   },

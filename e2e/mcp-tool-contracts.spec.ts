@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { mcpSession, pageHtml, PREVIEW_TOKEN, PREVIEW_MOUNT } from './fixtures/mcpSession'
 import { motionTriggers } from './fixtures/fxWire'
 // @ts-expect-error — plain .mjs, no types
-import { createToolSet, guideInstructions } from '../packages/guano/mcp/tools.mjs'
+import { createToolSet, guideInstructions } from '../packages/superbird/mcp/tools.mjs'
 
 // The tool CONTRACTS an agent depends on, driven in-process. Every case here
 // comes from something that cost the Cocoapp session real calls: a response too
@@ -25,7 +25,7 @@ test.describe('get_guide', () => {
   test('the whole handbook is still reachable, and one section stays one section', async () => {
     const s = await mcpSession()
     const all = await s.call('get_guide', { section: 'all' })
-    expect(all.guide).toContain('<!-- guano handbook')
+    expect(all.guide).toContain('<!-- superbird handbook')
     expect(all.guide.length).toBeGreaterThan(50_000)
 
     const one = await s.call('get_guide', { section: 'animations' })
@@ -1493,7 +1493,7 @@ test.describe('preview', () => {
     const project = s.stored()
     project.locales = ['en', 'fr', 'de']
     project.defaultLocale = 'en'
-    s.writeStore('guano-project:main', JSON.stringify(project))
+    s.writeStore('superbird-project:main', JSON.stringify(project))
 
     const { localeUrls } = await s.call('preview')
     expect(new URL(localeUrls.en).pathname).toBe(`${PREVIEW_MOUNT}/`)
@@ -1720,8 +1720,8 @@ test.describe('pageId takes a path', () => {
   })
 })
 
-// Embedded mode: the editor's own AI panel. `GUANO_MCP_EMBEDDED=1` on the
-// entry, written only by `guano connect --config … --embedded`, is the ONE
+// Embedded mode: the editor's own AI panel. `SUPERBIRD_MCP_EMBEDDED=1` on the
+// entry, written only by `superbird connect --config … --embedded`, is the ONE
 // signal — the panel knows the project, the branch, the page and the
 // selection, so the tools that exist to ask about any of them are gone.
 test.describe('the editor AI panel profile', () => {
@@ -1821,7 +1821,7 @@ test.describe('the editor AI panel profile', () => {
   // the handbook tells the model to treat that refusal as an editor bug and
   // STOP — so the turn died rather than retrying.
   test('the FIRST call already has the target the config carries', async () => {
-    const runtime = await import('../packages/guano/runtime/mcp-runtime.mjs').catch(() => null)
+    const runtime = await import('../packages/superbird/runtime/mcp-runtime.mjs').catch(() => null)
     test.skip(!runtime, 'runtime/mcp-runtime.mjs missing — run `npm run build:mcp-runtime`')
 
     // null until a forwarded call resolves it, as the real one is

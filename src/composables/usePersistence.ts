@@ -33,14 +33,14 @@ const HISTORY_LIMIT = 50
 
 export const MAIN_ID = 'main'
 
-export const BRANCHES_META_KEY = 'guano-branches'
+export const BRANCHES_META_KEY = 'superbird-branches'
 
 export const activeBranchId = ref(MAIN_ID)
 
 export const autosaveSuspended = ref(false)
 
 export function projectStorageKey(branchId: string) {
-  return `guano-project:${branchId}`
+  return `superbird-project:${branchId}`
 }
 
 const typing = ref(false)

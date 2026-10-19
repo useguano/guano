@@ -31,7 +31,7 @@ A page with text but no usable tree is salvaged through `src/lib/legacy/dsl.ts` 
 
 ## Where it runs
 
-The server migrates **every blob** once at boot (`migrateSchema` in `server/index.mjs`): Main, the drafts, the `guano-base:*` merge snapshots — whole project copies, so an unmigrated base makes a 3-way merge see every page as changed — and the published baseline. Before the first write it copies the whole store to `data/store.pre-v2/`, because this is one-way.
+The server migrates **every blob** once at boot (`migrateSchema` in `server/index.mjs`): Main, the drafts, the `superbird-base:*` merge snapshots — whole project copies, so an unmigrated base makes a 3-way merge see every page as changed — and the published baseline. Before the first write it copies the whole store to `data/store.pre-v2/`, because this is one-way.
 
 `migrateStoredProject` (`lib/storage.ts`) runs the same function client-side as a defensive no-op, for a blob that arrived some other way: an import, or a merge base read straight out of the store.
 

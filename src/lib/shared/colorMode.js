@@ -17,13 +17,13 @@
 //
 // A switcher is a node's `link`, exactly like the language switcher's
 // `@locale:<code>`: one existing field, no new schema, usable on any element,
-// and it emits `data-guano-theme` instead of an `href` because a theme switch
+// and it emits `data-superbird-theme` instead of an `href` because a theme switch
 // is not a navigation.
 
-export const COLOR_MODE_KEY = 'guano-theme'
+export const COLOR_MODE_KEY = 'superbird-theme'
 
 /** the reserved attribute the head script delegates clicks from */
-export const COLOR_MODE_ATTR = 'data-guano-theme'
+export const COLOR_MODE_ATTR = 'data-superbird-theme'
 
 /** what a first-time visitor gets, before they have chosen anything */
 export const COLOR_MODE_DEFAULTS = ['light', 'dark', 'system']

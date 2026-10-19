@@ -4,7 +4,7 @@ import { mcpSession, pageHtml } from './fixtures/mcpSession'
 // Actions are the third engine: interactions write classes, animations write
 // inline styles, actions write DATA. A prototype's "Mark as done" could change
 // the colour of a pill and never the status behind it, so every such button in
-// a Guano prototype was dead.
+// a Superbird prototype was dead.
 //
 // These specs are about the WRITE surface — what `edit_elements {bindActions}`
 // accepts and, mostly, what it refuses. Every refusal here exists because the

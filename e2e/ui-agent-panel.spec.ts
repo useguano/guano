@@ -45,7 +45,7 @@ async function fakeHost(page: Page) {
     const posts: unknown[] = []
     Object.defineProperty(window, '__hostPosts', { value: posts })
     Object.defineProperty(window, 'webkit', {
-      value: { messageHandlers: { guano: { postMessage: (message: unknown) => posts.push(message) } } },
+      value: { messageHandlers: { superbird: { postMessage: (message: unknown) => posts.push(message) } } },
     })
   })
 }
@@ -56,8 +56,8 @@ const posts = (page: Page) =>
 
 const feed = (page: Page, lines: unknown[]) =>
   page.evaluate((batch) => {
-    const host = (window as unknown as { __guanoHost: { agentEvent: (e: unknown) => void } })
-      .__guanoHost
+    const host = (window as unknown as { __superbirdHost: { agentEvent: (e: unknown) => void } })
+      .__superbirdHost
     for (const line of batch) host.agentEvent(line)
   }, lines)
 
@@ -184,7 +184,7 @@ test.describe('the AI panel', () => {
     }[]
     expect(sent).toHaveLength(1)
     expect(sent[0]!.text).toContain('make the heading say Hello')
-    expect(sent[0]!.text).toContain('Context from the Guano editor')
+    expect(sent[0]!.text).toContain('Context from the Superbird editor')
     // the page is named the way the TOOLS take it — `pageId` resolves either
     // way now, and the path alone cost the first embedded session two calls
     expect(sent[0]!.text).toMatch(/pageId: \S+, path: \//)

@@ -37,7 +37,7 @@ let metaLoaded = false
 const statusCache = ref(new Map<string, DraftStatus>())
 
 function baseStorageKey(branchId: string) {
-  return `guano-base:${branchId}`
+  return `superbird-base:${branchId}`
 }
 
 export function useBranches() {

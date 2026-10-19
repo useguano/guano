@@ -39,8 +39,8 @@ const emit = defineEmits<{
 
 const { thumbUrl, mediaUrl } = useMedia()
 
-const ASSET_MIME = 'application/x-guano-asset'
-const FOLDER_MIME = 'application/x-guano-folder'
+const ASSET_MIME = 'application/x-superbird-asset'
+const FOLDER_MIME = 'application/x-superbird-folder'
 
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)

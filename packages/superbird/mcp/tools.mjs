@@ -1,5 +1,5 @@
 // Transport-agnostic tool registry shared by BOTH agent surfaces:
-//  - `guano mcp` (packages/guano/mcp/server.mjs) — stdio, external MCP clients
+//  - `superbird mcp` (packages/superbird/mcp/server.mjs) — stdio, external MCP clients
 //  - the in-editor assistant (server/agent.mjs) — POST /api/agent agentic loop
 // One tool implementation, two surfaces. `api` abstracts how the instance is
 // reached (HTTP with a bearer for the MCP process; direct store access
@@ -272,7 +272,7 @@ const PANEL_DROPPED = new Set([
  */
 const PANEL_ONLY = new Set(['suggest_next'])
 
-/** set by createToolSet from GUANO_MCP_EMBEDDED — see PANEL_DROPPED */
+/** set by createToolSet from SUPERBIRD_MCP_EMBEDDED — see PANEL_DROPPED */
 let embeddedMode = false
 
 /** this MCP package's version — compared against the running server's so a
@@ -484,18 +484,18 @@ export function createToolSet({
   //
   // That reach is also a liability: under a prompt injection these path
   // arguments become "read any file the user can read, then publish it".
-  // GUANO_MCP_FILE_ROOT confines them to one directory; unset keeps the
+  // SUPERBIRD_MCP_FILE_ROOT confines them to one directory; unset keeps the
   // historical behaviour and the server prints a recommendation at startup.
 
-  const FILE_ROOT = process.env.GUANO_MCP_FILE_ROOT
-    ? resolvePath(process.env.GUANO_MCP_FILE_ROOT)
+  const FILE_ROOT = process.env.SUPERBIRD_MCP_FILE_ROOT
+    ? resolvePath(process.env.SUPERBIRD_MCP_FILE_ROOT)
     : null
 
   /**
    * Files no path argument may ever name, root or no root.
    *
    * The fence alone is not enough, for two reasons. An entry written by hand
-   * has no root at all. And `guano connect` now sets the root to the PROJECT
+   * has no root at all. And `superbird connect` now sets the root to the PROJECT
    * FOLDER — which contains `data/`, so the fence would happily allow
    * `<project>/data/api-tokens.json`: every token on the instance, read by a
    * tool whose whole purpose is reading a payload file. The MCP server is
@@ -530,7 +530,7 @@ export function createToolSet({
    *
    * A basename list can only name what someone thought of, and what nobody
    * thought of was the STORE. The root is the PROJECT FOLDER, which contains
-   * `data/`, so the fence allowed `<project>/data/store/guano-project__main.json`
+   * `data/`, so the fence allowed `<project>/data/store/superbird-project__main.json`
    * — the live site, read by a tool whose job is reading a payload, and
    * through `writeJsonFile` OVERWRITTEN by one, with the agent policy never
    * consulted: that policy guards `PUT /api/store`, not the disk, and the
@@ -540,7 +540,7 @@ export function createToolSet({
    * through the authed HTTP API precisely so that it cannot.
    */
   const DENIED_DIRS = [
-    process.env.GUANO_DATA_DIR,
+    process.env.SUPERBIRD_DATA_DIR,
     // the two a server resolves to, in `connect`'s own order (docs/instance.md)
     FILE_ROOT && resolvePath(FILE_ROOT, 'data'),
     FILE_ROOT && resolvePath(FILE_ROOT, 'server', 'data'),
@@ -560,7 +560,7 @@ export function createToolSet({
    * caller asks for is honoured, under one directory inside the fence (or the
    * system temp dir when no root is set, where a read is unfenced anyway).
    */
-  const WRITE_ROOT = resolvePath(FILE_ROOT ?? tmpdir(), '.guano-mcp')
+  const WRITE_ROOT = resolvePath(FILE_ROOT ?? tmpdir(), '.superbird-mcp')
 
   /**
    * Resolve a caller-supplied path, enforcing the root fence when one is set.
@@ -583,7 +583,7 @@ export function createToolSet({
     refuseProtectedPath(full, label, path)
     if (FILE_ROOT && full !== FILE_ROOT && !full.startsWith(FILE_ROOT + sep)) {
       throw new Error(
-        `${label} is outside GUANO_MCP_FILE_ROOT (${FILE_ROOT}): "${path}". ` +
+        `${label} is outside SUPERBIRD_MCP_FILE_ROOT (${FILE_ROOT}): "${path}". ` +
           'Move the file inside that directory, or ask the operator to widen the root.',
       )
     }
@@ -642,7 +642,7 @@ export function createToolSet({
     try {
       parsed = JSON.parse(await readFile(await resolveInputPath(path, label), 'utf8'))
     } catch (e) {
-      if (e?.message?.includes('GUANO_MCP_FILE_ROOT') || e?.message?.includes('must be absolute')) {
+      if (e?.message?.includes('SUPERBIRD_MCP_FILE_ROOT') || e?.message?.includes('must be absolute')) {
         throw e
       }
       throw new Error(`cannot read ${label} "${path}": ${e.message ?? e}`)
@@ -923,9 +923,9 @@ export function createToolSet({
 // ---------- keys ----------
 
 const MAIN_ID = 'main'
-const projectKey = (id) => `guano-project:${id}`
-const baseKey = (id) => `guano-base:${id}`
-const BRANCHES_KEY = 'guano-branches'
+const projectKey = (id) => `superbird-project:${id}`
+const baseKey = (id) => `superbird-base:${id}`
+const BRANCHES_KEY = 'superbird-branches'
 const DEFAULT_META = { activeId: MAIN_ID, branches: [{ id: MAIN_ID, name: 'Main', createdAt: 0 }] }
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex')
@@ -951,7 +951,7 @@ let target = null
 
 /**
  * A target the OPERATOR fixed in the MCP client's own config:
- * `GUANO_MCP_TARGET=main`, `=<draftId>` or `=new:<Draft name>`.
+ * `SUPERBIRD_MCP_TARGET=main`, `=<draftId>` or `=new:<Draft name>`.
  *
  * Editing that config is the human deciding, before the session starts and
  * through the one channel no prompt-injected agent can reach — strictly better
@@ -960,11 +960,11 @@ let target = null
  * ever showing it, which left the agent with no way to a target and so no way
  * to write anything at all.
  */
-const ENV_TARGET = (process.env.GUANO_MCP_TARGET ?? '').trim()
+const ENV_TARGET = (process.env.SUPERBIRD_MCP_TARGET ?? '').trim()
 
 // The configured target of the project currently being worked on. One MCP entry
 // now carries several projects, so a target pinned for a landing page must not
-// be pinned for a client's live site too: each project in GUANO_PROJECTS has its
+// be pinned for a client's live site too: each project in SUPERBIRD_PROJECTS has its
 // own `target`, and `syncProject` swaps this (and clears the session) when the
 // live project changes. With a bare single-project entry it stays ENV_TARGET.
 let envTarget = ENV_TARGET
@@ -1032,7 +1032,7 @@ const POLICY_SWITCH = {
 }
 
 const policyHint = (flag) =>
-  'an admin turns it on in the Guano editor under Settings → MCP → Agent permissions → ' +
+  'an admin turns it on in the Superbird editor under Settings → MCP → Agent permissions → ' +
   `"${POLICY_SWITCH[flag]}"`
 
 /** this token's permissions, as /api/auth/me reports them; null on an older
@@ -1043,7 +1043,7 @@ const agentPermissions = async () => (await whoami().catch(() => null))?.agentPo
 /**
  * Every Main-target result goes through this. With Main writes off the target
  * is still accepted — refusing it would leave a client configured with
- * GUANO_MCP_TARGET="main" no target at all, and so no possible write anywhere
+ * SUPERBIRD_MCP_TARGET="main" no target at all, and so no possible write anywhere
  * — but the refusal that is coming is stated HERE, at the one moment an agent
  * can still say something useful, instead of arriving as a 403 on the first
  * save after an hour of work.
@@ -1071,7 +1071,7 @@ const targetMissingMessage = () => {
   }
   return envTarget
     ? `no target set yet — call set_target (it needs no question: the human configured ` +
-      `GUANO_MCP_TARGET="${envTarget}")`
+      `SUPERBIRD_MCP_TARGET="${envTarget}")`
     : 'no target set — call set_target first (ask the user: Main or a draft?)'
 }
 
@@ -1234,7 +1234,7 @@ async function loadTargetProject() {
   if (raw === null) {
     if (target !== MAIN_ID && target === envTarget) {
       throw new Error(
-        `GUANO_MCP_TARGET names draft "${target}", which has no stored project — it was deleted ` +
+        `SUPERBIRD_MCP_TARGET names draft "${target}", which has no stored project — it was deleted ` +
         `or belongs to another instance. Ask the human to fix the MCP config (or set it to ` +
         `"new:<Name>"), or call set_target to choose a target for this session.`,
       )
@@ -5882,7 +5882,7 @@ const tools = [
   {
     name: 'get_guide',
     description:
-      'The Guano handbook: the page HTML format, the element registry, how styling, content ' +
+      'The Superbird handbook: the page HTML format, the element registry, how styling, content ' +
       'and interactions attach to elements, the class-validation rules and the intended ' +
       'workflow. It answers every "how do I express X" question. ' +
       '**`for: "build-page"` returns everything a page build needs in ONE call** — read it ' +
@@ -5914,7 +5914,7 @@ const tools = [
       if (!GUIDE) throw new Error('GUIDE.md is missing from this installation')
       // the header makes a stale MCP process visible: if the handbook you read
       // lacks a documented feature, compare this line with get_status
-      const header = `<!-- guano handbook · mcp v${MCP_VERSION} · ${GUIDE_HASH} -->`
+      const header = `<!-- superbird handbook · mcp v${MCP_VERSION} · ${GUIDE_HASH} -->`
       const slugOf = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       const parts = GUIDE.split(/^## /m)
       const sections = parts.slice(1).map((p) => {
@@ -6070,7 +6070,7 @@ const tools = [
               elicitationWorks: false,
               elicitationNote:
                 'this client answered a dialog without showing it to the human — target ' +
-                'choices here go through chat (chosenByUser: true) or GUANO_MCP_TARGET',
+                'choices here go through chat (chosenByUser: true) or SUPERBIRD_MCP_TARGET',
             }
           : {}),
         // the directory every *Path argument must sit under (htmlPath,
@@ -6100,7 +6100,7 @@ const tools = [
               versionMismatch: true,
               versionWarning:
                 `This MCP process is v${MCP_VERSION} but the server is v${serverVersion}. The ` +
-                'MCP server is a SEPARATE process spawned by your client — restarting Guano ' +
+                'MCP server is a SEPARATE process spawned by your client — restarting Superbird ' +
                 'does not restart it, so your tool list and handbook may be stale. Ask the ' +
                 'human to restart the MCP client before trusting missing tools.',
             }
@@ -6199,7 +6199,7 @@ const tools = [
   {
     name: 'use_project',
     description:
-      'Switch which Guano SITE the tools work on, when this connection carries more than one. ' +
+      'Switch which Superbird SITE the tools work on, when this connection carries more than one. ' +
       'THE HUMAN DECIDES: this opens a dialog they answer. Call it when they name another ' +
       'site, or after a refusal that says several are running. No argument lists them. ' +
       'Switching clears the write target, so call set_target again afterwards.',
@@ -6218,7 +6218,7 @@ const tools = [
           switched: false,
           message:
             'this connection carries one project, so there is nothing to switch to — ' +
-            'run `guano connect` in another project to add it',
+            'run `superbird connect` in another project to add it',
         }
       }
       const list = await projects.list()
@@ -6229,7 +6229,7 @@ const tools = [
       if (!found) {
         throw new Error(
           `"${slug}" is not one of this connection's projects (${list.map((p) => p.slug).join(', ')}). ` +
-            'The human runs `guano connect` in its folder to add it.',
+            'The human runs `superbird connect` in its folder to add it.',
         )
       }
       if (found.active) return { switched: false, active: slug, message: `already working on "${slug}"` }
@@ -6239,11 +6239,11 @@ const tools = [
       // getting it wrong is worst — a write that lands on someone else's live
       // site and reports success — so a client that cannot show a dialog does
       // NOT fall back to an agent-asserted boolean the way set_target does.
-      // It is sent to `guano use`, which is a shell the agent has no access to.
+      // It is sent to `superbird use`, which is a shell the agent has no access to.
       if (!elicit) {
         throw new Error(
           `this client cannot show a confirmation dialog, and switching sites is not a ` +
-            `decision an agent may assert on its own. Ask the human to run \`guano use ${slug}\` ` +
+            `decision an agent may assert on its own. Ask the human to run \`superbird use ${slug}\` ` +
             '— it takes effect on your next call, with no restart.',
         )
       }
@@ -6251,7 +6251,7 @@ const tools = [
       try {
         res = await elicit({
           message:
-            `The AI agent wants to switch to the Guano site "${found.name || slug}"` +
+            `The AI agent wants to switch to the Superbird site "${found.name || slug}"` +
             `${found.running ? '' : ' (which is not running right now)'}. ` +
             'Its later changes would go to that site instead of the current one.',
           requestedSchema: {
@@ -6268,7 +6268,7 @@ const tools = [
       } catch (e) {
         throw new Error(
           `the switch dialog failed or timed out (${e?.message ?? e}) — ask the human to run ` +
-            `\`guano use ${slug}\` instead`,
+            `\`superbird use ${slug}\` instead`,
         )
       }
       const answered = res !== null && res !== undefined
@@ -6404,7 +6404,7 @@ const tools = [
         const draft = meta.branches.find((b) => b.id === envTarget)
         if (!draft) {
           throw new Error(
-            `GUANO_MCP_TARGET is "${envTarget}", which is neither "main", "new:<name>", nor a ` +
+            `SUPERBIRD_MCP_TARGET is "${envTarget}", which is neither "main", "new:<name>", nor a ` +
               `draft that exists (${meta.branches
                 .filter((b) => b.id !== MAIN_ID)
                 .map((b) => `${b.name} = ${b.id}`)
@@ -6440,7 +6440,7 @@ const tools = [
         try {
           res = await elicit({
             message:
-              'The AI agent needs a write target for Guano — where should its changes go? ' +
+              'The AI agent needs a write target for Superbird — where should its changes go? ' +
               (stats && !stats.isEmpty
                 ? `Main is the live project "${projectName}" (${stats.pages} page(s), ` +
                   `${stats.entries} entry/entries) and writes to it land immediately; a draft ` +
@@ -6518,7 +6518,7 @@ const tools = [
                 'the human never saw it. Ask them in chat ("Work on Main directly, or in a ' +
                 'draft?") and call set_target again with chosenByUser: true (plus ' +
                 'acknowledgeMain: true for a Main that already holds a site). The human can ' +
-                'also set GUANO_MCP_TARGET in the MCP config to settle it before the session ' +
+                'also set SUPERBIRD_MCP_TARGET in the MCP config to settle it before the session ' +
                 'starts.',
             }
           }
@@ -11845,7 +11845,7 @@ const tools = [
       // expired". Path first, then the query it came with.
       //
       // A route is appended to the link's OWN path rather than replacing it:
-      // the preview is served under a mount (`/_guano/preview/`) on the
+      // the preview is served under a mount (`/_superbird/preview/`) on the
       // studio's origin, and assigning `pathname` threw the mount away. An
       // older server answers with a bare `/`, for which this is a no-op — so
       // the same build talks to both.

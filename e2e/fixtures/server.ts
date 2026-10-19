@@ -41,7 +41,7 @@ export async function boot(
     cwd: REPO,
     env: {
       ...process.env,
-      GUANO_DATA_DIR: dataDir,
+      SUPERBIRD_DATA_DIR: dataDir,
       PORT: String(port),
       PORT_STRICT: '1', // never walk: the test owns this port or it fails
       LOG_LEVEL: 'info',
@@ -90,7 +90,7 @@ export async function bootUnpinned(dataDir: string) {
   let output = ''
   const proc = spawn(process.execPath, ['server/index.mjs'], {
     cwd: REPO,
-    env: { ...process.env, GUANO_DATA_DIR: dataDir, LOG_LEVEL: 'info', PORT: '', PORT_STRICT: '' },
+    env: { ...process.env, SUPERBIRD_DATA_DIR: dataDir, LOG_LEVEL: 'info', PORT: '', PORT_STRICT: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   proc.stdout?.on('data', (c) => (output += String(c)))

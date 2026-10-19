@@ -2,10 +2,10 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
 // Lib build for the MCP runtime bundle. Bundles src/lib/mcp-runtime.ts and its
-// transitive deps into ONE DOM-free ESM file consumed by `guano mcp`
-// (packages/guano/mcp/). No Vue plugin — the reachable graph is Vue/DOM-free by
+// transitive deps into ONE DOM-free ESM file consumed by `superbird mcp`
+// (packages/superbird/mcp/). No Vue plugin — the reachable graph is Vue/DOM-free by
 // construction (see src/lib/mcp-runtime.ts). Run via `npm run build:mcp-runtime`;
-// packages/guano/scripts/prepack.mjs runs it before packing.
+// packages/superbird/scripts/prepack.mjs runs it before packing.
 export default defineConfig({
   resolve: {
     alias: {
@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: fileURLToPath(new URL('./packages/guano/runtime', import.meta.url)),
+    outDir: fileURLToPath(new URL('./packages/superbird/runtime', import.meta.url)),
     emptyOutDir: true,
     // don't copy the SPA's public/ (favicon.ico) into the
     // runtime dir — this build emits only the MCP bundle

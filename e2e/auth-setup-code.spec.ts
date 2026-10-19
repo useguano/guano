@@ -9,7 +9,7 @@ import { boot, instances } from './fixtures/server'
 // `POST /api/auth/setup` was gated on "no users exist" and nothing else, and
 // the server binds EVERY interface — so on shared wifi, or on a VPS in the
 // minutes before its owner opens /admin, the first stranger to reach it became
-// the instance's admin and inherited every token `guano connect --offline` had
+// the instance's admin and inherited every token `superbird connect --offline` had
 // minted (`bindPendingTokens`). A data-dir wipe reopens that window on a
 // machine that was already set up, which is a thing people do.
 //

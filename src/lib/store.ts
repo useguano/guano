@@ -10,9 +10,9 @@ const hashes = new Map<string, string>()
 
 export const storeHash = (key: string): string | undefined => hashes.get(key)
 
-/** `x-guano-hashes` off a store GET: `{"<key>": "<sha256>" | null}` */
+/** `x-superbird-hashes` off a store GET: `{"<key>": "<sha256>" | null}` */
 function absorbHashes(res: Response) {
-  const header = res.headers.get('x-guano-hashes')
+  const header = res.headers.get('x-superbird-hashes')
   if (!header) return
   try {
     const map = JSON.parse(header) as Record<string, string | null>

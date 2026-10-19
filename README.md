@@ -1,6 +1,6 @@
-# Guano
+# Superbird
 
-Guano is a self-hosted visual website builder. You build pages on a live canvas
+Superbird is a self-hosted visual website builder. You build pages on a live canvas
 with a layers tree — insert and arrange elements, style them with Tailwind classes,
 add interactions, build reusable components and
 CMS collections, translate into locales, leave comments, and work in drafts before
@@ -9,8 +9,8 @@ one CSS file + a ~1.5 KB runtime) that ships as a zip, pushes straight to a
 GitHub repo, or is hosted at `/` by the built-in server. The admin editor lives at
 `/admin`; invite editors, contributors and reviewers with role-based access.
 
-Guano is **launcher-first**: the way to run it on your own machine is the
-**Guano Launcher**, a native macOS app that creates projects, runs their
+Superbird is **launcher-first**: the way to run it on your own machine is the
+**Superbird Launcher**, a native macOS app that creates projects, runs their
 servers, opens the editor and hosts the AI panel's Claude session — no terminal.
 The same server runs headless on any Node host when a site needs an always-on
 instance, and the Launcher connects to that instance too. A project is one
@@ -18,7 +18,7 @@ ordinary folder either way.
 
 ## Quickstart
 
-**On a Mac:** open the Guano Launcher, choose **New project**, name it. The
+**On a Mac:** open the Superbird Launcher, choose **New project**, name it. The
 Launcher scaffolds the folder, starts its server, opens the builder and offers
 to connect Claude. Create the first (admin) account, build, publish. Projects
 sit in the Launcher's home; a project you stop stays on disk and reopens where
@@ -27,7 +27,7 @@ you left it.
 **From a terminal** (Linux, Windows, a server, or if you prefer it):
 
 ```sh
-npm create @useguano   # asks for a folder name, installs guano, connects Claude Desktop
+npm create @superbird-app   # asks for a folder name, installs superbird, connects Claude Desktop
 cd my-site
 npm run dev            # → http://localhost:4174
 ```
@@ -64,8 +64,8 @@ serves `dist/` on an isolated port and data dir).
 
 ## Deploying
 
-The mental model: **Guano is the studio, the site is the product.** The editor
-lives wherever the Guano server runs; the published site is a portable static
+The mental model: **Superbird is the studio, the site is the product.** The editor
+lives wherever the Superbird server runs; the published site is a portable static
 export that can live anywhere. Two questions decide the setup, in this order:
 **where does the instance run**, and **where does the site live**.
 
@@ -74,7 +74,7 @@ export that can live anywhere. Two questions decide the setup, in this order:
 The Launcher runs the instance on your machine. You build locally and publish
 by pushing the export to a GitHub repo (publish method: **github** →
 Pages/Netlify/anything watching the repo) or by downloading a zip (**zip**) to
-drop on any static host. Nothing of Guano is on the public internet; the site
+drop on any static host. Nothing of Superbird is on the public internet; the site
 gets CDN speed and is up whether or not your Mac is. This is where every
 project starts.
 
@@ -83,18 +83,18 @@ The export is fully portable (root-absolute URLs, plain HTML + one CSS file + a
 
 ### When the instance moves to a host
 
-Some things need the Guano process reachable at 9pm when your laptop is closed:
+Some things need the Superbird process reachable at 9pm when your laptop is closed:
 
 - a **client, contributor or reviewer** who logs in, comments, or is invited by mail;
 - **form submissions**, the mail they send and any webhook forward;
 - a **private site**, or publish method **server** (the host serves the site at `/`);
-- an **agent on another machine** connecting over `guano connect --url`.
+- an **agent on another machine** connecting over `superbird connect --url`.
 
 The moment one of those is true, the instance moves to a persistent Node host
 and the Launcher connects to it (**Connect a remote instance…**) instead of
 running it. Two shapes:
 
-**Studio + static site.** Guano runs on *your* infrastructure
+**Studio + static site.** Superbird runs on *your* infrastructure
 (`studio.youragency.com`); clients and editors log in there. Publishing stays
 github or zip; the client's domain serves the static export and the studio host
 never appears on it. Best for agencies: auth and data stay per-instance on your
@@ -104,10 +104,10 @@ static pages post submissions back to the studio, which validates and stores
 them, accepting only the site's own domain (Settings → General → Domain) and
 never with cookies.
 
-**All-in-one.** One host runs Guano and serves everything: `yoursite.com` is
+**All-in-one.** One host runs Superbird and serves everything: `yoursite.com` is
 the published site, `yoursite.com/admin` is the editor. Publish method:
 **server** — every publish refreshes `/` in place. One host, one cert, zero
-extra config; the site is up only while the Guano process is. Leave Studio URL
+extra config; the site is up only while the Superbird process is. Leave Studio URL
 empty here — site and studio are the same host.
 
 ### On the host
@@ -115,7 +115,7 @@ empty here — site and studio are the same host.
 The instance needs a **persistent Node process with a writable disk** — a VPS,
 Railway, Fly.io, Render, etc. **It cannot run on Vercel/Netlify or any static
 host** — only the published site can. On platforms with ephemeral filesystems,
-mount a volume and point `GUANO_DATA_DIR` at it, or your users, media, and site
+mount a volume and point `SUPERBIRD_DATA_DIR` at it, or your users, media, and site
 vanish on redeploy.
 
 ```sh
@@ -143,8 +143,8 @@ Rules that hold wherever the instance runs:
 ### Docker
 
 ```sh
-docker build -t guano .
-docker run -d --name guano -p 4174:4174 -v guano-data:/data guano
+docker build -t superbird .
+docker run -d --name superbird -p 4174:4174 -v superbird-data:/data superbird
 ```
 
 `compose.yaml` is the same thing with a volume, a restart policy and a grace
@@ -162,8 +162,8 @@ reports no path and no secret.
 
 ### One process per data dir
 
-Every lock, rate limiter, session map and cache is in-process. Two Guano
-processes sharing one `GUANO_DATA_DIR` will disagree about all of them — run
+Every lock, rate limiter, session map and cache is in-process. Two Superbird
+processes sharing one `SUPERBIRD_DATA_DIR` will disagree about all of them — run
 one, and scale by running more instances with their own data, not more workers
 over the same one.
 
@@ -177,18 +177,18 @@ A second signal exits immediately. Give the process ~45s to stop.
 ### The preview port
 
 `PORT + 1` serves the preview site, which renders UNPUBLISHED pages. It is
-token-gated and served by the same server, at `/_guano/preview/` — so it rides
+token-gated and served by the same server, at `/_superbird/preview/` — so it rides
 your studio's own host, scheme and certificate, and works unchanged behind a
 proxy or on a VPS. The url `POST /api/preview` returns carries a signed token,
 good for an hour; the first request with it is answered directly and sets a
 cookie (scoped to that path) for the rest, so a plain `fetch`, an agent, or an
 agent's browser can read, scroll and click the page. A bare
-`/_guano/preview/` answers "preview link missing or expired": open a fresh
+`/_superbird/preview/` answers "preview link missing or expired": open a fresh
 preview from the editor or the `preview` tool and use the whole url.
 
 ### HSTS
 
-Terminate TLS at the proxy, and set `Strict-Transport-Security` there. Guano
+Terminate TLS at the proxy, and set `Strict-Transport-Security` there. Superbird
 does not send it: the header belongs to the origin as a whole, including
 whatever else that hostname serves.
 
@@ -277,30 +277,30 @@ On Windows and Linux, `⌘` is `Ctrl`.
 
 ## Working with an AI agent
 
-**The AI drawer in the editor is how you use AI in Guano** (`⌘J`, the left
+**The AI drawer in the editor is how you use AI in Superbird** (`⌘J`, the left
 rail's first button, under the desktop Launcher). You type beside the page you
 are looking at and the edits land on the canvas as the agent works. It runs
 your own Claude Code install — the harness, the sign-in and the bill are
-yours, and Guano never collects an API key. It already knows the project, the
+yours, and Superbird never collects an API key. It already knows the project, the
 branch, the page and whatever you have selected, so it never asks you which.
 
-**Claude Desktop and Claude Code also connect**, over `guano connect`. That
+**Claude Desktop and Claude Code also connect**, over `superbird connect`. That
 path is supported and secondary: it is another app, and it has to be told
 which site and which branch before it can do anything.
 
-Both drive the same MCP server (`guano mcp`), which lets an agent read and
+Both drive the same MCP server (`superbird mcp`), which lets an agent read and
 write the same project the editor does — pages as a strict HTML subset,
 components, collections, interactions, animations, translations — through the
-authed HTTP API with a `guano_` token. The agent handbook it serves is
-`packages/guano/mcp/GUIDE.md`.
+authed HTTP API with a `superbird_` token. The agent handbook it serves is
+`packages/superbird/mcp/GUIDE.md`.
 
-`npm create @useguano` connects Claude Desktop for you: it mints the token into
+`npm create @superbird-app` connects Claude Desktop for you: it mints the token into
 `./data`, writes the two permissions beside it, and writes the `mcpServers`
 entry into Claude's config (quit Claude first — it overwrites its config from
 memory on quit; the scaffolder waits if it is open). The token is **pending**
 until the admin account is created at `/admin`, which binds it, and the setup
 form shows the permissions you chose instead of asking again. When Main is
-allowed the config also carries `GUANO_MCP_TARGET=main`, so the agent never
+allowed the config also carries `SUPERBIRD_MCP_TARGET=main`, so the agent never
 asks "Main or a draft?".
 
 Everything an agent may do is **off by default** and server-enforced,
@@ -310,27 +310,27 @@ custom code, read form submissions. Change any of them in **Settings → MCP →
 Agent permissions**. To connect later, or another machine running the
 instance: `npm run connect` (`--main` / `--publish` answer the questions,
 `--print` emits the snippet for any other MCP client). Details and the manual
-setup for other clients are in `packages/guano/README.md`.
+setup for other clients are in `packages/superbird/README.md`.
 
 ### Several sites on one machine
 
 Each site needs its **own port**, or whichever one starts first answers for
 both — and the other's token is then refused with a 401 that looks exactly
-like a revoked token. `npm create @useguano` picks a free port per project and
+like a revoked token. `npm create @superbird-app` picks a free port per project and
 writes it to `.env`; a server with no `PORT` set otherwise reclaims whatever
-port it used last. `guano connect` writes **one `mcpServers` entry for all of
+port it used last. `superbird connect` writes **one `mcpServers` entry for all of
 them**, carrying a map of projects — so connecting a second site never
 disconnects the first, and Claude does not start a process (and an alert) per
 project you are not running. Each project in the map records its own instance
-id, so if another instance is holding the port, `guano mcp` says which project
+id, so if another instance is holding the port, `superbird mcp` says which project
 answered instead of failing silently. Run `npm run connect` again in a project
 whose port has changed.
 
 A project that is deleted, rebuilt or renamed leaves its entry behind, and
 enough stale entries make every tool call fail with *no configured project is
-running*. `guano disconnect --list` shows every entry with a live verdict,
-`guano disconnect` removes the one for the folder you are in, and
-`guano disconnect --stale` removes the ones whose address answers but is
+running*. `superbird disconnect --list` shows every entry with a live verdict,
+`superbird disconnect` removes the one for the folder you are in, and
+`superbird disconnect --stale` removes the ones whose address answers but is
 provably not them. Quit Claude Desktop first — it rewrites its config on quit.
 
 ## Backup
@@ -348,8 +348,8 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | remembered, else `4174` | server port. Without it the port this data dir last landed on is preferred over the default, so two sites on one machine keep their own addresses. `npm create @useguano` writes a free one into `.env` |
-| `GUANO_DATA_DIR` | `server/data` | data location — absolute path; set this on any real deploy (`SB_DATA_DIR` still works, deprecated) |
+| `PORT` | remembered, else `4174` | server port. Without it the port this data dir last landed on is preferred over the default, so two sites on one machine keep their own addresses. `npm create @superbird-app` writes a free one into `.env` |
+| `SUPERBIRD_DATA_DIR` | `server/data` | data location — absolute path; set this on any real deploy |
 | `COOKIE_SECURE` | `1` (Secure on) | session cookie `Secure` flag; set `0` only for plain-HTTP LAN/dev setups (localhost works with the default) |
 | `TRUST_PROXY` | unset | set `1` **only behind a reverse proxy** — rate limiting then keys on the last `X-Forwarded-For` hop instead of the socket address |
 | `PUBLISH_TOKEN` | unset | when set, allows token-authenticated CI publishes via `Authorization: Bearer` |
@@ -357,26 +357,26 @@ Export project downloads a portable `.zip` you can re-import elsewhere.
 | `STORE_QUOTA` | 512 MiB | project storage ceiling, in bytes |
 | `SNAPSHOT_MAX_BYTES` | 512 MiB | refuses a snapshot above this — the zip is built in memory |
 | `PORT_STRICT` | unset | `1` refuses to walk to the next free port when `PORT` is busy. Worth setting on a real deploy: a silent walk means everything addressing the default port reaches something else |
-| `GUANO_PROJECTS` | unset | `guano mcp`: the projects this one client entry serves, as `{"<slug>":{url,token,instance,target}}`. Written by `guano connect`, which folds every project into ONE entry — Claude Desktop starts a process per entry, so a per-project entry meant an alert for every project you were not running |
-| `GUANO_MCP_PROJECT` | unset | `guano mcp`: pin the live project by slug. Unset, the sole project whose server is answering is used — so switching projects is starting the one you want, with no restart. Two running and nothing pinned is refused by name rather than guessed |
-| `GUANO_URL` | `http://localhost:4174` | `guano mcp` / `guano connect`: which instance to talk to (the single-project form; `GUANO_PROJECTS` supersedes it) |
-| `GUANO_INSTANCE` | unset | `guano mcp`: the project this client entry was connected to. Written by `guano connect`; a mismatch against the server's own id is refused by name rather than failing with a 401 |
+| `SUPERBIRD_PROJECTS` | unset | `superbird mcp`: the projects this one client entry serves, as `{"<slug>":{url,token,instance,target}}`. Written by `superbird connect`, which folds every project into ONE entry — Claude Desktop starts a process per entry, so a per-project entry meant an alert for every project you were not running |
+| `SUPERBIRD_MCP_PROJECT` | unset | `superbird mcp`: pin the live project by slug. Unset, the sole project whose server is answering is used — so switching projects is starting the one you want, with no restart. Two running and nothing pinned is refused by name rather than guessed |
+| `SUPERBIRD_URL` | `http://localhost:4174` | `superbird mcp` / `superbird connect`: which instance to talk to (the single-project form; `SUPERBIRD_PROJECTS` supersedes it) |
+| `SUPERBIRD_INSTANCE` | unset | `superbird mcp`: the project this client entry was connected to. Written by `superbird connect`; a mismatch against the server's own id is refused by name rather than failing with a 401 |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. `warn` drops the per-request access line and keeps the warnings |
 | `LOG_JSON` | unset | `1` emits one JSON object per line, for a log shipper |
 | `SHUTDOWN_GRACE_MS` | `0` | how long to keep answering health checks as draining before the socket closes. Set it behind a load balancer so traffic moves off first |
 | `SHUTDOWN_DRAIN_MS` | `10000` | how long to wait for in-flight requests |
 | `SHUTDOWN_CRITICAL_MS` | `30000` | how long to wait for a publish, preview, restore or store write to finish |
-| `GUANO_FSYNC` | `1` | fsync every data write before the rename; `0` trades durability for throughput |
-| `GUANO_STALE_AGE_MS` | 1 hour | how old a leftover staging directory must be before boot sweeps it |
+| `SUPERBIRD_FSYNC` | `1` | fsync every data write before the rename; `0` trades durability for throughput |
+| `SUPERBIRD_STALE_AGE_MS` | 1 hour | how old a leftover staging directory must be before boot sweeps it |
 | `BOOT_TIMEOUT_MS` | `60000` | logs a line naming the stage if boot has not finished; it never gives up |
 
 ## License
 
-Guano is [AGPL-3.0](LICENSE): self-hosting it — for yourself or for clients — carries
-no obligations; offering a *modified* Guano to others as a network service requires
+Superbird is [AGPL-3.0](LICENSE): self-hosting it — for yourself or for clients — carries
+no obligations; offering a *modified* Superbird to others as a network service requires
 sharing your modifications with those users.
 
-**Your exported sites are entirely yours.** The AGPL never touches the sites Guano
+**Your exported sites are entirely yours.** The AGPL never touches the sites Superbird
 produces, and the small runtime scripts embedded in them (`assets/script.js`,
 `assets/motion.js`, `assets/slider.js`) are deliberately MIT-licensed so no copyleft question can ever
 attach to a published site — see [LICENSE-EXCEPTIONS.md](LICENSE-EXCEPTIONS.md).

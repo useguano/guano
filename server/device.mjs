@@ -1,4 +1,4 @@
-// Device authorization for `guano connect --url <remote>`.
+// Device authorization for `superbird connect --url <remote>`.
 //
 // WHY IT EXISTS. The local connect flow proves it may mint a token by writing
 // a nonce into the data dir, which `/api/auth/connect` reads back — filesystem
@@ -32,7 +32,7 @@ const MAX_PENDING = 12
  * ...and a cap per ADDRESS, because the global one alone is a denial of
  * service: the start endpoint is unauthenticated, so two hosts on the network
  * (or one, over two minutes) could hold all twelve slots indefinitely and
- * every real `guano connect --url` got a 429. One human starts one
+ * every real `superbird connect --url` got a 429. One human starts one
  * authorization at a time; two allows for a mistyped code.
  */
 const MAX_PENDING_PER_IP = 2
@@ -87,12 +87,12 @@ export function startDevice({ name, ip, kind } = {}) {
     deviceCode,
     // WHICH KIND of token this authorization will mint, decided by the client
     // that started it and carried through to the consent screen — because
-    // "Guano Launcher wants builder access" and "Claude wants to work on this
+    // "Superbird Launcher wants builder access" and "Claude wants to work on this
     // site" are different sentences, and a human approving one must not be
     // approving the other. Anything but the launcher is an agent, so an older
     // CLI that sends no kind is unchanged.
     kind: kind === 'launcher' ? 'launcher' : 'agent',
-    name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 60) : 'guano connect',
+    name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 60) : 'superbird connect',
     // The name is the REQUESTER's to choose, so it is a label and never
     // evidence. The address is ours, and it is what lets the admin tell their
     // own terminal apart from somebody else's on the same network.
@@ -160,7 +160,7 @@ export function pollDevice(deviceCode) {
     pending.delete(key)
     return { status: 'granted', ...rec.granted }
   }
-  return { error: 'unknown or expired device code — run `guano connect` again' }
+  return { error: 'unknown or expired device code — run `superbird connect` again' }
 }
 
 /** for tests and for the shutdown path: nothing here outlives the process */

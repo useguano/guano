@@ -273,7 +273,7 @@ async function loadVariants() {
   if (effectiveClasses) return
   try {
     const mod = await import(
-      new URL('../packages/guano/runtime/mcp-runtime.mjs', import.meta.url).href
+      new URL('../packages/superbird/runtime/mcp-runtime.mjs', import.meta.url).href
     ).catch(() => import(new URL('../runtime/mcp-runtime.mjs', import.meta.url).href))
     effectiveClasses = mod.effectiveClasses
   } catch {
@@ -929,7 +929,7 @@ function resolveHref(node, ctx) {
   }
   // '@theme…' switches the colour mode, which is not a navigation: the head
   // script (shared/colorMode.js) delegates the click off the reserved
-  // data-guano-theme attribute attrsFor emits instead. An <a> still gets a
+  // data-superbird-theme attribute attrsFor emits instead. An <a> still gets a
   // '#' href so it stays keyboard-operable; nothing else gets one, so no
   // anchor is wrapped around it.
   if (isThemeLink(raw)) {
@@ -1869,7 +1869,7 @@ function renderNode(node, ctx) {
     if (enabled) {
       // `action`/`method` are NOT in the attribute allowlist, so the exporter
       // owns them outright — an author cannot repoint a form at another host.
-      const action = `${ctx.apiOrigin}/_guano/forms/${encodeURIComponent(node.id)}`
+      const action = `${ctx.apiOrigin}/_superbird/forms/${encodeURIComponent(node.id)}`
       formAttrs = ` method="post" action="${escapeHtml(action)}" data-form="${escapeHtml(node.id)}" accept-charset="utf-8"`
       // the runtime navigates here on success. Re-validated at export: a blob
       // can arrive by import, merge or agent without passing any writer, and

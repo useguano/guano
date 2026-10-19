@@ -1,4 +1,4 @@
-# guano
+# superbird
 
 Self-hosted visual website builder: build pages on a live canvas with a layers
 tree, style with Tailwind classes, add interactions, reusable components, CMS
@@ -7,10 +7,10 @@ collections and locales — then publish a fully static site
 downloaded as a zip, or pushed to GitHub.
 
 ```sh
-npm create @useguano   # scaffolds a folder and installs
+npm create @superbird-app   # scaffolds a folder and installs
 cd my-site && npm run dev
 # or, without a project folder:
-npx -y @useguano/guano dev
+npx -y @superbird-app/superbird dev
 ```
 
 Open `http://localhost:4174/admin`, create the first (admin) account, build.
@@ -18,18 +18,18 @@ Your published site is at `http://localhost:4174/`.
 
 ## CLI
 
-- `guano dev` — start the server for local editing
-- `guano start` — production server (`NODE_ENV=production`)
-- `guano build [--out dir]` — export the current project as static files (default `./dist-site`)
-- `guano mcp` — run the MCP server (stdio) so AI agents can edit the site (see [MCP](#mcp-ai-agents))
-- `guano connect` — issue an API token to a local instance, for `guano mcp`
+- `superbird dev` — start the server for local editing
+- `superbird start` — production server (`NODE_ENV=production`)
+- `superbird build [--out dir]` — export the current project as static files (default `./dist-site`)
+- `superbird mcp` — run the MCP server (stdio) so AI agents can edit the site (see [MCP](#mcp-ai-agents))
+- `superbird connect` — issue an API token to a local instance, for `superbird mcp`
 
 ## Environment
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | remembered, else `4174` | server port. Without it the port this data dir last landed on is preferred, so two sites on one machine keep their own addresses |
-| `GUANO_DATA_DIR` | `./data` under `node_modules`, else `server/data` | users, media, drafts, published site — **backup = copy this dir**; on ephemeral hosts point it at a volume |
+| `SUPERBIRD_DATA_DIR` | `./data` under `node_modules`, else `server/data` | users, media, drafts, published site — **backup = copy this dir**; on ephemeral hosts point it at a volume |
 | `COOKIE_SECURE` | `1` | session cookie `Secure` flag; set `0` only for plain-HTTP LAN setups |
 | `PUBLISH_TOKEN` | unset | when set, allows token-authenticated CI publishes |
 | `MEDIA_QUOTA` | 2 GiB | media library ceiling, bytes |
@@ -39,9 +39,9 @@ Your published site is at `http://localhost:4174/`.
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`; `warn` drops the per-request access line |
 | `LOG_JSON` | unset | `1` emits one JSON object per line, for a log shipper |
 | `SHUTDOWN_GRACE_MS` | `0` | how long to keep failing health checks before the socket closes, so a load balancer can drain first |
-| `GUANO_URL` | `http://localhost:4174` | `guano mcp` only — the running instance to connect to |
-| `GUANO_TOKEN` | unset | `guano mcp` only — an API token (see [MCP](#mcp-ai-agents)) |
-| `GUANO_INSTANCE` | unset | `guano mcp` only — which project this entry was connected to. `guano connect` writes it; a mismatch against the server's own id is refused by name instead of failing with a 401 |
+| `SUPERBIRD_URL` | `http://localhost:4174` | `superbird mcp` only — the running instance to connect to |
+| `SUPERBIRD_TOKEN` | unset | `superbird mcp` only — an API token (see [MCP](#mcp-ai-agents)) |
+| `SUPERBIRD_INSTANCE` | unset | `superbird mcp` only — which project this entry was connected to. `superbird connect` writes it; a mismatch against the server's own id is refused by name instead of failing with a 401 |
 
 The admin needs a persistent Node process with a writable disk (VPS, Railway,
 Fly.io, Render…). It cannot run on Vercel/Netlify — but your published site is
@@ -53,16 +53,16 @@ A site is an ordinary npm project, so the thing you update is the package:
 
 ```sh
 cd my-site
-npm update @useguano/guano   # within the pinned range: ^0.1.0 is 0.1.x
+npm update @superbird-app/superbird   # within the pinned range: ^0.1.0 is 0.1.x
 npm start                    # the running process keeps serving until you restart it
-guano --version              # what you are now on
+superbird --version              # what you are now on
 ```
 
-`npm update @useguano` does nothing — `@useguano` is the npm *scope*, not a
+`npm update @superbird-app` does nothing — `@superbird-app` is the npm *scope*, not a
 package name. To cross a minor (0.1.x → 0.2.0), widen the range yourself with
-`npm install @useguano/guano@latest`.
+`npm install @superbird-app/superbird@latest`.
 
-Your site is **not** in the package: it lives in `$GUANO_DATA_DIR` (`./data`),
+Your site is **not** in the package: it lives in `$SUPERBIRD_DATA_DIR` (`./data`),
 which npm never touches. Two things to do around an update:
 
 - **Back up `data/` first**, or take a snapshot in Settings → Snapshots. The
@@ -76,7 +76,7 @@ which npm never touches. Two things to do around an update:
 
 ## MCP (AI agents)
 
-`guano mcp` exposes a **running** Guano instance to AI agents over the
+`superbird mcp` exposes a **running** Superbird instance to AI agents over the
 [Model Context Protocol](https://modelcontextprotocol.io). The agent edits your
 site through the same authenticated HTTP API the editor uses and shares the
 editor's own document logic, so structure edits preserve element identity,
@@ -84,7 +84,7 @@ styling, and interactions exactly as if you'd typed them.
 
 ### Claude Desktop: already done by the scaffolder
 
-`npm create @useguano` asks whether to connect Claude Desktop and the two
+`npm create @superbird-app` asks whether to connect Claude Desktop and the two
 permission questions a connected agent needs answered — **may it edit the live
 project (Main)?** and **may it publish?** — and does the connect right there,
 before the server has ever run: it mints an API token into `./data`, writes the
@@ -98,31 +98,31 @@ it is open.
 To connect later, or from another machine running the instance:
 
 ```sh
-npx guano connect   # or `npm run connect` in a scaffolded project
+npx superbird connect   # or `npm run connect` in a scaffolded project
 ```
 
-The `guano` binary is a project dependency, not a global install, so it is
+The `superbird` binary is a project dependency, not a global install, so it is
 reached through `npx` (or an npm script) rather than typed bare. It mints the
 token (through the running server, or straight into the data dir when the
 server is down — `--offline` never asks the network), asks the same two
 questions unless `--main` / `--publish` answer them (`--yes` skips them and
 leaves the stored policy alone), and writes Claude Desktop's config. When Main
-is allowed it also sets `GUANO_MCP_TARGET=main`, so the agent starts working
+is allowed it also sets `SUPERBIRD_MCP_TARGET=main`, so the agent starts working
 instead of asking which target to use. Change either permission later in
-**Settings → MCP → Agent permissions**. `guano connect --print` emits the JSON
+**Settings → MCP → Agent permissions**. `superbird connect --print` emits the JSON
 snippet instead, for any other MCP client or a remote instance.
 
 ### Manual setup (other clients / remote instances)
 
 **1. Create an API token** — in the editor: **My account → API tokens →
-create**. Copy the `guano_…` token (shown once). It carries your role — admin
+create**. Copy the `superbird_…` token (shown once). It carries your role — admin
 or editor only (contributors can't).
 
 **2. Register the server** — it talks to your instance over HTTP; point it at
 the URL and token. For example, with Claude Code:
 
 ```sh
-claude mcp add guano -- npx -y @useguano/guano mcp
+claude mcp add superbird -- npx -y @superbird-app/superbird mcp
 ```
 
 then set the environment in your MCP client config:
@@ -130,12 +130,12 @@ then set the environment in your MCP client config:
 ```json
 {
   "mcpServers": {
-    "guano-my-site": {
+    "superbird-my-site": {
       "command": "npx",
-      "args": ["-y", "@useguano/guano", "mcp"],
+      "args": ["-y", "@superbird-app/superbird", "mcp"],
       "env": {
-        "GUANO_URL": "http://localhost:4174",
-        "GUANO_TOKEN": "guano_your_token_here"
+        "SUPERBIRD_URL": "http://localhost:4174",
+        "SUPERBIRD_TOKEN": "superbird_your_token_here"
       }
     }
   }
@@ -144,12 +144,12 @@ then set the environment in your MCP client config:
 
 Use your deployed URL (e.g. `https://studio.example.com`) for a hosted instance.
 
-**One entry per site.** `guano connect` names it `guano-<slug>` for exactly
+**One entry per site.** `superbird connect` names it `superbird-<slug>` for exactly
 this reason: a single shared key means connecting a second site overwrites the
 first one's entry, and since both would point at the same default port the
 survivor talks to whichever instance booted first — which answers its token
-with a 401. Give each site its own `PORT` and its own entry. `guano connect`
-also writes `GUANO_INSTANCE`, which lets `guano mcp` tell you that another
+with a 401. Give each site its own `PORT` and its own entry. `superbird connect`
+also writes `SUPERBIRD_INSTANCE`, which lets `superbird mcp` tell you that another
 project is holding the port instead of failing with "not connected"; add it by
 hand (the `instance` field of `GET /api/health`) if you write the config
 yourself.

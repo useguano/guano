@@ -14,7 +14,7 @@
 // Route links become explicit files (`/fr` → `../fr/index.html`), because a
 // directory URL only resolves to its index on a server; from disk it opens a
 // listing or nothing. Anything that is not a path into the export is left
-// alone: protocol-relative `//cdn…`, the form endpoint under `/_guano/` (which
+// alone: protocol-relative `//cdn…`, the form endpoint under `/_superbird/` (which
 // lives on the instance, never in the zip), `data-form-redirect` (consumed by
 // the runtime as a root-relative route), JSON-LD, and `<meta content>` (an
 // `og:image` has to be absolute anyway).
@@ -33,7 +33,7 @@ const looksLikeFile = (pathname) => /\.[a-z0-9]+$/i.test(pathname.split('/').pop
  * unchanged when it is not a path into the export.
  */
 export function relativizeUrl(url, prefix) {
-  if (!url.startsWith('/') || url.startsWith('//') || url.startsWith('/_guano/')) return url
+  if (!url.startsWith('/') || url.startsWith('//') || url.startsWith('/_superbird/')) return url
   const m = /^([^?#]*)(.*)$/.exec(url)
   const pathname = m[1]
   const tail = m[2]
@@ -84,7 +84,7 @@ export function relativizeSite(files) {
 
 // ---------- mounted preview: root-absolute → mount-prefixed ----------
 //
-// The preview is served from the MAIN server under `/_guano/preview/`, not from
+// The preview is served from the MAIN server under `/_superbird/preview/`, not from
 // a second port on PORT+1. That port bound every interface, spoke plain HTTP
 // while the studio is HTTPS, needed its own token gate, its own rate-limit
 // buckets and its own form handler — and behind any proxy, or on a VPS, it is
@@ -94,22 +94,22 @@ export function relativizeSite(files) {
 // Root-absolute URLs are what made a sub-path impossible, so they are rewritten
 // here, the way the zip rewrite does it — but to the mount rather than to a
 // relative depth. Keeping them absolute means a route stays a clean directory
-// URL (`/_guano/preview/pricing`) that the server resolves to its index.html,
+// URL (`/_superbird/preview/pricing`) that the server resolves to its index.html,
 // and it is the form of URL an agent can navigate to directly.
 //
 // Three paths are NOT the site's and must survive untouched: `//cdn…`, and
-// anything under `/_guano/` or `/media/` (instance routes, not export paths).
+// anything under `/_superbird/` or `/media/` (instance routes, not export paths).
 // The one exception is the form endpoint, which is remapped INTO the mount so a
 // draft form posts to the preview's own handler — it validates exactly as the
 // live one does and then stores and sends nothing. Without that remap a form
 // tried out in the preview would put a row in the real list.
-const FORMS_PREFIX = '/_guano/forms/'
+const FORMS_PREFIX = '/_superbird/forms/'
 
 /** One root-absolute URL → the same path under `mount`. */
 export function mountUrl(url, mount) {
   if (!url.startsWith('/') || url.startsWith('//')) return url
   if (url.startsWith(FORMS_PREFIX)) return `${mount}/forms/${url.slice(FORMS_PREFIX.length)}`
-  if (url.startsWith('/_guano/') || url.startsWith('/media/')) return url
+  if (url.startsWith('/_superbird/') || url.startsWith('/media/')) return url
   return mount + url
 }
 
@@ -143,7 +143,7 @@ const mountCss = (css, mount) =>
 /**
  * Rewrite an exported site's file list to be served under `mount`.
  * @param {{path: string, data: Buffer}[]} files  as `readDirFiles` returns them
- * @param {string} mount  no trailing slash, e.g. `/_guano/preview`
+ * @param {string} mount  no trailing slash, e.g. `/_superbird/preview`
  */
 export function mountSite(files, mount) {
   return files.map((file) => {

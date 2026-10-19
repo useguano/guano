@@ -89,7 +89,7 @@ test.describe('concurrent whole-project writes', () => {
       if (++reads !== nth) return
       s.onProjectRead(null)
       s.writeStore(
-        'guano-project:main',
+        'superbird-project:main',
         JSON.stringify({ ...s.stored(), name: 'renamed in the editor' }),
       )
     })

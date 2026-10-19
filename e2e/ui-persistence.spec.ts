@@ -13,7 +13,7 @@ import { becomeBuilder, openEditor } from './fixtures/session'
 //
 // Named to sort AFTER smoke.spec, which owns the first-run flow.
 
-const MAIN = 'guano-project:main'
+const MAIN = 'superbird-project:main'
 
 
 /**
@@ -82,9 +82,9 @@ async function waitForStored(page: Page, key: string, want: (blob: any) => boole
 
 /** every key the editor keeps a project under, newest branch meta first */
 async function draftKey(page: Page) {
-  const meta = await stored(page, 'guano-branches')
+  const meta = await stored(page, 'superbird-branches')
   const id = meta?.branches?.at(-1)?.id
-  return id ? `guano-project:${id}` : null
+  return id ? `superbird-project:${id}` : null
 }
 
 test('undo does not revert what another writer changed', async ({ page }) => {
@@ -230,7 +230,7 @@ test('a save that lost the race is refused, reloaded and SAID — not silently d
   }
 
   let raced = false
-  await page.route('**/api/store/guano-project%3Amain', async (route) => {
+  await page.route('**/api/store/superbird-project%3Amain', async (route) => {
     if (route.request().method() !== 'PUT' || raced) return route.fallback()
     raced = true
     await theirPage()
@@ -262,7 +262,7 @@ test('a save that lost the race is refused, reloaded and SAID — not silently d
 
   // ...and this tab adopted their version rather than sitting on a document
   // the server does not have
-  await page.unroute('**/api/store/guano-project%3Amain')
+  await page.unroute('**/api/store/superbird-project%3Amain')
   await page.getByRole('button', { name: 'Pages', exact: true }).click()
   await expect(page.locator('[data-page-row="raced"]')).toBeVisible({ timeout: 20_000 })
 
@@ -276,7 +276,7 @@ test('a rejected save says what the server said, and offers no pointless retry',
   await expect(page.locator('h1').first()).toBeVisible({ timeout: 30_000 })
 
   // a refusal with a message, in the shape the server sends
-  await page.route('**/api/store/guano-project%3Amain', async (route) => {
+  await page.route('**/api/store/superbird-project%3Amain', async (route) => {
     if (route.request().method() !== 'PUT') return route.fallback()
     await route.fulfill({
       status: 403,
@@ -300,8 +300,8 @@ test('a rejected save says what the server said, and offers no pointless retry',
   )
 
   // a 5xx is the other half: worth trying again, so it offers to
-  await page.unroute('**/api/store/guano-project%3Amain')
-  await page.route('**/api/store/guano-project%3Amain', async (route) => {
+  await page.unroute('**/api/store/superbird-project%3Amain')
+  await page.route('**/api/store/superbird-project%3Amain', async (route) => {
     if (route.request().method() !== 'PUT') return route.fallback()
     await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"busy"}' })
   })

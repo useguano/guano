@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 // AFTER smoke.spec, which owns the first-run flow.
 
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
-const KEY = 'guano-project:cas-spec-draft'
+const KEY = 'superbird-project:cas-spec-draft'
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 

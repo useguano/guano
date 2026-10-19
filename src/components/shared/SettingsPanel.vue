@@ -2155,7 +2155,7 @@ async function onImportFile(e: Event) {
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-xs font-medium">{{ t.name }}</p>
                     <p class="truncate text-[9px] text-muted-foreground">
-                      {{ t.kind === 'launcher' ? 'Guano Launcher' : 'Agent' }} ·
+                      {{ t.kind === 'launcher' ? 'Superbird Launcher' : 'Agent' }} ·
                       created {{ timeAgo(t.createdAt) }} ·
                       {{ t.lastUsedAt ? `last used ${timeAgo(t.lastUsedAt)}` : 'never used' }}
                     </p>
@@ -2309,7 +2309,7 @@ async function onImportFile(e: Event) {
               <Info class="mt-px size-3.5 shrink-0" />
               <span>
                 You are signed in from a browser, so this is the content view.
-                <span class="text-foreground">Building happens in Guano Launcher</span> — pages,
+                <span class="text-foreground">Building happens in Superbird Launcher</span> — pages,
                 components, settings and publishing are there.
               </span>
             </div>

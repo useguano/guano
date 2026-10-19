@@ -45,7 +45,7 @@ test('a snapshot survives a publish that filled the variant cache', async ({ bas
   // the kind the desktop app holds (→ e2e/fixtures/session.ts).
   await becomeBuilder(admin)
 
-  const MAIN = 'guano-project:main'
+  const MAIN = 'superbird-project:main'
   const raw = ((await (await admin.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>)[MAIN]!
   const main = JSON.parse(raw)
 
@@ -69,7 +69,7 @@ test('a snapshot survives a publish that filled the variant cache', async ({ bas
 
   // the cache the old package bundled and the old import rejected
   // the same dir playwright.config.ts hands the server, resolved from here
-  const DATA_DIR = process.env.GUANO_DATA_DIR ?? resolve(import.meta.dirname, '..', '.e2e-data')
+  const DATA_DIR = process.env.SUPERBIRD_DATA_DIR ?? resolve(import.meta.dirname, '..', '.e2e-data')
   const variantsDir = join(DATA_DIR, 'media', 'variants')
   expect(existsSync(variantsDir)).toBeTruthy()
   const cached = readdirSync(variantsDir).filter((f) => f.endsWith('.webp'))
@@ -125,7 +125,7 @@ test('a snapshot is taken, listed, downloadable, restorable and deletable', asyn
   await becomeBuilder(admin)
 
   // the store reads as {key: rawJsonString}; writes take the raw string
-  const MAIN = 'guano-project:main'
+  const MAIN = 'superbird-project:main'
   const readMain = async () =>
     JSON.parse(((await (await admin.get(`/api/store?keys=${MAIN}`)).json()) as Record<string, string>)[MAIN]!)
 

@@ -74,7 +74,7 @@ function start() {
       }
       if (!fontFaceEl) {
         fontFaceEl = document.createElement('style')
-        fontFaceEl.dataset.guanoFonts = ''
+        fontFaceEl.dataset.superbirdFonts = ''
         document.head.appendChild(fontFaceEl)
       }
       fontFaceEl.textContent = css

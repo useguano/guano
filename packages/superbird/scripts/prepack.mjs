@@ -1,7 +1,7 @@
 // prepack: build the admin SPA + the MCP runtime bundle at the repo root, then
 // copy the runtime pieces into this package so the tarball is self-contained:
 //   dist/            the built admin SPA (served at /admin)
-//   runtime/         the bundled MCP runtime (mcp-runtime.mjs; `guano mcp`)
+//   runtime/         the bundled MCP runtime (mcp-runtime.mjs; `superbird mcp`)
 //   server/          the node server (code files only — NEVER server/data),
 //                    including the built motion-runtime.js the exporter ships
 //                    and server/public/, the unauthenticated namespace
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const REPO = join(PKG, '..', '..')
 
-// the shipped CLI, before anything else: 0.1.4 published a bin/guano.js that
+// the shipped CLI, before anything else: 0.1.4 published a bin/superbird.js that
 // did not parse, so every subcommand died on load. A tarball whose entry point
 // cannot run is not worth building.
 console.log('prepack: checking the CLI…')
@@ -72,7 +72,7 @@ await cp(join(REPO, 'src', 'lib', 'shared'), join(PKG, 'src', 'lib', 'shared'), 
 
 // the licence exceptions are listed in `files`, so a stale copy ships as the
 // licence — restage it from the root rather than trusting the one on disk
-for (const pkg of [PKG, join(REPO, 'packages', 'create-guano')]) {
+for (const pkg of [PKG, join(REPO, 'packages', 'create-superbird')]) {
   await cp(join(REPO, 'LICENSE-EXCEPTIONS.md'), join(pkg, 'LICENSE-EXCEPTIONS.md'))
 }
 

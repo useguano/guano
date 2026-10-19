@@ -1,15 +1,15 @@
 {
-  "name": "guano-monorepo",
+  "name": "superbird-monorepo",
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "homepage": "https://github.com/useguano/guano#readme",
+  "homepage": "https://github.com/superbird-app/superbird#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/useguano/guano.git"
+    "url": "git+https://github.com/superbird-app/superbird.git"
   },
   "bugs": {
-    "url": "https://github.com/useguano/guano/issues"
+    "url": "https://github.com/superbird-app/superbird/issues"
   },
   "type": "module",
   "workspaces": [

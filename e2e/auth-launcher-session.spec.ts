@@ -27,7 +27,7 @@ test.afterEach(() => {
 
 test('the launcher mints a session, and only over loopback with the right secret', async () => {
   const srv = await boot('launcher-session', 4405, {
-    env: { GUANO_LAUNCHER_SECRET: SECRET },
+    env: { SUPERBIRD_LAUNCHER_SECRET: SECRET },
   })
 
   // before setup there is nobody to mint for — 409, not an error, because the
@@ -66,7 +66,7 @@ test('the launcher mints a session, and only over loopback with the right secret
 
 test('the launcher tag survives a password change', async () => {
   const srv = await boot('launcher-session-pw', 4406, {
-    env: { GUANO_LAUNCHER_SECRET: SECRET },
+    env: { SUPERBIRD_LAUNCHER_SECRET: SECRET },
   })
   await srv.api.post('/api/auth/setup', {
     data: { email: EMAIL, password: PASSWORD, projectName: 'Launcher' },
@@ -85,7 +85,7 @@ test('the launcher tag survives a password change', async () => {
   expect((await (await ctx.get('/api/auth/me')).json()).host).toBe('launcher')
 })
 
-// ---------- the second proof: a `guanol_` launcher token ----------
+// ---------- the second proof: a `superbirdl_` launcher token ----------
 //
 // A VPS is not spawned by the app, so there is no secret and no loopback to
 // prove with. The remote stand-in is a launcher token, approved once in the
@@ -124,10 +124,10 @@ test('a launcher token is exchanged for a launcher session; an agent token is re
   const admin = await bare(srv.port)
   expect((await admin.post('/api/auth/login', { data: { email: EMAIL, password: PASSWORD } })).ok()).toBeTruthy()
 
-  // No GUANO_LAUNCHER_SECRET on this server at all: the bearer proof stands on
+  // No SUPERBIRD_LAUNCHER_SECRET on this server at all: the bearer proof stands on
   // its own, and the route must exist for it even with the env absent.
   const launcherToken = await deviceToken(srv, admin, 'launcher')
-  expect(launcherToken.startsWith('guanol_')).toBeTruthy()
+  expect(launcherToken.startsWith('superbirdl_')).toBeTruthy()
 
   const ctx = await pwRequest.newContext({
     baseURL: `http://localhost:${srv.port}`,
@@ -143,8 +143,8 @@ test('a launcher token is exchanged for a launcher session; an agent token is re
   // if it were accepted, an injected agent would trade its token for a cookie
   // and stop being an agent in the server's eyes
   const agentToken = await deviceToken(srv, admin, 'agent')
-  expect(agentToken.startsWith('guano_')).toBeTruthy()
-  expect(agentToken.startsWith('guanol_')).toBeFalsy()
+  expect(agentToken.startsWith('superbird_')).toBeTruthy()
+  expect(agentToken.startsWith('superbirdl_')).toBeFalsy()
   const agent = await pwRequest.newContext({
     baseURL: `http://localhost:${srv.port}`,
     extraHTTPHeaders: { authorization: `Bearer ${agentToken}` },
@@ -231,7 +231,7 @@ test('a launcher session hides the chrome the app provides; a browser session ke
   browser,
 }) => {
   const srv = await boot('launcher-session-ui', 4408, {
-    env: { GUANO_LAUNCHER_SECRET: SECRET },
+    env: { SUPERBIRD_LAUNCHER_SECRET: SECRET },
   })
   await srv.api.post('/api/auth/setup', {
     data: { email: EMAIL, password: PASSWORD, projectName: 'Launcher UI' },

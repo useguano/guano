@@ -1,14 +1,14 @@
-# @useguano/create
+# @superbird-app/create
 
-Install [Guano](https://www.npmjs.com/package/@useguano/guano) on a server, or
+Install [Superbird](https://www.npmjs.com/package/@superbird-app/superbird) on a server, or
 scaffold a site project on your own machine.
 
 ```sh
-npm create @useguano
+npm create @superbird-app
 ```
 
 Asks for a folder name (default `my-site`), then creates the folder with
-`@useguano/guano` as a dependency plus `dev`/`start`/`build`/`connect` scripts,
+`@superbird-app/superbird` as a dependency plus `dev`/`start`/`build`/`connect` scripts,
 a `.env.example` and a `.gitignore`, and runs `npm install`. Then:
 
 ```sh
@@ -23,10 +23,10 @@ for *"the form asks for this code"*. It is what stands in for being at the
 machine: without it, the first stranger to reach a fresh instance would become
 its admin.
 
-## Then add it in Guano Launcher
+## Then add it in Superbird Launcher
 
 This is the **server installer**. Building a site — pages, components,
-settings, publishing — happens in the Guano Launcher app on a Mac: Home →
+settings, publishing — happens in the Superbird Launcher app on a Mac: Home →
 Servers → **Add a server…**, then approve that Mac once in your browser. What
 the instance you just installed serves is the site itself, its forms, and the
 content view for the people you invite, who need nothing installed at all.
@@ -37,7 +37,7 @@ building.
 
 ## Claude
 
-Not asked about, and not needed. The editor's own AI panel is Guano's main AI
+Not asked about, and not needed. The editor's own AI panel is Superbird's main AI
 integration and needs no wiring up — it is in the app, beside the page.
 
 `--connect` is for the one case it was written for: a site on your own laptop,
@@ -49,7 +49,7 @@ same thing later.
 
 ## Flags
 
-Pass the folder to skip that prompt (`npm create @useguano my-site`);
+Pass the folder to skip that prompt (`npm create @superbird-app my-site`);
 `--no-install` skips the install; `--connect` connects Claude, with `--main` /
 `--publish` granting the agent permissions non-interactively and
 `--config <path>` naming one client's config file. `--no-connect` is accepted

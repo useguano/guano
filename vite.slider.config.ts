@@ -28,7 +28,7 @@ export default defineConfig({
       entry: fileURLToPath(new URL('./src/slider/runtime.ts', import.meta.url)),
       // IIFE: a plain <script> the page can load with no module plumbing
       formats: ['iife'],
-      name: 'GuanoSlider',
+      name: 'SuperbirdSlider',
       fileName: () => 'slider-runtime.js',
     },
   },

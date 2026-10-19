@@ -29,8 +29,8 @@ export const AGENT_INIT = {
   subtype: 'init',
   cwd: '/Users/someone/Sites/acme',
   session_id: SESSION,
-  tools: ['mcp__guano__get_page', 'mcp__guano__set_page_html'],
-  mcp_servers: [{ name: 'guano', status: 'connected' }],
+  tools: ['mcp__superbird__get_page', 'mcp__superbird__set_page_html'],
+  mcp_servers: [{ name: 'superbird', status: 'connected' }],
   model: 'claude-opus-5',
   permissionMode: 'dontAsk',
 }
@@ -187,7 +187,7 @@ export const agentResult = (overrides: Record<string, unknown> = {}) => ({
 })
 
 /**
- * A full turn: thinking (empty), one guano tool call that succeeds, a second
+ * A full turn: thinking (empty), one superbird tool call that succeeds, a second
  * message with thinking at index 0 and the answer at index 1 — consolidated
  * alone at array index 0, which is the doubling shape.
  */
@@ -201,7 +201,7 @@ export const AGENT_TURN: unknown[] = [
     session_id: SESSION,
     uuid: 'u4',
   },
-  ...agentToolCall(TOOL_ID, 'mcp__guano__set_page_html', { pageId: 'home', html: '<h1>Hello</h1>' }, MSG_A, 1, { content: '{"saved":true}' }),
+  ...agentToolCall(TOOL_ID, 'mcp__superbird__set_page_html', { pageId: 'home', html: '<h1>Hello</h1>' }, MSG_A, 1, { content: '{"saved":true}' }),
   messageStart(MSG_B, 'u12'),
   ...thinkingBlock(0, 'u13'),
   {
@@ -225,11 +225,11 @@ export const AGENT_BUSY_TURN: unknown[] = [
   { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'b1' },
   messageStart('msg_busy_1', 'b2'),
   ...textBlock('msg_busy_1', 0, ['Let me get oriented first.'], 'b3'),
-  ...agentToolCall('toolu_b1', 'mcp__guano__get_guide', { section: 'page-html' }, 'msg_busy_1', 1),
+  ...agentToolCall('toolu_b1', 'mcp__superbird__get_guide', { section: 'page-html' }, 'msg_busy_1', 1),
   messageStart('msg_busy_2', 'b4'),
-  ...agentToolCall('toolu_b2', 'mcp__guano__get_guide', { section: 'styling' }, 'msg_busy_2', 0),
+  ...agentToolCall('toolu_b2', 'mcp__superbird__get_guide', { section: 'styling' }, 'msg_busy_2', 0),
   messageStart('msg_busy_3', 'b5'),
-  ...agentToolCall('toolu_b3', 'mcp__guano__list_pages', {}, 'msg_busy_3', 0),
+  ...agentToolCall('toolu_b3', 'mcp__superbird__list_pages', {}, 'msg_busy_3', 0),
   messageStart('msg_busy_4', 'b6'),
   ...textBlock('msg_busy_4', 0, ['Main is empty, so I will start from scratch.'], 'b7'),
   agentResult(),
@@ -244,7 +244,7 @@ export const AGENT_STEP_IN_FLIGHT: unknown[] = [
     event: {
       type: 'content_block_start',
       index: 0,
-      content_block: { type: 'tool_use', id: 'toolu_step', name: 'mcp__guano__get_guide', input: {}, caller: { type: 'direct' } },
+      content_block: { type: 'tool_use', id: 'toolu_step', name: 'mcp__superbird__get_guide', input: {}, caller: { type: 'direct' } },
     },
     session_id: SESSION,
     uuid: 's3',
@@ -256,7 +256,7 @@ export const AGENT_STEP_IN_FLIGHT: unknown[] = [
       id: 'msg_step',
       type: 'message',
       role: 'assistant',
-      content: [{ type: 'tool_use', id: 'toolu_step', name: 'mcp__guano__get_guide', input: { section: 'styling' } }],
+      content: [{ type: 'tool_use', id: 'toolu_step', name: 'mcp__superbird__get_guide', input: { section: 'styling' } }],
     },
     session_id: SESSION,
     uuid: 's4',
@@ -300,15 +300,15 @@ export const AGENT_DENIAL: unknown[] = [
 export const AGENT_HARNESS_TURN: unknown[] = [
   { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'h1' },
   messageStart('msg_h1', 'h2'),
-  ...agentToolCall('toolu_h1', 'ToolSearch', { query: 'select:mcp__guano__get_page' }, 'msg_h1', 0, {
+  ...agentToolCall('toolu_h1', 'ToolSearch', { query: 'select:mcp__superbird__get_page' }, 'msg_h1', 0, {
     content: '<functions>…</functions>',
   }),
   messageStart('msg_h2', 'h3'),
-  ...agentToolCall('toolu_h2', 'ToolSearch', { query: 'select:mcp__guano__set_page_html' }, 'msg_h2', 0, {
+  ...agentToolCall('toolu_h2', 'ToolSearch', { query: 'select:mcp__superbird__set_page_html' }, 'msg_h2', 0, {
     content: '<functions>…</functions>',
   }),
   messageStart('msg_h3', 'h4'),
-  ...agentToolCall('toolu_h3', 'mcp__guano__list_pages', {}, 'msg_h3', 0),
+  ...agentToolCall('toolu_h3', 'mcp__superbird__list_pages', {}, 'msg_h3', 0),
   messageStart('msg_h4', 'h5'),
   ...textBlock('msg_h4', 0, ['One page: Home.'], 'h6'),
   agentResult({ result: 'One page: Home.' }),
@@ -366,14 +366,14 @@ export const AGENT_RATE_LIMITED = {
 export const AGENT_SUGGEST_TURN: unknown[] = [
   { type: 'system', subtype: 'status', status: 'requesting', session_id: SESSION, uuid: 'sg1' },
   messageStart('msg_sg1', 'sg2'),
-  ...agentToolCall('toolu_sg1', 'mcp__guano__set_page_html', { pageId: 'home', html: '<h1>Acme</h1>' }, 'msg_sg1', 0, {
+  ...agentToolCall('toolu_sg1', 'mcp__superbird__set_page_html', { pageId: 'home', html: '<h1>Acme</h1>' }, 'msg_sg1', 0, {
     content: '{"saved":true}',
   }),
   messageStart('msg_sg2', 'sg3'),
   ...textBlock('msg_sg2', 0, ['The page is up, on the stark palette you picked.'], 'sg4'),
   ...agentToolCall(
     'toolu_sg2',
-    'mcp__guano__suggest_next',
+    'mcp__superbird__suggest_next',
     {
       suggestions: [
         { label: 'Animate it in', prompt: 'Add a subtle load animation: the heading and the form fade and rise in, staggered.' },
@@ -397,7 +397,7 @@ export const AGENT_SUGGEST_DENIAL: unknown[] = [
     event: {
       type: 'content_block_start',
       index: 0,
-      content_block: { type: 'tool_use', id: 'toolu_ad', name: 'mcp__guano__suggest_next', input: {} },
+      content_block: { type: 'tool_use', id: 'toolu_ad', name: 'mcp__superbird__suggest_next', input: {} },
     },
     session_id: SESSION,
     uuid: 'ad3',
@@ -405,7 +405,7 @@ export const AGENT_SUGGEST_DENIAL: unknown[] = [
   {
     type: 'system',
     subtype: 'permission_denied',
-    tool_name: 'mcp__guano__suggest_next',
+    tool_name: 'mcp__superbird__suggest_next',
     tool_use_id: 'toolu_ad',
     message: 'suggest_next is not allowed in this panel.',
     uuid: 'ad4',
@@ -413,6 +413,6 @@ export const AGENT_SUGGEST_DENIAL: unknown[] = [
   },
   agentResult({
     result: 'I could not offer anything.',
-    permission_denials: [{ tool_name: 'mcp__guano__suggest_next', tool_use_id: 'toolu_ad', tool_input: {} }],
+    permission_denials: [{ tool_name: 'mcp__superbird__suggest_next', tool_use_id: 'toolu_ad', tool_input: {} }],
   }),
 ]

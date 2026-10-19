@@ -23,13 +23,13 @@ export function useEditorBoot() {
       await hydrateStore([projectStorageKey(activeId), projectStorageKey(MAIN_ID)])
       hydratePublishState()
 
-      const setupName = localStorage.getItem('guano-setup-name')
+      const setupName = localStorage.getItem('superbird-setup-name')
       if (setupName) {
         if (!storeGet(projectStorageKey(activeId))) {
           useProject().renameProject(setupName)
         }
       }
-      localStorage.removeItem('guano-setup-name')
+      localStorage.removeItem('superbird-setup-name')
 
       usePersistence().init()
       useHostBridge().start()

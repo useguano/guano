@@ -6,7 +6,7 @@
 // prompt-injected instruction — from a comment, page content, an entry value —
 // can set them all to true and be believed. These switches are the real
 // boundary: they live in the data dir, only a browser SESSION can change them
-// (never a token), and they gate requests authenticated by a `guano_` bearer.
+// (never a token), and they gate requests authenticated by a `superbird_` bearer.
 //
 // Everything is OFF by default. With the defaults an agent works inside a
 // draft, cannot publish, and cannot write custom code — so the worst a
@@ -19,7 +19,7 @@ import { DATA_DIR, writeAtomic } from './util.mjs'
 const POLICY_FILE = join(DATA_DIR, 'agent-policy.json')
 
 const DEFAULTS = {
-  /** may a token write guano-project:main (and its merge base) directly? */
+  /** may a token write superbird-project:main (and its merge base) directly? */
   allowMainWrites: false,
   /** may a token POST /api/published (ship to the live site)? */
   allowPublish: false,
@@ -57,7 +57,7 @@ export async function readAgentPolicy() {
 }
 
 /**
- * The two switches a first-run asks about (the setup form, `guano connect`).
+ * The two switches a first-run asks about (the setup form, `superbird connect`).
  * Narrowed on purpose: custom code and reading form submissions are decisions
  * worth making with the product in front of you, not a checkbox during
  * install. Returns only the keys present as booleans — an empty object when
@@ -73,7 +73,7 @@ export function onboardingPolicy(input) {
   return out
 }
 
-/** was the policy already answered — by the scaffolder, `guano connect` or an
+/** was the policy already answered — by the scaffolder, `superbird connect` or an
  *  earlier admin? The setup form reads this to skip its two switches. */
 export async function agentPolicyPreset() {
   try {

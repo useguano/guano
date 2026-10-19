@@ -11,7 +11,7 @@ export async function fakeHost(page: Page) {
     Object.defineProperty(window, 'webkit', {
       value: {
         messageHandlers: {
-          guano: {
+          superbird: {
             postMessage: (message: unknown) => {
               posts.push(message)
               // ...and ANSWER the one message the page blocks on. The router
@@ -25,8 +25,8 @@ export async function fakeHost(page: Page) {
               if (type !== 'unauthorized') return
               queueMicrotask(() => {
                 const host = (
-                  window as unknown as { __guanoHost?: { sessionLost?: (why?: string) => void } }
-                ).__guanoHost
+                  window as unknown as { __superbirdHost?: { sessionLost?: (why?: string) => void } }
+                ).__superbirdHost
                 host?.sessionLost?.('this fake host mints nothing')
               })
             },
@@ -42,14 +42,14 @@ export const hostPosts = (page: Page) =>
 
 /**
  * The Edit / Play switch is the HOST's button (the launcher's header), so a
- * test switches the way the launcher does: through `__guanoHost.setViewMode`.
+ * test switches the way the launcher does: through `__superbirdHost.setViewMode`.
  * Waits for the page to post the mode back, which is what the host's label
  * reads.
  */
 export async function hostViewMode(page: Page, mode: 'build' | 'preview') {
   await page.evaluate((next) => {
-    const host = (window as unknown as { __guanoHost?: { setViewMode: (m: string) => void } })
-      .__guanoHost
+    const host = (window as unknown as { __superbirdHost?: { setViewMode: (m: string) => void } })
+      .__superbirdHost
     if (!host) throw new Error('no host callbacks: install fakeHost() before navigating')
     host.setViewMode(next)
   }, mode)

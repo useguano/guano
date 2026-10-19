@@ -14,9 +14,9 @@ import { LAUNCHER_SECRET } from './fixtures/session'
 const ADMIN = { email: 'smoke@example.com', password: 'supersecret1' }
 const CONTRIB = { email: 'contrib@example.com', password: 'contrib-pass-1' }
 const EDITOR = { email: 'editor@example.com', password: 'editor-pass-1' }
-const MAIN = 'guano-project:main'
-const DRAFT = 'guano-project:sec-spec-draft'
-const BASE = 'guano-base:sec-spec-draft'
+const MAIN = 'superbird-project:main'
+const DRAFT = 'superbird-project:sec-spec-draft'
+const BASE = 'superbird-base:sec-spec-draft'
 
 /**
  * An admin who can BUILD — which means a launcher session, not a password
@@ -35,7 +35,7 @@ async function adminContext(baseURL: string | undefined) {
   // ...and upgrade the session to the kind the desktop app holds. The secret
   // proof, over the suite server's loopback.
   const minted = await ctx.post('/api/auth/launcher-session', { data: { secret: LAUNCHER_SECRET } })
-  expect(minted.status(), 'the suite server must carry GUANO_LAUNCHER_SECRET').toBe(200)
+  expect(minted.status(), 'the suite server must carry SUPERBIRD_LAUNCHER_SECRET').toBe(200)
   return ctx
 }
 
@@ -65,7 +65,7 @@ async function contributorContext(admin: APIRequestContext, baseURL: string | un
  * An editor who can BUILD — a build role in a launcher session.
  *
  * The secret proof mints for `oldestAdmin()` only, so an editor's builder
- * session can only come from the bearer proof: a `guanol_` token this editor
+ * session can only come from the bearer proof: a `superbirdl_` token this editor
  * approved for themselves through the device flow. That is the second builder's
  * whole path — an editor with their own Mac — and it is why a LAUNCHER
  * authorization needs a build role rather than an admin: the token carries
@@ -126,7 +126,7 @@ async function launcherToken(who: APIRequestContext, baseURL: string | undefined
   expect(got.ok()).toBeTruthy()
   const { token } = await got.json()
   await anon.dispose()
-  expect(String(token).startsWith('guanol_')).toBeTruthy()
+  expect(String(token).startsWith('superbirdl_')).toBeTruthy()
   return token as string
 }
 
@@ -157,10 +157,10 @@ test('store keys cannot alias past the contributor guards', async ({ baseURL }) 
   await seedMain(admin)
   const contrib = await contributorContext(admin, baseURL)
 
-  // `guano-project__main` maps to the SAME file as `guano-project:main`, but
-  // used to slip past every startsWith('guano-project:') check — which meant a
+  // `superbird-project__main` maps to the SAME file as `superbird-project:main`, but
+  // used to slip past every startsWith('superbird-project:') check — which meant a
   // contributor could write structure into Main and read its secrets back.
-  for (const alias of ['guano-project__main', 'guano-base__sec', 'a__b']) {
+  for (const alias of ['superbird-project__main', 'superbird-base__sec', 'a__b']) {
     expect((await contrib.put(`/api/store/${alias}`, { data: '{"pages":[]}' })).status()).toBe(400)
     expect((await contrib.get(`/api/store?keys=${alias}`)).status()).toBe(400)
     // admins get no special pass — the key is simply not addressable
@@ -183,7 +183,7 @@ test('merge-base snapshots get the same guards as project blobs', async ({ baseU
   expect((await admin.put(`/api/store/${BASE}`, { data: mainBody })).ok()).toBeTruthy()
 
   // read: the legacy secret block must be redacted for a contributor, exactly as
-  // for guano-project:*. It is REMOVED rather than nulled — integrations live
+  // for superbird-project:*. It is REMOVED rather than nulled — integrations live
   // entirely server-side now (server/integrations.mjs), so the key must not be
   // there at all for a blob that arrived with one (an import, a restore).
   const read = (await (await contrib.get(`/api/store?keys=${BASE}`)).json()) as Record<string, string>
@@ -314,17 +314,17 @@ test('contributors can only discard their own drafts', async ({ baseURL }) => {
       { id: 'legacy', name: 'Legacy', createdAt: 3 }, // pre-ownership: stays shared
     ],
   }
-  expect((await admin.put('/api/store/guano-branches', { data: JSON.stringify(meta) })).ok()).toBeTruthy()
+  expect((await admin.put('/api/store/superbird-branches', { data: JSON.stringify(meta) })).ok()).toBeTruthy()
   for (const id of ['mine', 'theirs', 'legacy']) {
-    expect((await admin.put(`/api/store/guano-project:${id}`, { data: '{"pages":[]}' })).ok()).toBeTruthy()
+    expect((await admin.put(`/api/store/superbird-project:${id}`, { data: '{"pages":[]}' })).ok()).toBeTruthy()
   }
 
-  expect((await contrib.delete('/api/store/guano-project:theirs')).status()).toBe(403)
-  expect((await contrib.delete('/api/store/guano-project:mine')).status()).toBe(200)
+  expect((await contrib.delete('/api/store/superbird-project:theirs')).status()).toBe(403)
+  expect((await contrib.delete('/api/store/superbird-project:mine')).status()).toBe(200)
   // a draft created before ownership existed must not become undeletable
-  expect((await contrib.delete('/api/store/guano-project:legacy')).status()).toBe(200)
+  expect((await contrib.delete('/api/store/superbird-project:legacy')).status()).toBe(200)
 
-  await admin.delete('/api/store/guano-project:theirs')
+  await admin.delete('/api/store/superbird-project:theirs')
   await admin.dispose()
   await contrib.dispose()
 })
@@ -455,7 +455,7 @@ test('the publish bookkeeping blobs need a build role', async ({ baseURL }) => {
   // are not project blobs, so neither the contributor merge nor the reviewer
   // merge covered them — both wrote them verbatim, and so did an agent token
   // with no policy switch in the way.
-  for (const key of ['guano-published-baseline', 'guano-published-info']) {
+  for (const key of ['superbird-published-baseline', 'superbird-published-info']) {
     for (const who of [contrib, agent]) {
       const res = await who.put(`/api/store/${key}`, { data: '{"pages":[]}' })
       expect(res.status(), key).toBe(403)
@@ -475,10 +475,10 @@ test('an agent token cannot open the editor, and a launcher token cannot drive t
   //
   // Builder capability needs a credential the desktop app holds; agents are
   // fenced by the agent policy because they are judged by HOW they
-  // authenticated. So if the session exchange accepted any `guano_` token, an
+  // authenticated. So if the session exchange accepted any `superbird_` token, an
   // injected agent would trade its token for a cookie, stop being an agent in
   // the server's eyes, and write Main with the policy off. The two kinds are
-  // therefore a PREFIX and not a field: `guanol_` and `guano_` are different
+  // therefore a PREFIX and not a field: `superbirdl_` and `superbird_` are different
   // types to every parser, and each door refuses the other BY NAME so the
   // attempt is visible rather than merely unsuccessful.
   //
@@ -493,7 +493,7 @@ test('an agent token cannot open the editor, and a launcher token cannot drive t
     expect(begun.ok()).toBeTruthy()
     const { userCode, deviceCode } = await begun.json()
     // the consent screen is told which sentence it is showing, because
-    // "Guano Launcher wants builder access" and "Claude wants to work on this
+    // "Superbird Launcher wants builder access" and "Claude wants to work on this
     // site" must not be the same approval
     expect((await (await admin.get(`/api/auth/device/${userCode}`)).json()).kind).toBe(kind)
     expect((await admin.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
@@ -506,11 +506,11 @@ test('an agent token cannot open the editor, and a launcher token cannot drive t
 
   const agentToken = await mint('agent')
   const launcherToken = await mint('launcher')
-  expect(agentToken.startsWith('guano_')).toBeTruthy()
-  expect(launcherToken.startsWith('guanol_')).toBeTruthy()
+  expect(agentToken.startsWith('superbird_')).toBeTruthy()
+  expect(launcherToken.startsWith('superbirdl_')).toBeTruthy()
   // disjoint strings, which is the whole mechanism: a launcher token cannot be
   // READ as an agent bearer, let alone resolve as one
-  expect(launcherToken.startsWith('guano_')).toBeFalsy()
+  expect(launcherToken.startsWith('superbird_')).toBeFalsy()
 
   const asAgent = await pwRequest.newContext({
     baseURL,
@@ -702,7 +702,7 @@ test('who may authorize what: a builder for a launcher, an admin for an agent', 
     expect((await editorSession.get(`/api/auth/device/${userCode}`)).ok()).toBeTruthy()
     expect((await editorSession.post(`/api/auth/device/${userCode}/approve`, { data: {} })).ok()).toBeTruthy()
     const { token } = await (await anon.post('/api/auth/device/token', { data: { deviceCode } })).json()
-    expect(String(token).startsWith('guanol_')).toBeTruthy()
+    expect(String(token).startsWith('superbirdl_')).toBeTruthy()
     await anon.dispose()
   }
 

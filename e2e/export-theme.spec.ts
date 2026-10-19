@@ -223,7 +223,7 @@ test.describe('the native colour-mode switcher', () => {
   test('a light-only site pays nothing, and a switching one gets a blocking head script', async () => {
     await exportSite(fixture(), SITE)
     const plain = await readFile(join(SITE, 'index.html'), 'utf8')
-    expect(plain).not.toContain('guano-theme')
+    expect(plain).not.toContain('superbird-theme')
 
     await exportSite(switcherFixture(), SITE)
     const html = await readFile(join(SITE, 'index.html'), 'utf8')
@@ -231,14 +231,14 @@ test.describe('the native colour-mode switcher', () => {
     // in <head>, synchronous, and BEFORE the stylesheet: the mode has to be on
     // <html> before the first paint or a dark visitor sees the light site flash
     expect(head).toContain("localStorage.getItem(K)")
-    expect(head.indexOf('guano-theme')).toBeLessThan(head.indexOf('/assets/style.css'))
+    expect(head.indexOf('superbird-theme')).toBeLessThan(head.indexOf('/assets/style.css'))
     expect(html).not.toContain('defer src="/assets/script.js"')
 
     // the switcher itself: a reserved attribute, no href on a non-anchor, and
     // a '#' on an <a> so it stays keyboard-operable
-    expect(/<button[^>]*id="switch"[^>]*data-guano-theme="toggle"/.test(html)).toBe(true)
+    expect(/<button[^>]*id="switch"[^>]*data-superbird-theme="toggle"/.test(html)).toBe(true)
     expect(/<a[^>]*id="pin-light"[^>]*>/.exec(html)![0]).toContain('href="#"')
-    expect(/<a[^>]*id="pin-light"[^>]*>/.exec(html)![0]).toContain('data-guano-theme="light"')
+    expect(/<a[^>]*id="pin-light"[^>]*>/.exec(html)![0]).toContain('data-superbird-theme="light"')
     // a switcher is not a navigation, so nothing is wrapped in a contents anchor
     expect(html).not.toMatch(/<a href="#" class="contents"[^>]*><button[^>]*id="switch"/)
   })
@@ -257,7 +257,7 @@ test.describe('the native colour-mode switcher', () => {
     // #root also carries the earlier interaction's `transition-all`, so the
     // colour is polled for its settled value, never sampled mid-tween
     await expect.poll(() => page.evaluate(bg('#root'))).toBe('rgb(8, 9, 11)')
-    expect(await page.evaluate('localStorage.getItem("guano-theme")')).toBe('dark')
+    expect(await page.evaluate('localStorage.getItem("superbird-theme")')).toBe('dark')
     // color-scheme follows it, which is what darkens the native scrollbars
     expect(await page.evaluate('document.documentElement.style.colorScheme')).toBe('dark')
 
@@ -273,7 +273,7 @@ test.describe('the native colour-mode switcher', () => {
     // and a pinned mode wins over the stored one
     await page.locator('#pin-light').click()
     await expect(page.locator('html')).toHaveClass(/(^|\s)light(\s|$)/)
-    expect(await page.evaluate('localStorage.getItem("guano-theme")')).toBe('light')
+    expect(await page.evaluate('localStorage.getItem("superbird-theme")')).toBe('light')
   })
 
   test('"the visitor\'s system" is followed until they choose, and giving it back works', async ({
@@ -283,7 +283,7 @@ test.describe('the native colour-mode switcher', () => {
     await page.emulateMedia({ colorScheme: 'dark' })
     await page.goto('/')
     await expect(page.locator('html')).toHaveClass(/(^|\s)dark(\s|$)/)
-    expect(await page.evaluate('localStorage.getItem("guano-theme")')).toBe(null)
+    expect(await page.evaluate('localStorage.getItem("superbird-theme")')).toBe(null)
 
     // an explicit choice wins over the system — the state a two-state class
     // toggle could never express, which is why this is a head script
@@ -295,7 +295,7 @@ test.describe('the native colour-mode switcher', () => {
     // and handing it back to the system restores the OS answer
     await page.locator('#pin-sys').click()
     await expect(page.locator('html')).toHaveClass(/(^|\s)dark(\s|$)/)
-    expect(await page.evaluate('localStorage.getItem("guano-theme")')).toBe(null)
+    expect(await page.evaluate('localStorage.getItem("superbird-theme")')).toBe(null)
     await page.emulateMedia({ colorScheme: 'light' })
     await expect(page.locator('html')).toHaveClass(/(^|\s)light(\s|$)/)
   })

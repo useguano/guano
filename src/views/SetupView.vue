@@ -49,7 +49,7 @@ async function submit() {
         : { allowMainWrites: allowMainWrites.value, allowPublish: allowPublish.value },
       setupCode.value.trim(),
     )
-    localStorage.setItem('guano-setup-name', projectName.value.trim())
+    localStorage.setItem('superbird-setup-name', projectName.value.trim())
     window.location.assign('/admin')
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Setup failed'

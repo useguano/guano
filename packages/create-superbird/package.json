@@ -1,0 +1,29 @@
+{
+  "name": "@superbird-app/create",
+  "version": "0.1.10",
+  "license": "AGPL-3.0-only",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Scaffold a new Superbird site project.",
+  "homepage": "https://github.com/superbird-app/superbird#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superbird-app/superbird.git",
+    "directory": "packages/create-superbird"
+  },
+  "bugs": {
+    "url": "https://github.com/superbird-app/superbird/issues"
+  },
+  "type": "module",
+  "bin": {
+    "create-superbird": "index.js"
+  },
+  "files": [
+    "index.js",
+    "LICENSE-EXCEPTIONS.md"
+  ],
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  }
+}

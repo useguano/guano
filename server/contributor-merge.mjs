@@ -228,7 +228,7 @@ function overlayNode(node, incById) {
 /**
  * Build the blob to persist for a contributor's project write.
  * @param {string|null} storedStr  the current blob for this key (null = new draft)
- * @param {string|null} mainStr    guano-project:main blob (baseline for a new draft)
+ * @param {string|null} mainStr    superbird-project:main blob (baseline for a new draft)
  * @param {string} incomingStr     the contributor's raw PUT/publish body
  * @returns {{ ok: true, merged: string } | { error: string }}
  */
@@ -325,11 +325,11 @@ export function redactSecretsForContributor(str) {
 }
 
 /**
- * Server-authoritative merge for the DRAFT INDEX (`guano-branches`) on a
+ * Server-authoritative merge for the DRAFT INDEX (`superbird-branches`) on a
  * contributor write.
  *
  * Why this exists. The store's PUT path ran the content merge only for project
- * blob keys; every other key was written verbatim. `guano-branches` is the
+ * blob keys; every other key was written verbatim. `superbird-branches` is the
  * blob that records who created each draft, and `ownsDraft` — the gate on
  * DELETE — trusts it. So a contributor could PUT that index with their own id
  * stamped on somebody else's draft and then delete it. The index is UI state

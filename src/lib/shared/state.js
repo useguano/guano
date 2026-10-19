@@ -355,10 +355,10 @@ export function applyDiff(store, diff) {
 /**
  * Where a diff is remembered. ONE key for the whole site, not one per route:
  * the store's identity is the entry id, so a change made on `/task/x` has to be
- * readable on `/board`. `?resetstate` already clears every `guano-` key, so a
+ * readable on `/board`. `?resetstate` already clears every `superbird-` key, so a
  * persisted toggle and a persisted entry are forgotten by the same affordance.
  */
-export const STATE_STORAGE_KEY = 'guano-ds:v1'
+export const STATE_STORAGE_KEY = 'superbird-ds:v1'
 
 /** @param {'none'|'session'|'local'|undefined} mode */
 export function stateStorage(mode, win) {

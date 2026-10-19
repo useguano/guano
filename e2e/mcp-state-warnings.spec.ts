@@ -22,7 +22,7 @@ async function withBlob(mutate: (p: any) => void) {
   })
   const blob = s.stored()
   mutate(blob)
-  s.writeStore('guano-project:main', JSON.stringify(blob))
+  s.writeStore('superbird-project:main', JSON.stringify(blob))
   return s
 }
 

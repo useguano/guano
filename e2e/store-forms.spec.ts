@@ -1,7 +1,7 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from '@playwright/test'
 import { becomeBuilder } from './fixtures/session'
 
-// POST /_guano/forms/:id — the only unauthenticated WRITE in the product.
+// POST /_superbird/forms/:id — the only unauthenticated WRITE in the product.
 //
 // This spec is the refusal order, in order. A public endpoint that stores what
 // strangers send and can make the instance send mail is the one surface where
@@ -152,7 +152,7 @@ async function post(
   fields: Record<string, string>,
   { id = FORM_ID, ip, origin }: { id?: string; ip?: string; origin?: string } = {},
 ) {
-  return ctx.post(`/_guano/forms/${id}`, {
+  return ctx.post(`/_superbird/forms/${id}`, {
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       accept: 'application/json',
@@ -204,14 +204,14 @@ test.describe('the public form endpoint', () => {
     expect((await post(v, GOOD, { id: 'has%20spaces' })).status()).toBe(404)
 
     // multipart (file uploads) is refused outright in v1
-    const wrongType = await v.post(`/_guano/forms/${FORM_ID}`, {
+    const wrongType = await v.post(`/_superbird/forms/${FORM_ID}`, {
       headers: { 'content-type': 'application/json' },
       data: '{}',
     })
     expect(wrongType.status()).toBe(415)
 
     // GET is not a thing
-    expect((await v.get(`/_guano/forms/${FORM_ID}`)).status()).toBe(405)
+    expect((await v.get(`/_superbird/forms/${FORM_ID}`)).status()).toBe(405)
 
     // a route the form was never exported on: one form id must not accept
     // submissions attributed to any page on the site
@@ -226,7 +226,7 @@ test.describe('the public form endpoint', () => {
     expect((await post(v, { ...GOOD, topic: 'not-offered' })).status()).toBe(400)
 
     // an oversized body is cut off rather than buffered
-    const big = await v.post(`/_guano/forms/${FORM_ID}`, {
+    const big = await v.post(`/_superbird/forms/${FORM_ID}`, {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       data: body({ ...GOOD, message: 'x'.repeat(40_000) }),
     })
@@ -296,13 +296,13 @@ test.describe('the public form endpoint', () => {
     expect(no.headers()['access-control-allow-origin']).toBeUndefined()
 
     // the preflight, both ways
-    const pre = await allowed.fetch(`/_guano/forms/${FORM_ID}`, {
+    const pre = await allowed.fetch(`/_superbird/forms/${FORM_ID}`, {
       method: 'OPTIONS',
       headers: { origin: 'https://forms.example' },
     })
     expect(pre.status()).toBe(204)
     expect(pre.headers()['access-control-allow-methods']).toContain('POST')
-    const preBad = await denied.fetch(`/_guano/forms/${FORM_ID}`, {
+    const preBad = await denied.fetch(`/_superbird/forms/${FORM_ID}`, {
       method: 'OPTIONS',
       headers: { origin: 'https://evil.example' },
     })
@@ -317,7 +317,7 @@ test.describe('the public form endpoint', () => {
     const v = await visitor(baseURL)
 
     // no `accept: application/json` — a plain browser form post
-    const res = await v.post(`/_guano/forms/${FORM_ID}`, {
+    const res = await v.post(`/_superbird/forms/${FORM_ID}`, {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       data: body(GOOD),
       maxRedirects: 0,
@@ -493,7 +493,7 @@ test.describe('reading submissions', () => {
     // store Main with the form OFF
     const off = JSON.parse(JSON.stringify(main))
     delete off.pages[0].elements[0].children[0].form
-    expect((await admin.put('/api/store/guano-project%3Amain', { data: off })).ok()).toBeTruthy()
+    expect((await admin.put('/api/store/superbird-project%3Amain', { data: off })).ok()).toBeTruthy()
 
     const invite = await admin.post('/api/users/invite', {
       data: { name: 'C2', email: 'contrib-form2@example.com', role: 'contributor' },
@@ -504,10 +504,10 @@ test.describe('reading submissions', () => {
 
     // `node.form` is behaviour, not content: the server merge keeps the stored
     // value and drops theirs
-    const wrote = await contributor.put('/api/store/guano-project%3Amain', { data: main })
+    const wrote = await contributor.put('/api/store/superbird-project%3Amain', { data: main })
     expect(wrote.status()).toBe(200)
-    const stored = await (await admin.get('/api/store?keys=guano-project:main')).json()
-    const form = JSON.parse(stored['guano-project:main']).pages[0].elements[0].children[0]
+    const stored = await (await admin.get('/api/store?keys=superbird-project:main')).json()
+    const form = JSON.parse(stored['superbird-project:main']).pages[0].elements[0].children[0]
     expect(form.form).toBeUndefined()
 
     await contributor.dispose()

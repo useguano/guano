@@ -18,7 +18,7 @@ const LINE =
 
 export function mitBanner(): Plugin {
   return {
-    name: 'guano:mit-banner',
+    name: 'superbird:mit-banner',
     generateBundle(_options, bundle) {
       for (const file of Object.values(bundle)) {
         if (file.type === 'chunk') file.code = `${LINE}\n${file.code}`

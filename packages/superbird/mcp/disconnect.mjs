@@ -1,8 +1,8 @@
-// `guano disconnect` — take a project OUT of the shared Claude entry.
+// `superbird disconnect` — take a project OUT of the shared Claude entry.
 //
 // The map had no remove. `connect` adds a key and folds legacy ones in, and
 // that was the whole of it, so a project that was deleted, renamed, rebuilt or
-// moved to another port stayed in GUANO_PROJECTS forever. The only way out was
+// moved to another port stayed in SUPERBIRD_PROJECTS forever. The only way out was
 // to hand-edit claude_desktop_config.json — which Claude Desktop rewrites from
 // memory on quit, so the edit silently reverts, and the next attempt is a
 // bigger hand-edit. Ten dead entries later, nine of them claiming :4174, no
@@ -26,10 +26,10 @@ import readline from 'node:readline/promises'
 import { ENTRY_KEY, claudeDesktopRunning, clientTargets, readIdentity, resolveDataDir } from './connect.mjs'
 import { addressOf, identifyEntry, parseProjects } from './projects.mjs'
 
-/** the GUANO_PROJECTS map inside one client config file, or null */
+/** the SUPERBIRD_PROJECTS map inside one client config file, or null */
 function readMap(config) {
   const entry = config?.mcpServers?.[ENTRY_KEY]
-  const raw = entry?.env?.GUANO_PROJECTS
+  const raw = entry?.env?.SUPERBIRD_PROJECTS
   if (typeof raw !== 'string' || !raw) return null
   const { projects } = parseProjects(raw)
   return projects
@@ -152,9 +152,9 @@ export async function main(args = []) {
   if (!named && !flag('--stale')) {
     const dataDir = await resolveDataDir()
     selfDir = dataDir
-    process.env.GUANO_DATA_DIR = dataDir
+    process.env.SUPERBIRD_DATA_DIR = dataDir
     const identity = await readIdentity(
-      (process.env.GUANO_URL || `http://localhost:${process.env.PORT || 4174}`).replace(/\/+$/, ''),
+      (process.env.SUPERBIRD_URL || `http://localhost:${process.env.PORT || 4174}`).replace(/\/+$/, ''),
       dataDir,
     )
     selfId = identity.id
@@ -183,7 +183,7 @@ export async function main(args = []) {
       if (!key) {
         console.log(
           `· ${target.label}: could not tell which of its ${Object.keys(projects).length} entries is ` +
-            `this project (${selfDir}). Name it: guano disconnect <slug> — see \`guano disconnect --list\``,
+            `this project (${selfDir}). Name it: superbird disconnect <slug> — see \`superbird disconnect --list\``,
         )
         continue
       }
@@ -201,7 +201,7 @@ export async function main(args = []) {
     if (target.needsQuit && !flag('--force') && claudeDesktopRunning()) {
       console.error(
         `\n✗ ${target.label} is running. Quit it completely first (it overwrites its config\n` +
-          '  on quit, which would silently undo this), then re-run `guano disconnect`.',
+          '  on quit, which would silently undo this), then re-run `superbird disconnect`.',
       )
       blockedByDesktop = true
       continue
@@ -221,7 +221,7 @@ export async function main(args = []) {
       // the normalized shape back is what drops a malformed sibling for good.
       servers[ENTRY_KEY] = {
         ...servers[ENTRY_KEY],
-        env: { ...servers[ENTRY_KEY].env, GUANO_PROJECTS: JSON.stringify(strip(kept)) },
+        env: { ...servers[ENTRY_KEY].env, SUPERBIRD_PROJECTS: JSON.stringify(strip(kept)) },
       }
     } else {
       // The last project is out, so the entry has nothing to serve. Leaving an
@@ -240,7 +240,7 @@ export async function main(args = []) {
   if (removedAnywhere) {
     console.log('\nReopen Claude to pick it up. The project itself is untouched — its data dir,')
     console.log('its token and its site are all still there; only the client entry is gone.')
-    console.log('Run `guano connect` in its folder to put it back.')
+    console.log('Run `superbird connect` in its folder to put it back.')
   }
 }
 

@@ -74,14 +74,14 @@ test('a private site asks for its password, then serves', async ({ baseURL }) =>
   expect((await visitor.get('/media/0123456789abcdef')).status()).toBe(401)
 
   // wrong password: the gate again, with the error
-  res = await visitor.post('/_guano/unlock', { form: { password: 'nope', next: '/' } })
+  res = await visitor.post('/_superbird/unlock', { form: { password: 'nope', next: '/' } })
   expect(res.status()).toBe(401)
   expect(await res.text()).toContain('not right')
 
   // right password: redirected to where they were going, cookie set, site served
-  res = await visitor.post('/_guano/unlock', { form: { password: 'letmein1', next: '/' }, maxRedirects: 0 })
+  res = await visitor.post('/_superbird/unlock', { form: { password: 'letmein1', next: '/' }, maxRedirects: 0 })
   expect(res.status()).toBe(303)
-  expect(res.headers()['set-cookie']).toContain('guano_site=')
+  expect(res.headers()['set-cookie']).toContain('superbird_site=')
   expect(await (await visitor.get('/')).text()).toContain('Members only')
 
   // an open redirect is never followed. `//` was checked; `/\\` was not, and a
@@ -89,14 +89,14 @@ test('a private site asks for its password, then serves', async ({ baseURL }) =>
   // visitor on an attacker's host immediately after they typed the real
   // password. site-runtime.js already rejected both for a form redirect.
   for (const next of ['//evil.test/x', '/\\evil.test/x', 'https://evil.test', '\\\\evil.test']) {
-    res = await visitor.post('/_guano/unlock', {
+    res = await visitor.post('/_superbird/unlock', {
       form: { password: 'letmein1', next },
       maxRedirects: 0,
     })
     expect(res.headers()['location'], `next=${next}`).toBe('/')
   }
   // ...while a genuine path still carries through
-  res = await visitor.post('/_guano/unlock', {
+  res = await visitor.post('/_superbird/unlock', {
     form: { password: 'letmein1', next: '/about' },
     maxRedirects: 0,
   })

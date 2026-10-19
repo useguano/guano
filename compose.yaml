@@ -1,13 +1,13 @@
 # One instance = one project = one site. Five clients means five of these,
 # each with its own volume.
 services:
-  guano:
+  superbird:
     build: .
-    # or: image: ghcr.io/<you>/guano:<tag>
+    # or: image: ghcr.io/<you>/superbird:<tag>
     ports:
       - '4174:4174'
     volumes:
-      - guano-data:/data
+      - superbird-data:/data
     environment:
       # Set this behind the proxy below, and ONLY behind one: without a proxy
       # the header is client-spoofable and every rate limit keys on it.
@@ -23,4 +23,4 @@ services:
     stop_grace_period: 45s
 
 volumes:
-  guano-data:
+  superbird-data:

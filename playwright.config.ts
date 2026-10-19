@@ -2,17 +2,17 @@ import { defineConfig, devices } from '@playwright/test'
 import { resolve } from 'node:path'
 import { LAUNCHER_SECRET } from './e2e/fixtures/session'
 
-// Smoke-only e2e. The server is started on an isolated data dir (GUANO_DATA_DIR)
+// Smoke-only e2e. The server is started on an isolated data dir (SUPERBIRD_DATA_DIR)
 // and a non-default port so it never touches real dev data or a running
 // `npm run serve`. Requires a prior `npm run build` (the SPA is served from
 // dist/) — CI runs the build gate first.
 const PORT = 4188
 // absolute: the exporter's write-path backstop rejects a relative data dir
 const DATA_DIR = resolve(import.meta.dirname, '.e2e-data')
-// point GUANO_E2E_SERVER at a packaged install's server entry
-// (…/node_modules/guano/server/index.mjs) to run the suite against the
+// point SUPERBIRD_E2E_SERVER at a packaged install's server entry
+// (…/node_modules/@superbird-app/superbird/server/index.mjs) to run the suite against the
 // packed tarball instead of the repo layout
-const SERVER = process.env.GUANO_E2E_SERVER ?? 'server/index.mjs'
+const SERVER = process.env.SUPERBIRD_E2E_SERVER ?? 'server/index.mjs'
 
 export default defineConfig({
   testDir: './e2e',
@@ -29,7 +29,7 @@ export default defineConfig({
   webServer: {
     // wipe the throwaway data dir, then serve the built SPA + API on an
     // isolated port/data dir
-    command: `node -e "require('fs').rmSync(process.env.GUANO_DATA_DIR,{recursive:true,force:true})" && node ${SERVER}`,
+    command: `node -e "require('fs').rmSync(process.env.SUPERBIRD_DATA_DIR,{recursive:true,force:true})" && node ${SERVER}`,
     // TRUST_PROXY so a spec can present its own client address through
     // X-Forwarded-For. The public form endpoint's per-IP limit (5/minute) is a
     // real guard worth testing, and without this every request in the suite
@@ -41,7 +41,7 @@ export default defineConfig({
     // the result; warnings and errors still come through, which is what a
     // failing run needs. Drop this to `info` while debugging a spec.
     env: {
-      GUANO_DATA_DIR: DATA_DIR,
+      SUPERBIRD_DATA_DIR: DATA_DIR,
       PORT: String(PORT),
       TRUST_PROXY: '1',
       LOG_LEVEL: 'warn',
@@ -50,7 +50,7 @@ export default defineConfig({
       // builder session, so a UI spec that edits structure has to hold the
       // kind of session the desktop launcher holds. Loopback-only either way.
       // One definition, in e2e/fixtures/session.ts.
-      GUANO_LAUNCHER_SECRET: LAUNCHER_SECRET,
+      SUPERBIRD_LAUNCHER_SECRET: LAUNCHER_SECRET,
     },
     port: PORT,
     reuseExistingServer: false,

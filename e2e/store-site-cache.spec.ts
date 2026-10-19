@@ -134,7 +134,7 @@ test('a private site is never stored by a shared cache', async ({ baseURL }) => 
   expect(await res.json()).toMatchObject({ enabled: true, passwordSet: true })
 
   const visitor = await pwRequest.newContext({ baseURL })
-  const unlocked = await visitor.post('/_guano/unlock', {
+  const unlocked = await visitor.post('/_superbird/unlock', {
     form: { password: 'letmein1', next: '/' },
     maxRedirects: 0,
   })
